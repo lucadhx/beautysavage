@@ -345,6 +345,12 @@ const limiter = rateLimit({
   }
 });
 app.use(limiter);
+// Le healthcheck d'infrastructure doit rester disponible même lorsqu'un garde
+// métier (maintenance ou contrat) met l'application en attente.
+app.get('/health', (_req, res) => {
+  res.status(200).json({ data: { status: 'ok', env: process.env.ENV || (process.env.TEST_MODE === 'true' ? 'TEST' : 'PROD') } });
+});
+
 app.use(maintenanceGuard());
 app.post('/admin-login', (_req, res) => res.redirect(303, '/admin-login'));
 app.use(contractGuard());
@@ -593,10 +599,6 @@ mountReactFrontend(app);
 app.get('/vitrine.html', redirectToReactWhenOfficial('/app/'));
 
 app.use(express.static(path.join(__dirname, 'public')));
-
-app.get('/health', (_req, res) => {
-  res.status(200).json({ data: { status: 'ok', env: process.env.ENV || (process.env.TEST_MODE === 'true' ? 'TEST' : 'PROD') } });
-});
 
 app.get('/', (_req, res) =>
   res.redirect(isReactOfficialFrontend() ? '/app/' : '/vitrine.html')
