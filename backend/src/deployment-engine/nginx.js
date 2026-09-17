@@ -104,6 +104,17 @@ function backendProxy(backendPort) {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
     }
+    # Authentication is intentionally outside /api.  Without this explicit
+    # proxy, a POST /auth/login falls through to the static SPA handler and
+    # nginx returns 405 before Express can receive the credentials.
+    location /auth/ {
+        proxy_pass http://127.0.0.1:${backendPort};
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
     location /bridge/ {
         proxy_pass http://127.0.0.1:${backendPort};
         proxy_http_version 1.1;

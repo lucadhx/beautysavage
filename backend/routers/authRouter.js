@@ -93,6 +93,15 @@ function isValidEmail(value) {
   return EMAIL_REGEX.test(String(value || '').trim());
 }
 
+// The quick-login surface is deliberately controlled by the deployed project
+// environment, never by a frontend build flag.  It gives test operators a
+// deterministic way to open the seeded dev account, and simply does not exist
+// in production.
+function isTestMode() {
+  return String(process.env.TEST_MODE || '').trim().toLowerCase() === 'true' ||
+    String(process.env.PLATFORM_ENVIRONMENT || '').trim().toUpperCase() === 'TEST';
+}
+
 function isStrongPassword(password) {
   return PASSWORD_POLICY.test(String(password || ''));
 }
@@ -510,6 +519,52 @@ router.post('/resend-verification', RESEND_RATE_LIMIT, async (req, res) => {
     });
   } catch (error) {
     console.error('[auth/resend-verification] erreur', error);
+    return res.status(500).json({ ok: false, error: 'Erreur serveur.' });
+  }
+});
+
+// Connexion rapide du manager — TEST uniquement.  This is intentionally a
+// server-side capability: a copied manager must not rely on a hidden password
+// or on a client-only `TEST` switch that could leak into production.
+router.get('/test-accounts', async (_req, res) => {
+  if (!isTestMode()) return res.status(404).json({ ok: false, code: 'NOT_FOUND' });
+  try {
+    const account = await User.findOne({ role: 'dev', isActive: { $ne: false } })
+      .select({ _id: 1, email: 1, firstName: 1, lastName: 1, role: 1 })
+      .lean();
+    return res.json({
+      ok: true,
+      enabled: true,
+      accounts: account ? [{
+        id: String(account._id),
+        email: account.email,
+        displayName: [account.firstName, account.lastName].filter(Boolean).join(' ') || account.email,
+        role: account.role,
+        connectable: true
+      }] : []
+    });
+  } catch (error) {
+    console.error('[auth/test-accounts] erreur', error);
+    return res.status(500).json({ ok: false, error: 'Impossible de charger les comptes de test.' });
+  }
+});
+
+router.post('/dev-login', LOGIN_RATE_LIMIT, async (req, res) => {
+  if (!isTestMode()) return res.status(404).json({ ok: false, code: 'NOT_FOUND' });
+  try {
+    const email = normalizeEmail(req.body?.email);
+    const user = await User.findOne({ email, role: 'dev' });
+    if (!user || !resolveUserIsActive(user)) {
+      return res.status(401).json({ ok: false, error: GENERIC_AUTH_ERROR });
+    }
+    const sessionToken = generateSessionToken();
+    user.sessionTokenHash = hashSessionToken(sessionToken);
+    user.lastLogin = new Date();
+    await user.save();
+    createSessionCookie(res, user._id, sessionToken);
+    return res.json({ ok: true, role: user.role, currentMode: user.currentMode });
+  } catch (error) {
+    console.error('[auth/dev-login] erreur', error);
     return res.status(500).json({ ok: false, error: 'Erreur serveur.' });
   }
 });
