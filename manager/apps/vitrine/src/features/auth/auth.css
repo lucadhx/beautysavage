@@ -1,0 +1,73 @@
+/* RX-GO-2 — Écrans auth React. Colonne unique centrée, mobile-first, 44px, tokens --bs-* only. */
+.bs-auth {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  padding: clamp(var(--bs-space-4), 6vw, 56px) var(--bs-space-2);
+  isolation: isolate;
+}
+/* Halo décoratif derrière la carte */
+.bs-auth__aura {
+  position: absolute;
+  z-index: -1;
+  top: 0;
+  left: 50%;
+  width: min(520px, 90vw);
+  height: 320px;
+  transform: translateX(-50%);
+  background: transparent;
+  pointer-events: none;
+}
+.bs-auth__card {
+  width: 100%;
+  max-width: 440px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--bs-space-3);
+  border-radius: calc(var(--bs-radius) * 2.4);
+  box-shadow: 0 30px 60px -30px rgba(15, 23, 42, 0.5);
+}
+.bs-auth__brand { display: flex; flex-direction: column; align-items: center; gap: var(--bs-space-2); }
+.bs-auth__emblem {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 60px;
+  height: 60px;
+  border-radius: 20px;
+  font-size: 1.7rem;
+  color: var(--bs-color-on-primary, #fff);
+  background: var(--bs-color-primary);
+  box-shadow: 0 16px 30px -12px color-mix(in srgb, var(--bs-color-primary) 75%, transparent);
+}
+.bs-auth__brandname { font-weight: 700; letter-spacing: 0.02em; color: var(--bs-color-text); }
+.bs-auth__title { margin: 0; font-size: 1.5rem; text-align: center; }
+.bs-auth__subtitle { margin: 0; color: var(--bs-color-muted); font-size: 0.92rem; text-align: center; }
+.bs-auth form { display: flex; flex-direction: column; gap: var(--bs-space-3); }
+.bs-auth__submit { width: 100%; min-height: 48px; border-radius: 999px; font-weight: 600; }
+.bs-auth__spin { display: inline-block; animation: bs-auth-spin 0.8s linear infinite; }
+@keyframes bs-auth-spin { to { transform: rotate(360deg); } }
+.bs-auth__footer { display: flex; flex-direction: column; gap: var(--bs-space-1); font-size: 0.9rem; text-align: center; }
+.bs-auth__footer a { color: var(--bs-color-primary); text-decoration: none; }
+.bs-auth__footer a:hover { text-decoration: underline; }
+.bs-auth__home { margin: 0; font-size: 0.85rem; text-align: center; }
+.bs-auth__home a { display: inline-flex; align-items: center; gap: 6px; color: var(--bs-color-muted); text-decoration: none; }
+.bs-auth__home a:hover { color: var(--bs-color-primary); }
+
+/* Champ mot de passe (afficher/masquer) */
+.bs-auth__pw { position: relative; display: flex; }
+.bs-auth__pw .bs-input { flex: 1; padding-right: 44px; }
+.bs-auth__pw-toggle { position: absolute; right: 0; top: 0; height: 100%; width: 44px; display: inline-flex; align-items: center; justify-content: center; background: none; border: none; cursor: pointer; color: var(--bs-color-muted); }
+.bs-auth__pw-toggle:hover { color: var(--bs-color-text); }
+
+/* Code de vérification (6 chiffres) */
+.bs-auth__code .bs-input { font-size: 1.4rem; letter-spacing: 0.4em; text-align: center; font-variant-numeric: tabular-nums; }
+.bs-auth__resend { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; background: none; border: none; color: var(--bs-color-primary); cursor: pointer; font-size: 0.9rem; padding: 0; }
+.bs-auth__resend:disabled { color: var(--bs-color-muted); cursor: default; }
+
+/* États (succès / info) */
+.bs-auth__notice { display: flex; align-items: flex-start; gap: var(--bs-space-2); padding: var(--bs-space-3); border-radius: var(--bs-radius); border: 1px solid var(--bs-color-border); }
+.bs-auth__notice i { font-size: 1.2rem; flex-shrink: 0; }
+.bs-auth__notice--ok { border-color: color-mix(in srgb, var(--bs-color-success) 40%, transparent); background: color-mix(in srgb, var(--bs-color-success) 8%, var(--bs-color-surface)); }
+.bs-auth__notice--ok i { color: var(--bs-color-success); }
+.bs-auth__notice--info i { color: var(--bs-color-primary); }

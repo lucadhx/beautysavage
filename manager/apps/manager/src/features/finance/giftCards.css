@@ -1,0 +1,107 @@
+/* RX2.6 — Gift Card Finance (préfixe fin-gc-). Cards/timeline, tokens --bs-* only, zéro hex.
+   Résumé sticky, liste en cards, détail lisible. Jamais de tableau. AUCUNE mention d'expiration. */
+
+.fin-gc-page { display: flex; flex-direction: column; gap: var(--bs-space-3); padding-bottom: var(--bs-space-4, 32px); }
+.fin-gc-head { display: flex; align-items: center; gap: var(--bs-space-2); flex-wrap: wrap; }
+.fin-gc-head__title { font-weight: 700; font-size: 1.25rem; margin-right: auto; }
+
+/* Résumé sticky */
+.fin-gc-summary {
+  position: sticky; top: 0; z-index: 6;
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--bs-space-2);
+  padding: var(--bs-space-3); border: 1px solid var(--bs-color-border); border-radius: var(--bs-radius); background: var(--bs-color-surface);
+}
+@media (min-width: 640px) { .fin-gc-summary { grid-template-columns: repeat(4, 1fr); } }
+.fin-gc-kpi { display: flex; flex-direction: column; gap: 2px; }
+.fin-gc-kpi__value { font-weight: 700; font-size: 1.15rem; }
+.fin-gc-kpi__label { font-size: 0.72rem; color: var(--bs-color-muted); }
+
+/* Filtres chips */
+.fin-gc-chips { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; -webkit-overflow-scrolling: touch; }
+.fin-gc-chip { flex: 0 0 auto; min-height: 40px; padding: 0 var(--bs-space-3); border: 1px solid var(--bs-color-border); border-radius: 999px; background: var(--bs-color-surface); color: var(--bs-color-muted); font-weight: 600; font-size: 0.85rem; }
+.fin-gc-chip--active { background: var(--bs-color-accent); color: var(--bs-color-surface); border-color: var(--bs-color-accent); }
+
+/* Liste cards */
+.fin-gc-list { display: flex; flex-direction: column; gap: var(--bs-space-2); }
+.fin-gc-card {
+  display: flex; align-items: center; gap: var(--bs-space-2);
+  padding: var(--bs-space-3); min-height: 44px; text-align: left; width: 100%;
+  border: 1px solid var(--bs-color-border); border-radius: var(--bs-radius); background: var(--bs-color-surface); color: var(--bs-color-text);
+  transition: background var(--bs-motion-fast, 160ms) var(--bs-motion-ease-out, ease);
+}
+.fin-gc-card:hover { background: var(--bs-color-background); }
+.fin-gc-card__icon { width: 40px; height: 40px; flex-shrink: 0; border-radius: 999px; display: flex; align-items: center; justify-content: center; background: var(--bs-color-background); }
+.fin-gc-card__icon i { color: var(--bs-color-accent); }
+.fin-gc-card__body { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.fin-gc-card__code { font-weight: 700; font-variant-numeric: tabular-nums; }
+.fin-gc-card__sub { font-size: 0.78rem; color: var(--bs-color-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fin-gc-card__right { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.fin-gc-card__balance { font-weight: 800; white-space: nowrap; }
+.fin-gc-card__initial { font-size: 0.72rem; color: var(--bs-color-muted); }
+
+/* Badges */
+.fin-gc-badge { font-size: 0.68rem; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--bs-color-border); color: var(--bs-color-muted); display: inline-flex; align-items: center; gap: 4px; }
+.fin-gc-badge--success { color: var(--bs-color-success); border-color: var(--bs-color-success); }
+.fin-gc-badge--neutral { color: var(--bs-color-muted); }
+.fin-gc-badge--danger { color: var(--bs-color-danger); border-color: var(--bs-color-danger); }
+.fin-gc-badge--warning { color: var(--bs-color-accent); border-color: var(--bs-color-accent); }
+
+/* Detail cards */
+.fin-gc-block { border: 1px solid var(--bs-color-border); border-radius: var(--bs-radius); background: var(--bs-color-surface); padding: var(--bs-space-3); display: flex; flex-direction: column; gap: var(--bs-space-2); }
+.fin-gc-block__title { font-weight: 700; font-size: 0.95rem; display: flex; align-items: center; gap: 8px; }
+.fin-gc-block__title i { color: var(--bs-color-accent); }
+.fin-gc-row { display: flex; justify-content: space-between; gap: var(--bs-space-2); font-size: 0.88rem; padding: 4px 0; }
+.fin-gc-row span:first-child { color: var(--bs-color-muted); }
+.fin-gc-row span:last-child { font-weight: 600; text-align: right; }
+
+/* Solde */
+.fin-gc-balance { display: flex; flex-direction: column; gap: 2px; }
+.fin-gc-balance__amount { font-weight: 800; font-size: 2rem; line-height: 1.1; color: var(--bs-color-success); }
+.fin-gc-balance__label { font-size: 0.8rem; color: var(--bs-color-muted); }
+
+/* Lifecycle timeline */
+.fin-gc-tl { display: flex; flex-direction: column; gap: var(--bs-space-2); position: relative; padding-left: var(--bs-space-3); }
+.fin-gc-tl::before { content: ''; position: absolute; left: 9px; top: 8px; bottom: 8px; width: 2px; background: var(--bs-color-border); border-radius: 2px; }
+.fin-gc-tlitem { display: flex; gap: var(--bs-space-2); align-items: flex-start; position: relative; }
+.fin-gc-tldot { position: absolute; left: -22px; top: 4px; width: 12px; height: 12px; border-radius: 999px; background: var(--bs-color-muted); border: 2px solid var(--bs-color-surface); }
+.fin-gc-tldot--success { background: var(--bs-color-success); }
+.fin-gc-tldot--warning { background: var(--bs-color-accent); }
+.fin-gc-tldot--danger { background: var(--bs-color-danger); }
+.fin-gc-tlbody { display: flex; flex-direction: column; gap: 1px; flex: 1; }
+.fin-gc-tltitle { font-weight: 600; font-size: 0.9rem; }
+.fin-gc-tlsub { font-size: 0.78rem; color: var(--bs-color-muted); }
+.fin-gc-tlmeta { display: flex; gap: var(--bs-space-2); font-size: 0.75rem; color: var(--bs-color-muted); }
+.fin-gc-tlamount { font-weight: 700; white-space: nowrap; }
+.fin-gc-tlamount--pos { color: var(--bs-color-success); }
+.fin-gc-tlamount--neg { color: var(--bs-color-danger); }
+
+/* Split refund */
+.fin-gc-split { display: flex; flex-direction: column; gap: 6px; padding: var(--bs-space-2); border: 1px solid var(--bs-color-border); border-radius: var(--bs-radius); }
+.fin-gc-split__head { display: flex; justify-content: space-between; align-items: center; }
+.fin-gc-split__part { display: flex; justify-content: space-between; font-size: 0.85rem; color: var(--bs-color-muted); }
+
+/* QR card */
+.fin-gc-qr { display: flex; align-items: center; gap: var(--bs-space-2); }
+.fin-gc-qr__icon { width: 48px; height: 48px; border-radius: var(--bs-radius); background: var(--bs-color-background); display: flex; align-items: center; justify-content: center; }
+.fin-gc-qr__icon i { font-size: 1.5rem; color: var(--bs-color-accent); }
+.fin-gc-qr__token { font-family: monospace; letter-spacing: 2px; }
+
+/* Actions footer */
+.fin-gc-actions { display: flex; gap: var(--bs-space-2); flex-wrap: wrap; }
+.fin-gc-btn { flex: 1 1 auto; min-width: min(130px, 100%); min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: 1px solid var(--bs-color-border); border-radius: var(--bs-radius); background: var(--bs-color-surface); color: var(--bs-color-text); font-weight: 600; text-decoration: none; }
+.fin-gc-btn--primary { background: var(--bs-color-accent); color: var(--bs-color-surface); border-color: var(--bs-color-accent); }
+.fin-gc-btn:disabled, .fin-gc-btn[aria-disabled='true'] { opacity: 0.45; cursor: not-allowed; }
+
+/* États */
+.fin-gc-skeleton { display: flex; flex-direction: column; gap: var(--bs-space-2); }
+.fin-gc-skeleton > div { height: 64px; border-radius: var(--bs-radius); background: var(--bs-color-border); opacity: 0.5; animation: fin-gc-pulse 1.2s ease-in-out infinite; }
+.fin-gc-empty { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: var(--bs-space-4, 32px); color: var(--bs-color-muted); }
+.fin-gc-empty i { font-size: 1.6rem; }
+@keyframes fin-gc-pulse { 0%, 100% { opacity: 0.35; } 50% { opacity: 0.6; } }
+@media (prefers-reduced-motion: reduce) { .fin-gc-skeleton > div { animation: none; } .fin-gc-card { transition: none; } }
+
+/* LOT2 §4 — Renvoi carte cadeau (reset PIN) */
+.fin-gc-resend__confirm p { margin: 0 0 .5rem; }
+.fin-gc-resend__actions { display: flex; flex-wrap: wrap; gap: .5rem; }
+.fin-gc-resend__ok { color: var(--bs-color-success, #166534); margin: .25rem 0 0; }
+.fin-gc-resend__error { color: var(--bs-color-danger, #991b1b); margin: .25rem 0 0; }

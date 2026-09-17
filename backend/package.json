@@ -50,12 +50,15 @@
         "express": "^4.21.1",
         "express-rate-limit": "^7.2.0",
         "helmet": "^7.2.0",
+        "mongodb": "^6.20.0",
         "mongoose": "^8.6.0",
         "morgan": "^1.10.0",
         "multer": "^2.0.2",
         "pdfkit": "^0.17.2",
         "qrcode": "^1.5.4",
-        "stripe": "^20.4.0"
+        "ssh2": "^1.16.0",
+        "stripe": "^20.4.0",
+        "tldts": "^6.1.86"
     },
     "devDependencies": {
         "cross-env": "^10.1.0",

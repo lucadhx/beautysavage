@@ -1,0 +1,25 @@
+/* C2 — Présence session (manager). Prefixe lrn-. Tokens --bs-* only, mobile-first, 44px, zéro hex. */
+.lrn-presencehead { display: flex; flex-direction: column; gap: var(--bs-space-1); }
+.lrn-presencestats { display: flex; gap: var(--bs-space-3); flex-wrap: wrap; color: var(--bs-color-muted); font-size: 0.9rem; }
+.lrn-presenceactions { display: flex; align-items: center; gap: var(--bs-space-2); flex-wrap: wrap; }
+.lrn-flash { font-size: 0.9rem; color: var(--bs-color-text); }
+
+.lrn-scanner { display: flex; flex-direction: column; gap: var(--bs-space-2); padding: var(--bs-space-2); border: 1px solid var(--bs-color-border); border-radius: var(--bs-radius); background: var(--bs-color-surface); }
+.lrn-scanner__head { display: flex; align-items: center; justify-content: space-between; }
+.lrn-scanner__title { font-weight: 600; display: inline-flex; align-items: center; gap: var(--bs-space-1); }
+.lrn-scanner__region { width: 100%; max-width: 320px; margin: 0 auto; border-radius: var(--bs-radius); overflow: hidden; }
+
+.lrn-participants { display: flex; flex-direction: column; gap: var(--bs-space-2); }
+.lrn-participant { display: flex; align-items: center; gap: var(--bs-space-2); flex-wrap: wrap; padding: var(--bs-space-2) var(--bs-space-3); border: 1px solid var(--bs-color-border); border-radius: var(--bs-radius); background: var(--bs-color-surface); }
+.lrn-participant__name { font-weight: 600; flex: 1; min-width: 120px; }
+.lrn-participant__actions { display: flex; gap: var(--bs-space-1); }
+
+/* C3 — Scanner hardening + filtres présence */
+.lrn-scanner__camera { display: flex; align-items: center; gap: var(--bs-space-2); font-size: 0.85rem; }
+.lrn-scanner__camera select { flex: 1; }
+.lrn-scanner__fallback { display: flex; flex-direction: column; gap: var(--bs-space-1); }
+.lrn-scanner__manual { display: flex; flex-direction: column; gap: var(--bs-space-1); border-top: 1px solid var(--bs-color-border); padding-top: var(--bs-space-2); }
+.lrn-scanner__manualtoggle { display: inline-flex; align-items: center; gap: var(--bs-space-1); min-height: 44px; background: transparent; border: none; cursor: pointer; color: var(--bs-color-text); font-size: 0.88rem; text-align: left; }
+.lrn-presencefilters { display: flex; gap: var(--bs-space-1); overflow-x: auto; padding-bottom: var(--bs-space-1); }
+.lrn-filter { min-height: 44px; padding: 0 var(--bs-space-2); border: 1px solid var(--bs-color-border); border-radius: 999px; background: var(--bs-color-surface); color: var(--bs-color-muted); cursor: pointer; white-space: nowrap; flex-shrink: 0; font-size: 0.85rem; }
+.lrn-filter--active { background: var(--bs-color-primary); color: var(--bs-color-surface); border-color: var(--bs-color-primary); }

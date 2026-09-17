@@ -1,0 +1,21 @@
+{
+  "name": "@bs/vitrine",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@bs/api-client": "0.0.0",
+    "@bs/auth": "0.0.0",
+    "@bs/config": "0.0.0",
+    "@bs/ui": "0.0.0",
+    "@tanstack/react-query": "^5.62.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.28.0"
+  }
+}

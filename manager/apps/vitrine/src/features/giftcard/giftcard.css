@@ -1,0 +1,102 @@
+/* RX3 S4 — Achat carte cadeau. Tokens --bs-* only, mobile-first, ≥44px, zéro scroll horizontal. */
+.gc-layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--bs-space-3);
+  align-items: start;
+}
+.gc-main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bs-space-3);
+  min-width: 0;
+}
+.gc-block__title {
+  margin: 0 0 var(--bs-space-2);
+  font-size: 1.1rem;
+}
+.gc-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--bs-space-1);
+  margin-bottom: var(--bs-space-3);
+}
+
+/* Aperçu premium */
+.gc-preview {
+  border-radius: calc(var(--bs-radius) * 2);
+  padding: var(--bs-space-4);
+  color: #fff;
+  background: linear-gradient(135deg, var(--bs-color-primary), var(--bs-color-secondary));
+  box-shadow: var(--bs-shadow);
+  min-height: 180px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--bs-space-2);
+  margin-bottom: var(--bs-space-3);
+}
+.gc-preview__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.gc-preview__brand {
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.gc-preview__tag {
+  font-size: 0.78rem;
+  opacity: 0.85;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.gc-preview__amount {
+  font-size: 2rem;
+  font-weight: 800;
+  margin-top: auto;
+}
+.gc-preview__to {
+  font-weight: 600;
+}
+.gc-preview__msg {
+  margin: 0;
+  font-size: 0.9rem;
+  opacity: 0.92;
+  font-style: italic;
+}
+
+.gc-summary {
+  margin: var(--bs-space-2) 0;
+}
+.gc-summary__row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--bs-space-2);
+}
+.gc-summary__row--total {
+  font-weight: 700;
+  font-size: 1.1rem;
+}
+.gc-pay {
+  width: 100%;
+  margin-top: var(--bs-space-2);
+}
+.gc-notice {
+  margin: var(--bs-space-2) 0;
+}
+.gc-trust {
+  display: flex;
+  align-items: center;
+  gap: var(--bs-space-1);
+  margin: var(--bs-space-2) 0 0;
+}
+
+@media (min-width: 960px) {
+  .gc-layout {
+    grid-template-columns: minmax(0, 1fr) 360px;
+  }
+  .gc-aside {
+    position: sticky;
+    top: var(--bs-space-3);
+  }
+}

@@ -1,0 +1,57 @@
+/* RX3 — Barre d'outils catalogue partagée. Tokens --bs-* only, mobile-first, zéro scroll horizontal. */
+.ct {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bs-space-2);
+  margin-bottom: var(--bs-space-3);
+}
+.ct__row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bs-space-2);
+}
+.ct__search {
+  position: relative;
+  flex: 1;
+}
+.ct__search-icon {
+  position: absolute;
+  left: var(--bs-space-3);
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--bs-color-muted);
+  pointer-events: none;
+}
+.ct__search-input {
+  padding-left: calc(var(--bs-space-4) + 8px);
+}
+.ct__sort {
+  display: flex;
+  align-items: center;
+  gap: var(--bs-space-2);
+}
+.ct__sort-label {
+  font-size: 0.85rem;
+  color: var(--bs-color-muted);
+  white-space: nowrap;
+}
+.ct__filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--bs-space-1);
+}
+.ct__count {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--bs-color-muted);
+}
+
+@media (min-width: 640px) {
+  .ct__row {
+    flex-direction: row;
+    align-items: center;
+  }
+  .ct__sort {
+    flex-shrink: 0;
+  }
+}

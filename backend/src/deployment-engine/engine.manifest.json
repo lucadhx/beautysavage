@@ -1,0 +1,94 @@
+{
+  "engine": "deployment-engine",
+  "version": "1.5.0",
+  "engineApiVersion": "1",
+  "contractVersion": "1.5.0",
+  "minimumCompatibleVersion": "1.0.0",
+  "layoutVersion": "2",
+  "releaseDate": "2026-08-07",
+  "lastStandardization": "2026-08-07",
+  "supportedProfiles": [
+    "beautysavage",
+    "panel"
+  ],
+  "compatibleProjects": [
+    "beautysavage"
+  ],
+  "description": "Moteur de déploiement standard de l'écosystème L.Y Solution. Cœur générique : préflight, build d'artefact, releases, Nginx piloté par le profil, HTTPS, PM2, health checks, rollback, sauvegardes, rapports, retrait d'une destination, registre des ports. Tout ce qui est propre à un projet vit dans config/project.profile.js — jamais dans le cœur.",
+  "layout": {
+    "core": "fichiers à la racine du moteur + dns/ + report/ — identiques dans tous les projets",
+    "config": "config/project.profile.js — le seul fichier spécifique au projet",
+    "adapters": "transport/ — SSH réel, transports de test",
+    "migrations": "migrations/ — passages d'une version de moteur à la suivante"
+  },
+  "capabilities": [
+    "preflight",
+    "artifact-build",
+    "releases",
+    "nginx",
+    "nginx-profile-driven",
+    "https-certbot",
+    "pm2",
+    "health-check",
+    "rollback",
+    "rollback-auto-restore",
+    "backup-restore",
+    "dns",
+    "reports",
+    "engine-introspection",
+    "engine-migrations",
+    "deprovision",
+    "quarantine-410",
+    "port-registry",
+    "service-health-proof",
+    "application-media-publication",
+    "binary-file-transfer",
+    "application-media-adoption",
+    "media-authority-preserving-healthcheck"
+  ],
+  "breakingChanges": [],
+  "history": [
+    {
+      "version": "1.5.0",
+      "date": "2026-08-07",
+      "type": "MINOR",
+      "summary": "Autorite des medias et reprise du parc existant. Le healthcheck public ne RECONSTRUIT plus l'adresse d'un media : une URL absolue exposee par la projection est testee TELLE QUELLE, sur son propre hote ; seuls les chemins relatifs sont eprouves contre chaque origine servie. Un media legitimement heberge ailleurs (le logo du developpeur, servi par le Panel) ne fait donc plus echouer un deploiement sain. Nouvelle etape 'project_media_adopt', placee entre la migration des medias et leur publication : capacite injectee, executee sur la DESTINATION, qui decrit les medias existants avant qu'on tente de les publier. Le coeur n'importe aucun modele de media.",
+      "breaking": false
+    },
+    {
+      "version": "1.4.0",
+      "date": "2026-08-06",
+      "type": "MINOR",
+      "summary": "Publication des medias de l'application au deploiement : une etape dediee, placee avant la validation finale, TRANSFERE vers la destination les medias que l'application declare manquants, RELIT leur empreinte et leur taille sur le serveur apres transfert, et ne les declare publics qu'ensuite. Le transport gagne uploadFile (un seul fichier, en binaire) : la copie de dossier de l'etape upload est un effet de bord tente au mieux, elle ne pouvait pas porter la preuve. Une instance peut donc etre entierement configuree AVANT sa premiere mise en ligne, sans reimport.",
+      "breaking": false
+    },
+    {
+      "version": "1.3.0",
+      "date": "2026-08-06",
+      "type": "MINOR",
+      "summary": "Ports applicatifs : lecture des sockets réelles et des process PM2, choix d'un port par exclusion des trois sources, refus AVANT démarrage sur collision ou détenteur inconnu, et preuve de santé du service (en ligne, stable, PID connu, port écouté par ce PID). Un « pm2 start » qui rend 0 ne vaut plus preuve.",
+      "breaking": false
+    },
+    {
+      "version": "1.2.0",
+      "date": "2026-08-06",
+      "type": "MINOR",
+      "summary": "Retrait d'une destination (deprovision) : validation canonique du chemin, inventaire, arrêt et suppression du service, preuve de libération du port, retrait du routage, quarantaine 410, suppression des fichiers, vérification finale. Une destination ne peut plus être oubliée sur un serveur.",
+      "breaking": false
+    },
+    {
+      "version": "1.1.0",
+      "date": "2026-07-27",
+      "type": "MINOR",
+      "summary": "Nginx entièrement piloté par le profil (rôles web/web-subdomain/api/static/proxy) ; rollback complet dans la façade avec vérification d'intégrité et restauration automatique ; introspection et migrations du moteur.",
+      "breaking": false
+    },
+    {
+      "version": "1.0.0",
+      "date": "2026-07-27",
+      "type": "MAJOR",
+      "summary": "Standardisation initiale : extraction du profil de projet, dossiers standards, contrôle de dérive.",
+      "breaking": false
+    }
+  ]
+}

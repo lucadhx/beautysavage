@@ -1,0 +1,53 @@
+{
+  "engine": "duplication-engine",
+  "version": "1.1.0",
+  "compatibleProjects": [
+    "vitrine",
+    "manager",
+    "panel"
+  ],
+  "contractVersion": "1.1.0",
+  "lastStandardization": "2026-07-27",
+  "description": "Moteur de duplication standard de l'écosystème L.Y Solution. Crée un nouveau projet complet à partir du projet courant : bases TEST/PROD, secrets, .env, configuration système et dépendances locales. Ne déploie jamais lui-même — il prépare, puis passe la main au deployment-engine.",
+  "layout": {
+    "core": "duplication.js — logique générique de duplication",
+    "config": "config/duplication.profile.js — secrets et variables propres au projet",
+    "dependsOn": [
+      "deployment-engine"
+    ]
+  },
+  "capabilities": [
+    "validate-input",
+    "create-databases",
+    "copy-project",
+    "regenerate-secrets",
+    "rewrite-env",
+    "validation",
+    "engine-introspection"
+  ],
+  "engineApiVersion": "1",
+  "minimumCompatibleVersion": "1.0.0",
+  "layoutVersion": "2",
+  "releaseDate": "2026-07-27",
+  "supportedProfiles": [
+    "fj-services-06",
+    "panel"
+  ],
+  "breakingChanges": [],
+  "history": [
+    {
+      "version": "1.1.0",
+      "date": "2026-07-27",
+      "type": "MINOR",
+      "summary": "Manifeste étendu (introspection, compatibilité) ; alignement sur la gouvernance des moteurs.",
+      "breaking": false
+    },
+    {
+      "version": "1.0.0",
+      "date": "2026-07-27",
+      "type": "MAJOR",
+      "summary": "Standardisation initiale : profil de duplication, régénération des secrets.",
+      "breaking": false
+    }
+  ]
+}

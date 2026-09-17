@@ -594,6 +594,10 @@ app.get('/vitrine.html', redirectToReactWhenOfficial('/app/'));
 
 app.use(express.static(path.join(__dirname, 'public')));
 
+app.get('/health', (_req, res) => {
+  res.status(200).json({ data: { status: 'ok', env: process.env.ENV || (process.env.TEST_MODE === 'true' ? 'TEST' : 'PROD') } });
+});
+
 app.get('/', (_req, res) =>
   res.redirect(isReactOfficialFrontend() ? '/app/' : '/vitrine.html')
 );

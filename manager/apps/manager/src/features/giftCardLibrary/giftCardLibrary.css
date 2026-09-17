@@ -1,0 +1,65 @@
+/* M13 — Librairie templates carte cadeau (admin). Mobile-first, tokens --bs-* (aucun hex). */
+
+.gcl-page { display: flex; flex-direction: column; gap: var(--bs-space-3); }
+.gcl-head { display: flex; flex-direction: column; gap: var(--bs-space-1); }
+.gcl-head__title { margin: 0; font-size: 1.3rem; }
+.gcl-head__subtitle { margin: 0; color: var(--bs-color-muted); font-size: 0.9rem; }
+
+.gcl-grid { display: grid; grid-template-columns: 1fr; gap: var(--bs-space-3); }
+@media (min-width: 720px) { .gcl-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (min-width: 1100px) { .gcl-grid { grid-template-columns: repeat(3, 1fr); } }
+
+.gcl-card {
+  display: flex; flex-direction: column; gap: var(--bs-space-2);
+  border: 1px solid var(--bs-color-border); border-radius: var(--bs-radius);
+  background: var(--bs-color-surface); padding: var(--bs-space-2);
+  transition: border-color var(--bs-motion-fast, 160ms) var(--bs-motion-ease-out, ease);
+}
+.gcl-card--active { border-color: var(--bs-color-primary); box-shadow: 0 0 0 1px var(--bs-color-primary); }
+.gcl-card__head { display: flex; align-items: center; justify-content: space-between; gap: var(--bs-space-2); }
+.gcl-card__name { font-weight: 600; }
+.gcl-card__preview { background: var(--bs-color-background); border-radius: var(--bs-radius); overflow: hidden; min-height: 180px; display: flex; align-items: center; justify-content: center; }
+.gcl-card__preview-loading { color: var(--bs-color-muted); font-size: 0.85rem; padding: var(--bs-space-4); }
+.gcl-card__frame { border: none; width: 100%; height: 220px; background: var(--bs-color-surface); }
+.gcl-card__foot { display: flex; justify-content: flex-end; min-height: 44px; align-items: center; }
+.gcl-card__foot .bs-btn { min-height: 44px; }
+.gcl-current { color: var(--bs-color-success); font-size: 0.85rem; font-weight: 600; }
+
+.gcl-badge { display: inline-flex; align-items: center; padding: 2px var(--bs-space-2); border-radius: 999px; font-size: 0.72rem; font-weight: 600; }
+.gcl-badge--active { background: color-mix(in srgb, var(--bs-color-primary) 14%, var(--bs-color-surface)); color: var(--bs-color-primary); }
+
+.gcl-empty { text-align: center; border: 1px dashed var(--bs-color-border); border-radius: var(--bs-radius); padding: var(--bs-space-4); color: var(--bs-color-muted); }
+.gcl-error { color: var(--bs-color-danger); font-size: 0.85rem; }
+.gcl-note { color: var(--bs-color-muted); font-size: 0.9rem; }
+
+/* Modale de confirmation */
+.gcl-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.4); z-index: var(--bs-z-overlay, 1000); animation: gcl-fade var(--bs-motion-fast, 160ms) var(--bs-motion-ease-out, ease); }
+.gcl-modal {
+  position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: var(--bs-z-drawer, 1001);
+  width: min(420px, calc(100vw - 2 * var(--bs-space-3)));
+  display: flex; flex-direction: column; gap: var(--bs-space-2);
+  background: var(--bs-color-surface); color: var(--bs-color-text);
+  border: 1px solid var(--bs-color-border); border-radius: var(--bs-radius); box-shadow: var(--bs-shadow);
+  padding: var(--bs-space-4); animation: gcl-pop var(--bs-motion-fast, 160ms) var(--bs-motion-ease-out, ease);
+}
+.gcl-modal__actions { display: flex; justify-content: flex-end; gap: var(--bs-space-2); }
+.gcl-modal__actions .bs-btn { min-height: 44px; }
+
+/* P1 — sur mobile, la modale de confirmation se dock en bas (atteignable au pouce). */
+@media (max-width: 640px) {
+  .gcl-modal {
+    left: 0; right: 0; bottom: 0; top: auto;
+    transform: none;
+    width: 100%;
+    border-radius: 16px 16px 0 0;
+    animation: bs-sheet var(--bs-motion-normal, 240ms) var(--bs-motion-ease-out, ease) both;
+  }
+}
+
+@keyframes gcl-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes gcl-pop { from { opacity: 0; transform: translate(-50%, -48%) scale(0.98); } to { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .gcl-overlay, .gcl-modal { animation: none !important; }
+  .gcl-card { transition: none !important; }
+}

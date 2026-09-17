@@ -1,0 +1,112 @@
+/* S1 — Paramètres Système (dev). Mobile-first. */
+.sys-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bs-space-3, 16px);
+  max-width: 760px;
+}
+.sys-page__intro {
+  margin: 0;
+  color: var(--bs-color-muted, rgba(15, 23, 42, 0.6));
+  font-size: 0.92rem;
+}
+.sys-section__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 4px;
+  font-size: 1.05rem;
+}
+.sys-section__help {
+  margin: 0 0 12px;
+  color: var(--bs-color-muted, rgba(15, 23, 42, 0.6));
+  font-size: 0.85rem;
+}
+.sys-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+.sys-field > label {
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+.sys-field input,
+.sys-field textarea,
+.sys-field select {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid var(--bs-color-border, rgba(15, 23, 42, 0.18));
+  border-radius: 8px;
+  font: inherit;
+  background: var(--bs-color-surface, #fff);
+}
+.sys-field textarea {
+  min-height: 72px;
+  resize: vertical;
+}
+.sys-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0 12px;
+}
+@media (min-width: 560px) {
+  .sys-grid--2 {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+.sys-url-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+.sys-url-row input {
+  flex: 1 1 auto;
+}
+.sys-copy-btn {
+  flex: 0 0 auto;
+  min-width: 44px;
+  min-height: 44px;
+  border: 1px solid var(--bs-color-border, rgba(15, 23, 42, 0.18));
+  border-radius: 8px;
+  background: var(--bs-color-surface, #fff);
+  cursor: pointer;
+}
+.sys-copy-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.sys-validity {
+  font-size: 0.8rem;
+  min-height: 1.1em;
+}
+.sys-validity--ok {
+  color: var(--bs-color-success, #1f7a3a);
+}
+.sys-validity--err {
+  color: var(--bs-color-danger, #dc2626);
+}
+.sys-field--inline {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+}
+.sys-actions {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  background: linear-gradient(to top, var(--bs-color-background, #f5f4ef) 70%, transparent);
+}
+.sys-saved {
+  color: var(--bs-color-success, #1f7a3a);
+  font-size: 0.85rem;
+}
+.sys-error {
+  color: var(--bs-color-danger, #dc2626);
+  font-size: 0.85rem;
+}

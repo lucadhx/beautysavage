@@ -1,0 +1,210 @@
+/* RX3 — Fiche prestation premium. Tokens --bs-* only, mobile-first, zéro scroll horizontal, ≥44px. */
+.sd {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bs-space-3);
+}
+.sd-breadcrumb {
+  margin: 0;
+}
+.sd-head__title {
+  margin: 0 0 var(--bs-space-2);
+  font-size: 1.6rem;
+  line-height: 1.15;
+}
+.sd-head__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--bs-space-1);
+}
+
+.sd-layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--bs-space-4);
+  align-items: start;
+}
+.sd-main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bs-space-4);
+  min-width: 0;
+}
+
+.sd-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bs-space-2);
+}
+.sd-section__title {
+  margin: 0;
+  font-size: 1.2rem;
+}
+.sd-lead {
+  margin: 0;
+  font-weight: 500;
+}
+.sd-desc {
+  margin: 0;
+  color: var(--bs-color-muted);
+  white-space: pre-line;
+}
+
+/* Options */
+.sd-options {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--bs-space-1);
+}
+.sd-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--bs-space-2);
+  padding: var(--bs-space-1) var(--bs-space-2);
+  border: 1px solid var(--bs-color-border);
+  border-radius: var(--bs-radius);
+}
+.sd-option__body {
+  display: flex;
+  flex-direction: column;
+}
+.sd-option__name {
+  font-weight: 500;
+}
+.sd-option__desc {
+  font-size: 0.82rem;
+  color: var(--bs-color-muted);
+}
+.sd-option__price {
+  flex-shrink: 0;
+  font-weight: 600;
+  color: var(--bs-color-primary);
+}
+
+/* Déroulement */
+.sd-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--bs-space-2);
+}
+.sd-step {
+  display: flex;
+  gap: var(--bs-space-2);
+  align-items: flex-start;
+}
+.sd-step__icon {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--bs-color-primary) 10%, transparent);
+  color: var(--bs-color-primary);
+}
+.sd-step__body {
+  display: flex;
+  flex-direction: column;
+}
+.sd-step__title {
+  font-weight: 600;
+}
+.sd-step__text {
+  font-size: 0.9rem;
+  color: var(--bs-color-muted);
+}
+
+/* Similaires — scroll horizontal mobile, rangée desktop */
+.sd-similar {
+  display: flex;
+  gap: var(--bs-space-3);
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  padding-bottom: var(--bs-space-2);
+}
+.sd-similar__item {
+  flex: 0 0 78%;
+  max-width: 320px;
+  scroll-snap-align: start;
+}
+
+/* Carte d'achat sticky (desktop) */
+.sd-buy {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bs-space-2);
+}
+.sd-buy__price {
+  display: flex;
+  align-items: baseline;
+  gap: var(--bs-space-2);
+}
+.sd-buy__amount {
+  font-size: 1.6rem;
+  font-weight: 700;
+}
+.sd-buy__original {
+  text-decoration: line-through;
+  color: var(--bs-color-muted);
+  font-size: 0.95rem;
+}
+.sd-buy__options {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--bs-color-muted);
+}
+.sd-buy__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--bs-space-2);
+}
+.sd-buy__duration {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--bs-space-1);
+  color: var(--bs-color-muted);
+}
+.sd-buy__cta {
+  width: 100%;
+}
+.sd-buy__note {
+  margin: 0;
+}
+
+/* Sticky CTA mobile (masqué desktop, l'aside prend le relais) */
+.sd-stickybar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.sd-stickybar__price {
+  font-weight: 700;
+  font-size: 1.15rem;
+}
+.sd-stickybar__cta {
+  flex: 0 0 auto;
+}
+
+@media (min-width: 960px) {
+  .sd-layout {
+    grid-template-columns: minmax(0, 1fr) 340px;
+  }
+  .sd-aside {
+    position: sticky;
+    top: var(--bs-space-3);
+  }
+  .sd-similar__item {
+    flex-basis: 260px;
+  }
+  .sd-stickybar {
+    display: none; /* la carte sticky desktop prend le relais */
+  }
+}

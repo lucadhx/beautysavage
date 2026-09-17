@@ -1,0 +1,10 @@
+{
+  "url": "https://beautysavage.ly-solution.com",
+  "host": "beautysavage.ly-solution.com",
+  "environment": "TEST",
+  "sshHost": "195.35.0.211",
+  "sshUser": "root",
+  "sshPort": 22,
+  "backendPort": 5109,
+  "remoteRoot": "/var/www"
+}

@@ -1,0 +1,111 @@
+/* RX4 — Espace client (Client Hub). Tokens --bs-* uniquement, mobile-first, 44px, zéro table, zéro
+   scroll horizontal. Motion Guideline + reduced-motion. */
+
+/* ── Layout général ───────────────────────────────────────────────────────── */
+.bs-hub { display: flex; flex-direction: column; gap: var(--bs-space-4); }
+.bs-hub__section { display: flex; flex-direction: column; gap: var(--bs-space-2); }
+.bs-hub__section-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--bs-space-2); }
+.bs-hub__section-title { margin: 0; font-size: 1.05rem; }
+.bs-hub__section-link { font-size: 0.85rem; color: var(--bs-color-primary); text-decoration: none; min-height: 44px; display: inline-flex; align-items: center; }
+.bs-hub__section-link:hover { text-decoration: underline; }
+
+/* ── En-tête d'accueil ────────────────────────────────────────────────────── */
+.bs-hub__hello { display: flex; align-items: center; gap: var(--bs-space-2); flex-wrap: wrap; }
+.bs-hub__avatar { width: 52px; height: 52px; border-radius: 999px; background: var(--theme-accent, var(--bs-color-primary)); color: var(--bs-color-surface); display: inline-flex; align-items: center; justify-content: center; font-weight: 700; font-size: 1.1rem; flex-shrink: 0; }
+.bs-hub__hello-text { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.bs-hub__hello-title { margin: 0; font-size: 1.35rem; line-height: 1.2; }
+.bs-hub__hello-sub { font-size: 0.85rem; color: var(--bs-color-muted); overflow: hidden; text-overflow: ellipsis; }
+.bs-hub__logout { display: inline-flex; align-items: center; gap: var(--bs-space-1); min-height: 44px; padding: 0 var(--bs-space-2); border: 1px solid var(--bs-color-border); border-radius: var(--bs-radius); background: var(--bs-color-surface); color: var(--bs-color-danger); cursor: pointer; font-size: 0.85rem; }
+.bs-hub__logout:hover { background: var(--bs-color-background); }
+
+/* ── Carte « highlight » (prochain RDV / formation / carte cadeau) ─────────── */
+.bs-hl { display: flex; flex-direction: column; gap: var(--bs-space-2); padding: var(--bs-space-3); border: 1px solid var(--bs-color-border); border-radius: var(--bs-radius-lg, var(--bs-radius)); background: var(--bs-color-surface); position: relative; overflow: hidden; }
+.bs-hl--accent { border-color: transparent; background: linear-gradient(135deg, var(--theme-accent, var(--bs-color-primary)), var(--theme-accent-strong, var(--bs-color-secondary))); color: var(--bs-color-surface); }
+.bs-hl--accent .bs-hl__label, .bs-hl--accent .bs-hl__meta { color: rgba(255, 255, 255, 0.85); }
+.bs-hl__label { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--bs-color-muted); display: inline-flex; align-items: center; gap: var(--bs-space-1); }
+.bs-hl__title { margin: 0; font-size: 1.15rem; line-height: 1.25; }
+.bs-hl__meta { display: flex; flex-wrap: wrap; gap: var(--bs-space-1) var(--bs-space-3); font-size: 0.9rem; color: var(--bs-color-muted); }
+.bs-hl__meta span { display: inline-flex; align-items: center; gap: 6px; }
+.bs-hl__row { display: flex; align-items: center; justify-content: space-between; gap: var(--bs-space-2); flex-wrap: wrap; }
+.bs-hl__amount { font-size: 1.6rem; font-weight: 700; }
+.bs-hl__progress { height: 8px; border-radius: 999px; background: rgba(255, 255, 255, 0.28); overflow: hidden; }
+.bs-hl--plain .bs-hl__progress { background: var(--bs-color-background); }
+.bs-hl__progressbar { display: block; height: 100%; background: var(--bs-color-surface); border-radius: 999px; }
+.bs-hl--plain .bs-hl__progressbar { background: var(--theme-accent, var(--bs-color-primary)); }
+.bs-hl__cta { align-self: flex-start; }
+
+/* ── Actions rapides (grille de cartes) ───────────────────────────────────── */
+.bs-hub__grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--bs-space-2); }
+@media (min-width: 640px) { .bs-hub__grid { grid-template-columns: repeat(4, 1fr); } }
+.bs-hub__action { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-height: 92px; padding: var(--bs-space-3); border: 1px solid var(--bs-color-border); border-radius: var(--bs-radius); background: var(--bs-color-surface); cursor: pointer; text-align: left; position: relative; text-decoration: none; color: inherit; transition: transform var(--bs-motion-fast) var(--bs-motion-ease-out), box-shadow var(--bs-motion-fast) var(--bs-motion-ease-out); }
+.bs-hub__action:hover { transform: translateY(-2px); box-shadow: var(--bs-shadow); }
+.bs-hub__action-icon { font-size: 1.4rem; color: var(--bs-color-primary); }
+.bs-hub__action-label { font-weight: 600; font-size: 0.92rem; }
+.bs-hub__action-badge { position: absolute; top: var(--bs-space-2); right: var(--bs-space-2); min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: var(--theme-accent, var(--bs-color-primary)); color: var(--bs-color-surface); font-size: 0.7rem; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; }
+
+/* ── Liste (historique, transactions) ─────────────────────────────────────── */
+.bs-hub__list { display: flex; flex-direction: column; gap: var(--bs-space-2); }
+.bs-row { display: flex; align-items: center; gap: var(--bs-space-2); padding: var(--bs-space-3); border: 1px solid var(--bs-color-border); border-radius: var(--bs-radius); background: var(--bs-color-surface); text-decoration: none; color: inherit; }
+.bs-row__icon { width: 40px; height: 40px; border-radius: var(--bs-radius); background: var(--bs-color-background); color: var(--bs-color-primary); display: inline-flex; align-items: center; justify-content: center; font-size: 1.1rem; flex-shrink: 0; }
+.bs-row__body { display: flex; flex-direction: column; min-width: 0; flex: 1; gap: 2px; }
+.bs-row__title { font-weight: 600; font-size: 0.95rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bs-row__meta { font-size: 0.82rem; color: var(--bs-color-muted); }
+.bs-row__aside { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex-shrink: 0; }
+.bs-row__amount { font-weight: 700; font-size: 0.95rem; }
+
+/* ── Cartes cadeaux (tuiles) ──────────────────────────────────────────────── */
+.bs-gc-grid { display: grid; grid-template-columns: 1fr; gap: var(--bs-space-2); }
+@media (min-width: 560px) { .bs-gc-grid { grid-template-columns: repeat(2, 1fr); } }
+.bs-gc { display: flex; flex-direction: column; gap: var(--bs-space-2); padding: var(--bs-space-3); border-radius: var(--bs-radius-lg, var(--bs-radius)); background: linear-gradient(135deg, var(--theme-accent, var(--bs-color-primary)), var(--theme-accent-strong, var(--bs-color-secondary))); color: var(--bs-color-surface); border: none; cursor: pointer; text-align: left; min-height: 120px; }
+.bs-gc__top { display: flex; align-items: center; justify-content: space-between; gap: var(--bs-space-2); }
+.bs-gc__brand { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; font-size: 0.85rem; }
+.bs-gc__balance { font-size: 1.5rem; font-weight: 700; }
+.bs-gc__code { font-family: var(--bs-font-mono, monospace); letter-spacing: 0.12em; font-size: 0.95rem; opacity: 0.92; }
+.bs-gc__foot { display: flex; align-items: center; justify-content: space-between; font-size: 0.8rem; opacity: 0.85; }
+
+/* ── En-tête de sous-page (retour) ────────────────────────────────────────── */
+.bs-acc-head { display: flex; align-items: center; gap: var(--bs-space-2); }
+.bs-acc-head__back { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: var(--bs-radius); border: 1px solid var(--bs-color-border); background: var(--bs-color-surface); color: inherit; text-decoration: none; flex-shrink: 0; }
+.bs-acc-head__title { margin: 0; font-size: 1.35rem; }
+
+/* ── Formulaire profil / aide ─────────────────────────────────────────────── */
+.bs-acc-form { display: flex; flex-direction: column; gap: var(--bs-space-3); }
+.bs-acc-form__actions { display: flex; gap: var(--bs-space-2); flex-wrap: wrap; }
+.bs-acc-help { display: flex; flex-direction: column; gap: var(--bs-space-2); }
+.bs-acc-help__item { display: flex; align-items: center; gap: var(--bs-space-2); padding: var(--bs-space-3); border: 1px solid var(--bs-color-border); border-radius: var(--bs-radius); background: var(--bs-color-surface); text-decoration: none; color: inherit; min-height: 44px; }
+.bs-acc-help__icon { color: var(--bs-color-primary); font-size: 1.2rem; }
+
+/* ── Transactions carte cadeau (drawer) ───────────────────────────────────── */
+.bs-gc-tx { display: flex; align-items: center; justify-content: space-between; gap: var(--bs-space-2); padding: var(--bs-space-2) 0; border-bottom: 1px solid var(--bs-color-border); }
+.bs-gc-tx:last-child { border-bottom: none; }
+.bs-gc-tx__label { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.bs-gc-tx__amount { font-weight: 700; flex-shrink: 0; }
+.bs-gc-tx__amount--debit { color: var(--bs-color-danger); }
+.bs-gc-tx__amount--credit { color: var(--bs-color-success); }
+.bs-gc-reveal { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 var(--bs-space-2); border: 1px solid var(--bs-color-border); border-radius: var(--bs-radius); background: var(--bs-color-surface); cursor: pointer; font-size: 0.85rem; }
+
+/* ── Drawer détail réservation + parcours annulation (RX4 S2) ─────────────── */
+.bs-bk-list { display: flex; flex-direction: column; }
+.bs-bk-row { display: flex; align-items: center; justify-content: space-between; gap: var(--bs-space-2); padding: var(--bs-space-2) 0; border-bottom: 1px solid var(--bs-color-border); }
+.bs-bk-row:last-child { border-bottom: none; }
+.bs-bk-row__label { color: var(--bs-color-muted); font-size: 0.88rem; display: inline-flex; align-items: center; gap: 6px; }
+.bs-bk-row__value { font-weight: 600; text-align: right; }
+.bs-bk-consequence { display: flex; align-items: flex-start; gap: var(--bs-space-2); padding: var(--bs-space-3); border-radius: var(--bs-radius); border: 1px solid var(--bs-color-border); }
+.bs-bk-consequence i { font-size: 1.3rem; flex-shrink: 0; }
+.bs-bk-consequence--ok { border-color: color-mix(in srgb, var(--bs-color-success) 40%, transparent); background: color-mix(in srgb, var(--bs-color-success) 8%, var(--bs-color-surface)); }
+.bs-bk-consequence--ok i { color: var(--bs-color-success); }
+.bs-bk-consequence--none { border-color: var(--bs-color-border); background: var(--bs-color-background); }
+.bs-bk-consequence--none i { color: var(--bs-color-muted); }
+.bs-bk-actions { display: flex; gap: var(--bs-space-2); flex-wrap: wrap; justify-content: flex-end; width: 100%; }
+.bs-bk-actions .bs-btn { flex: 1; justify-content: center; min-width: 140px; }
+.bs-btn-danger { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; padding: 0 var(--bs-space-3); border-radius: var(--bs-radius); border: 1px solid var(--bs-color-danger); background: var(--bs-color-danger); color: var(--bs-color-surface); cursor: pointer; font-size: 0.9rem; font-weight: 600; }
+.bs-btn-danger:disabled { opacity: 0.6; cursor: default; }
+
+/* Pied de carte formation (action avis — RX4 S2). */
+.bs-myf__foot { padding: var(--bs-space-2); border-top: 1px solid var(--bs-color-border); display: flex; }
+.bs-myf__foot .bs-btn { flex: 1; justify-content: center; }
+
+@media (prefers-reduced-motion: reduce) {
+  .bs-hub__action { transition: none; }
+  .bs-hub__action:hover { transform: none; }
+}

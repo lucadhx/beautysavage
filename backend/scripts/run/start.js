@@ -20,7 +20,7 @@ async function main() {
     printFailures(env0.failures);
     process.exit(1);
   }
-  if (!distIndex('vitrine') || !distIndex('manager')) {
+  if (process.env.STATIC_FRONTENDS_DEPLOYED !== 'true' && (!distIndex('vitrine') || !distIndex('manager'))) {
     console.error('\n❌ Builds React absents. Lancez d\'abord : `npm run build`.\n');
     process.exit(1);
   }

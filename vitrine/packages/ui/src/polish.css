@@ -1,0 +1,792 @@
+/* Sprint P1 — Couche de polish GLOBALE (@bs/ui/polish.css).
+   Importée APRÈS tokens.css dans les deux apps (vitrine + manager). N'ajoute QUE de l'UX transversale :
+   focus visible, cibles tactiles, scrollbar, micro-interactions, presets d'animation et primitives
+   harmonisées (opt-in). Toutes les valeurs dérivent des tokens `--bs-*`. Sélecteurs en `:where()`
+   (spécificité 0) pour ne JAMAIS écraser les styles existants des features.
+   Le reset `prefers-reduced-motion` global (tokens.css) neutralise déjà toutes ces animations. */
+
+:root {
+  --bs-motion-shimmer: 1200ms;
+  --bs-motion-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+  --bs-tap-target: 44px; /* WCAG 2.1 AA — cible tactile minimale */
+  --bs-icon-sm: 0.85rem;
+  --bs-icon-md: 1.05rem;
+  --bs-icon-lg: 1.25rem;
+}
+
+/* ----------------------------------------------------------------------------------------------- */
+/* A11y — Focus visible UNIFORME sur tous les éléments interactifs (couvre toutes les features).    */
+/* :where() = spécificité 0 → une feature peut surcharger sans `!important`.                         */
+:where(a, button, input, select, textarea, summary, [role='button'], [role='tab'], [tabindex]):focus-visible {
+  outline: 2px solid var(--bs-color-primary);
+  outline-offset: 2px;
+  border-radius: var(--bs-radius);
+}
+/* Pas d'outline au clic souris (focus-visible gère le clavier) — fallback navigateurs récents. */
+:where(button, [role='button']):focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* ----------------------------------------------------------------------------------------------- */
+/* Responsive — empêcher tout scroll horizontal sans casser `position: sticky` (clip, pas hidden).  */
+body {
+  overflow-x: clip;
+}
+img,
+svg,
+video,
+canvas {
+  max-width: 100%;
+}
+/* Défilement doux (respecté par le reset reduced-motion qui force scroll-behavior:auto). */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Scrollbar fine et discrète, cohérente partout. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--bs-color-border) transparent;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--bs-color-border);
+  border-radius: 999px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ----------------------------------------------------------------------------------------------- */
+/* Micro-interactions sur le bouton partagé (.bs-btn) — press + contraste disabled renforcé.        */
+.bs-btn {
+  transition:
+    transform var(--bs-motion-fast) var(--bs-motion-ease-out),
+    background-color var(--bs-motion-fast) var(--bs-motion-ease-out),
+    border-color var(--bs-motion-fast) var(--bs-motion-ease-out),
+    box-shadow var(--bs-motion-fast) var(--bs-motion-ease-out);
+  min-height: var(--bs-tap-target);
+}
+.bs-btn:active:not(:disabled):not([aria-disabled='true']) {
+  transform: translateY(1px) scale(0.99);
+}
+.bs-btn:disabled,
+.bs-btn[aria-disabled='true'] {
+  opacity: 0.5;
+  filter: saturate(0.65);
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Lien stylé en bouton : garder une cible tactile correcte. */
+a.bs-btn {
+  text-decoration: none;
+}
+
+/* ----------------------------------------------------------------------------------------------- */
+/* Skip-link (accessibilité clavier) — caché sauf focus.                                            */
+.bs-skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: var(--bs-z-banner);
+  padding: var(--bs-space-2) var(--bs-space-3);
+  background: var(--bs-color-primary);
+  color: #fff;
+  border-radius: var(--bs-radius);
+}
+.bs-skip-link:focus {
+  left: var(--bs-space-2);
+  top: var(--bs-space-2);
+}
+
+/* Lien de navigation actif (état « vous êtes ici »). */
+.bs-nav-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--bs-tap-target);
+  border-radius: var(--bs-radius);
+  text-decoration: none;
+  color: var(--bs-color-text);
+  padding: var(--bs-space-1) var(--bs-space-2);
+}
+.bs-nav-link:hover {
+  background: color-mix(in srgb, var(--bs-color-primary) 6%, transparent);
+}
+.bs-nav-link.active,
+.bs-nav-link[aria-current='page'] {
+  color: var(--bs-color-primary);
+  font-weight: 600;
+  background: color-mix(in srgb, var(--bs-color-primary) 10%, transparent);
+}
+
+/* ----------------------------------------------------------------------------------------------- */
+/* Primitives harmonisées (opt-in). Les features peuvent migrer dessus progressivement.             */
+
+/* Badge (statut/état). Variantes sémantiques cohérentes. */
+.bs-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--bs-space-1);
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.4;
+  background: color-mix(in srgb, var(--bs-color-muted) 14%, var(--bs-color-surface));
+  color: var(--bs-color-text);
+}
+.bs-badge--success {
+  background: color-mix(in srgb, var(--bs-color-success) 16%, var(--bs-color-surface));
+  color: var(--bs-color-success);
+}
+.bs-badge--warning {
+  background: color-mix(in srgb, var(--bs-color-warning) 16%, var(--bs-color-surface));
+  color: var(--bs-color-warning);
+}
+.bs-badge--danger {
+  background: color-mix(in srgb, var(--bs-color-danger) 14%, var(--bs-color-surface));
+  color: var(--bs-color-danger);
+}
+.bs-badge--info {
+  background: color-mix(in srgb, var(--bs-color-primary) 14%, var(--bs-color-surface));
+  color: var(--bs-color-primary);
+}
+.bs-badge--accent {
+  background: color-mix(in srgb, var(--bs-color-secondary) 14%, var(--bs-color-surface));
+  color: var(--bs-color-secondary);
+}
+.bs-badge--muted {
+  background: color-mix(in srgb, var(--bs-color-muted) 12%, var(--bs-color-surface));
+  color: var(--bs-color-muted);
+}
+
+/* Chip (filtre / tag). Interactive → cible tactile via --tap. */
+.bs-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--bs-space-1);
+  min-height: 32px;
+  padding: 4px 10px;
+  border: 1px solid var(--bs-color-border);
+  border-radius: 999px;
+  background: var(--bs-color-surface);
+  color: var(--bs-color-text);
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+.bs-chip--tap {
+  min-height: var(--bs-tap-target);
+}
+.bs-chip--active {
+  border-color: var(--bs-color-primary);
+  color: var(--bs-color-primary);
+  background: color-mix(in srgb, var(--bs-color-primary) 8%, var(--bs-color-surface));
+}
+
+/* Bouton icône (cible tactile garantie + centrage). */
+.bs-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--bs-tap-target);
+  min-height: var(--bs-tap-target);
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--bs-radius);
+  background: transparent;
+  color: var(--bs-color-text);
+  cursor: pointer;
+  transition: background-color var(--bs-motion-fast) var(--bs-motion-ease-out);
+}
+.bs-icon-btn:hover {
+  background: color-mix(in srgb, var(--bs-color-primary) 8%, transparent);
+}
+
+/* Bouton de bascule (device preview mobile/desktop, etc.). */
+.bs-device-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--bs-space-1);
+  min-height: var(--bs-tap-target);
+  padding: var(--bs-space-1) var(--bs-space-3);
+  border: 1px solid var(--bs-color-border);
+  border-radius: var(--bs-radius);
+  background: var(--bs-color-surface);
+  color: var(--bs-color-text);
+  cursor: pointer;
+}
+.bs-device-btn--active {
+  border-color: var(--bs-color-primary);
+  color: var(--bs-color-primary);
+  background: color-mix(in srgb, var(--bs-color-primary) 8%, var(--bs-color-surface));
+}
+
+/* Messages inline (erreur / succès / info) unifiés. */
+.bs-message {
+  font-size: 0.85rem;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--bs-space-1);
+}
+.bs-message--error {
+  color: var(--bs-color-danger);
+}
+.bs-message--success {
+  color: var(--bs-color-success);
+}
+.bs-message--warning {
+  color: var(--bs-color-warning);
+}
+
+/* Spinner (chargement animé). */
+.bs-spinner {
+  display: inline-block;
+  width: 1.1em;
+  height: 1.1em;
+  border: 2px solid color-mix(in srgb, var(--bs-color-primary) 30%, transparent);
+  border-top-color: var(--bs-color-primary);
+  border-radius: 50%;
+  animation: bs-spin 0.7s linear infinite;
+}
+
+/* Skeleton (shimmer harmonisé via token). */
+.bs-skeleton {
+  position: relative;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--bs-color-muted) 12%, var(--bs-color-surface));
+  border-radius: var(--bs-radius);
+}
+.bs-skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--bs-color-surface) 60%, transparent),
+    transparent
+  );
+  animation: bs-shimmer var(--bs-motion-shimmer) ease-in-out infinite;
+}
+.bs-skeleton--text {
+  height: 0.9em;
+  margin: 4px 0;
+}
+.bs-skeleton--line {
+  height: 12px;
+}
+.bs-skeleton--block {
+  height: 96px;
+}
+
+/* Tooltip minimal (CSS, opt-in via attribut data-bs-tip). */
+.bs-tip {
+  position: relative;
+}
+
+/* ----------------------------------------------------------------------------------------------- */
+/* Presets d'animation (Motion Guideline). Classes consommées par @bs/ui/polish motion.ts.          */
+@keyframes bs-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes bs-shimmer {
+  to {
+    transform: translateX(100%);
+  }
+}
+@keyframes bs-entrance {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes bs-exit {
+  to {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+@keyframes bs-sheet {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+@keyframes bs-slide {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+@keyframes bs-dialog {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes bs-pop {
+  0% {
+    transform: scale(0.7);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.05);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+@keyframes bs-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20%,
+  60% {
+    transform: translateX(-5px);
+  }
+  40%,
+  80% {
+    transform: translateX(5px);
+  }
+}
+@keyframes bs-toast {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.bs-anim-entrance {
+  animation: bs-entrance var(--bs-motion-normal) var(--bs-motion-ease-out) both;
+}
+.bs-anim-exit {
+  animation: bs-exit var(--bs-motion-fast) var(--bs-motion-ease-out) both;
+}
+.bs-anim-sheet {
+  animation: bs-sheet var(--bs-motion-normal) var(--bs-motion-ease-out) both;
+}
+.bs-anim-slide {
+  animation: bs-slide var(--bs-motion-normal) var(--bs-motion-ease-out) both;
+}
+.bs-anim-dialog {
+  animation: bs-dialog var(--bs-motion-fast) var(--bs-motion-ease-out) both;
+}
+.bs-anim-accordion {
+  animation: bs-entrance var(--bs-motion-fast) var(--bs-motion-ease-out) both;
+}
+.bs-anim-pop,
+.bs-anim-badge-pop {
+  animation: bs-pop var(--bs-motion-normal) var(--bs-motion-spring) both;
+}
+.bs-anim-shake {
+  animation: bs-shake var(--bs-motion-slow) var(--bs-motion-ease-in-out) both;
+}
+.bs-anim-toast,
+.bs-anim-notif {
+  animation: bs-toast var(--bs-motion-normal) var(--bs-motion-ease-out) both;
+}
+.bs-anim-hover {
+  transition: transform var(--bs-motion-fast) var(--bs-motion-ease-out);
+}
+.bs-anim-hover:hover {
+  transform: translateY(-2px);
+}
+.bs-anim-press:active {
+  transform: scale(0.97);
+}
+
+/* ----------------------------------------------------------------------------------------------- */
+/* Layout sidebar responsive (manager/dev). Colonne en desktop, rangée qui passe à la ligne en      */
+/* mobile (utilisable au pouce, aucun scroll horizontal). `min-width:0` sur le main évite l'overflow.*/
+.bs-sidebar-layout {
+  display: flex;
+  gap: var(--bs-space-4);
+  align-items: flex-start;
+}
+.bs-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bs-space-1);
+  min-width: 200px;
+}
+.bs-sidebar-layout__main {
+  flex: 1;
+  min-width: 0;
+}
+@media (max-width: 720px) {
+  .bs-sidebar-layout {
+    flex-direction: column;
+  }
+  .bs-sidebar {
+    flex-direction: row;
+    flex-wrap: wrap;
+    min-width: 0;
+    width: 100%;
+  }
+}
+
+/* ----------------------------------------------------------------------------------------------- */
+/* RX3 — Drawer partagé (bottom-sheet mobile / side-panel desktop) + scrim.                          */
+.bs-overlay-root {
+  position: fixed;
+  inset: 0;
+  z-index: var(--bs-z-drawer);
+}
+.bs-scrim {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  z-index: var(--bs-z-overlay);
+}
+.bs-drawer {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: var(--bs-z-drawer);
+  display: flex;
+  flex-direction: column;
+  max-height: 90vh;
+  background: var(--bs-color-surface);
+  border-top-left-radius: calc(var(--bs-radius) * 2);
+  border-top-right-radius: calc(var(--bs-radius) * 2);
+  box-shadow: 0 -8px 30px rgba(15, 23, 42, 0.2);
+  outline: none;
+}
+.bs-drawer__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--bs-space-2);
+  padding: var(--bs-space-3) var(--bs-space-3) var(--bs-space-2);
+  border-bottom: 1px solid var(--bs-color-border);
+}
+.bs-drawer__title {
+  font-weight: 600;
+  font-size: 1.05rem;
+}
+.bs-drawer__body {
+  padding: var(--bs-space-3);
+  overflow-y: auto;
+  flex: 1;
+}
+.bs-drawer__footer {
+  padding: var(--bs-space-3);
+  border-top: 1px solid var(--bs-color-border);
+  display: flex;
+  gap: var(--bs-space-2);
+  justify-content: flex-end;
+  background: var(--bs-color-surface);
+}
+@media (min-width: 640px) {
+  .bs-drawer {
+    top: 0;
+    bottom: 0;
+    left: auto;
+    width: min(440px, 100%);
+    max-height: none;
+    border-radius: 0;
+    box-shadow: -8px 0 30px rgba(15, 23, 42, 0.2);
+  }
+  .bs-drawer--left {
+    left: 0;
+    right: auto;
+    box-shadow: 8px 0 30px rgba(15, 23, 42, 0.2);
+  }
+}
+
+/* RX3 — Barre d'action collée (sticky CTA). Colle le bas du viewport (surtout mobile). */
+.bs-stickybar {
+  position: sticky;
+  bottom: 0;
+  z-index: var(--bs-z-banner);
+  display: flex;
+  gap: var(--bs-space-2);
+  align-items: center;
+  padding: var(--bs-space-2) var(--bs-space-3);
+  padding-bottom: calc(var(--bs-space-2) + env(safe-area-inset-bottom, 0px));
+  background: color-mix(in srgb, var(--bs-color-surface) 92%, transparent);
+  backdrop-filter: blur(8px);
+  border-top: 1px solid var(--bs-color-border);
+}
+.bs-stickybar > .bs-btn {
+  flex: 1;
+}
+@media (min-width: 960px) {
+  .bs-stickybar--desktop-inline {
+    position: static;
+    padding: 0;
+    background: none;
+    backdrop-filter: none;
+    border-top: none;
+  }
+}
+
+/* ----------------------------------------------------------------------------------------------- */
+/* RX3 — Primitives de formulaire partagées (FormField / Input / TextArea / Select / Checkbox).     */
+.bs-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bs-space-1);
+  margin-bottom: var(--bs-space-3);
+}
+.bs-field__label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--bs-color-text);
+}
+.bs-field__req {
+  color: var(--bs-color-danger);
+}
+.bs-field__hint {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--bs-color-muted);
+}
+.bs-field__error {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--bs-color-danger);
+}
+.bs-input {
+  width: 100%;
+  min-height: var(--bs-tap-target);
+  padding: var(--bs-space-2) var(--bs-space-3);
+  font: inherit;
+  color: var(--bs-color-text);
+  background: var(--bs-color-surface);
+  border: 1px solid var(--bs-color-border);
+  border-radius: var(--bs-radius);
+}
+.bs-input:focus {
+  border-color: var(--bs-color-primary);
+}
+.bs-input--area {
+  min-height: calc(var(--bs-tap-target) * 2);
+  resize: vertical;
+}
+.bs-input--select {
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--bs-color-muted) 50%),
+    linear-gradient(135deg, var(--bs-color-muted) 50%, transparent 50%);
+  background-position: calc(100% - 18px) calc(50% - 3px), calc(100% - 13px) calc(50% - 3px);
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  padding-right: calc(var(--bs-space-4) + 8px);
+}
+.bs-input[aria-invalid='true'] {
+  border-color: var(--bs-color-danger);
+}
+.bs-check {
+  display: flex;
+  align-items: center;
+  gap: var(--bs-space-2);
+  min-height: var(--bs-tap-target);
+  cursor: pointer;
+}
+.bs-check__input {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  accent-color: var(--bs-color-primary);
+}
+.bs-check__label {
+  font-size: 0.92rem;
+}
+
+/* ----------------------------------------------------------------------------------------------- */
+/* RX3 — Galerie photo (image principale + vignettes).                                              */
+.bs-gallery {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bs-space-2);
+}
+.bs-gallery__main {
+  border-radius: var(--bs-radius);
+  position: relative;
+  overflow: hidden;
+}
+.bs-gallery__img { animation: bs-gallery-fade var(--bs-motion-normal) var(--bs-motion-ease-out); }
+@keyframes bs-gallery-fade { from { opacity: 0; transform: scale(1.03); } to { opacity: 1; transform: none; } }
+.bs-gallery__nav {
+  position: absolute; top: 50%; transform: translateY(-50%);
+  width: 42px; height: 42px; border-radius: 999px; border: none; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center; font-size: 1.1rem;
+  background: color-mix(in srgb, var(--bs-color-surface) 78%, transparent); color: var(--bs-color-text);
+  backdrop-filter: blur(4px); transition: background var(--bs-motion-fast) var(--bs-motion-ease-out);
+}
+.bs-gallery__nav:hover { background: var(--bs-color-surface); }
+.bs-gallery__nav--prev { left: var(--bs-space-2); }
+.bs-gallery__nav--next { right: var(--bs-space-2); }
+.bs-gallery__counter {
+  position: absolute; bottom: var(--bs-space-2); right: var(--bs-space-2);
+  padding: 2px 9px; border-radius: 999px; font-size: 0.74rem; font-weight: 700;
+  background: color-mix(in srgb, var(--bs-color-text) 60%, transparent); color: var(--bs-color-on-primary);
+}
+@media (prefers-reduced-motion: reduce) { .bs-gallery__img, .bs-gallery__nav { animation: none; transition: none; } }
+.bs-gallery__thumbs {
+  display: flex;
+  gap: var(--bs-space-2);
+  overflow-x: auto;
+  padding-bottom: var(--bs-space-1);
+}
+.bs-gallery__thumb {
+  flex: 0 0 auto;
+  width: 64px;
+  height: 64px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: var(--bs-radius);
+  overflow: hidden;
+  cursor: pointer;
+  background: var(--bs-color-background);
+}
+.bs-gallery__thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.bs-gallery__thumb--active {
+  border-color: var(--bs-color-primary);
+}
+
+/* ----------------------------------------------------------------------------------------------- */
+/* Dropdown custom partagé — animé ouverture ET fermeture, angles discrets.                          */
+.bs-dd { position: relative; display: inline-block; }
+.bs-dd__trigger {
+  display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 12px;
+  border: 1px solid var(--bs-color-border); border-radius: 6px;
+  background: var(--bs-color-surface); color: var(--bs-color-text); font: inherit; font-weight: 600; cursor: pointer;
+  transition: border-color var(--bs-motion-fast) var(--bs-motion-ease-out), box-shadow var(--bs-motion-fast) var(--bs-motion-ease-out);
+}
+.bs-dd__trigger:hover:not(:disabled) { border-color: color-mix(in srgb, var(--bs-color-primary) 40%, var(--bs-color-border)); }
+.bs-dd--open .bs-dd__trigger { border-color: var(--bs-color-primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--bs-color-primary) 16%, transparent); }
+.bs-dd__trigger:disabled { opacity: 0.55; cursor: not-allowed; }
+.bs-dd__ic { color: var(--bs-color-muted); font-size: 0.95rem; }
+.bs-dd__value { font-size: 0.9rem; }
+.bs-dd__value--ph { color: var(--bs-color-muted); font-weight: 500; }
+.bs-dd__chev { color: var(--bs-color-muted); transition: transform var(--bs-motion-normal) var(--bs-motion-ease-in-out); }
+.bs-dd--open .bs-dd__chev { transform: rotate(180deg); color: var(--bs-color-primary); }
+/* Menu : monté en permanence → animation d'entrée ET de sortie (in/out). */
+.bs-dd__menu {
+  position: absolute; z-index: 40; top: calc(100% + 6px); left: 0; min-width: 100%;
+  list-style: none; margin: 0; padding: 5px;
+  border: 1px solid var(--bs-color-border); border-radius: 8px; background: var(--bs-color-surface);
+  box-shadow: 0 16px 38px -18px color-mix(in srgb, var(--bs-color-text) 45%, transparent);
+  opacity: 0; visibility: hidden; transform: translateY(-6px) scale(0.98); transform-origin: top;
+  transition: opacity var(--bs-motion-normal) var(--bs-motion-ease-in-out), transform var(--bs-motion-normal) var(--bs-motion-ease-in-out), visibility var(--bs-motion-normal) var(--bs-motion-ease-in-out);
+  pointer-events: none;
+}
+.bs-dd--open .bs-dd__menu { opacity: 1; visibility: visible; transform: none; pointer-events: auto; }
+.bs-dd__opt {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; min-height: 40px;
+  padding: 0 10px; border: none; border-radius: 6px; background: transparent; color: var(--bs-color-text);
+  font: inherit; font-weight: 600; cursor: pointer; text-align: left; white-space: nowrap;
+  transition: background var(--bs-motion-fast) var(--bs-motion-ease-out);
+}
+.bs-dd__opt:hover { background: color-mix(in srgb, var(--bs-color-primary) 8%, var(--bs-color-surface)); }
+.bs-dd__opt--active { color: var(--bs-color-primary); background: color-mix(in srgb, var(--bs-color-primary) 10%, var(--bs-color-surface)); }
+.bs-dd__opt i { color: var(--bs-color-primary); }
+@media (prefers-reduced-motion: reduce) { .bs-dd__menu, .bs-dd__chev { transition: none; } }
+
+/* ----------------------------------------------------------------------------------------------- */
+/* RX3 — Accordéon partagé (FAQ, modules, sections repliables).                                      */
+.bs-acc {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--bs-color-border);
+  border-radius: var(--bs-radius);
+  overflow: hidden;
+  background: var(--bs-color-surface);
+}
+.bs-acc__item + .bs-acc__item {
+  border-top: 1px solid var(--bs-color-border);
+}
+.bs-acc__heading {
+  margin: 0;
+  font-size: 1rem;
+}
+.bs-acc__trigger {
+  width: 100%;
+  min-height: var(--bs-tap-target);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--bs-space-2);
+  padding: var(--bs-space-3);
+  background: none;
+  border: none;
+  font: inherit;
+  font-weight: 600;
+  color: var(--bs-color-text);
+  text-align: left;
+  cursor: pointer;
+}
+.bs-acc__trigger:hover {
+  background: color-mix(in srgb, var(--bs-color-primary) 5%, transparent);
+}
+.bs-acc__chevron {
+  flex-shrink: 0;
+  color: var(--bs-color-muted);
+  transition: transform var(--bs-motion-normal, 240ms) var(--bs-motion-ease-in-out), color var(--bs-motion-normal, 240ms) var(--bs-motion-ease-in-out);
+}
+.bs-acc__trigger[aria-expanded='true'] .bs-acc__chevron,
+.bs-acc__chevron--open {
+  transform: rotate(180deg);
+  color: var(--bs-color-primary);
+}
+/* Panneau : dropdown animé (ouverture ET fermeture) via grid-template-rows 0fr → 1fr. */
+.bs-acc__panelwrap {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--bs-motion-normal, 240ms) var(--bs-motion-ease-in-out);
+}
+.bs-acc__panelwrap--open {
+  grid-template-rows: 1fr;
+}
+.bs-acc__panel {
+  overflow: hidden;
+  min-height: 0;
+  color: var(--bs-color-muted);
+}
+.bs-acc__panelinner {
+  padding: 0 var(--bs-space-3) var(--bs-space-3);
+  opacity: 0;
+  transition: opacity var(--bs-motion-normal, 240ms) var(--bs-motion-ease-in-out);
+}
+.bs-acc__panelwrap--open .bs-acc__panelinner {
+  opacity: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  .bs-acc__chevron,
+  .bs-acc__panelwrap,
+  .bs-acc__panelinner {
+    transition: none;
+  }
+}

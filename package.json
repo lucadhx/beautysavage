@@ -10,6 +10,8 @@
     "start": "npm run start --prefix backend",
     "seed": "npm run seed:all --prefix backend",
     "pair:panel": "npm run panel:pair --prefix backend",
+    "deploy:preflight": "node deploy/deploy.mjs --preflight",
+    "deploy": "node deploy/deploy.mjs --execute",
     "test": "npm test --prefix backend && npm run react:test --prefix backend"
   }
 }
