@@ -1,0 +1,10 @@
+﻿## 12. Formations - structure
+- **Model Formation** : collection ormations with 
+ame, description, price, coverImage, 	railerVideoUrl, 	ype (presentiel/distanciel), status (draft/published/disabled), ctive (compatibility) and createdAt. The name remains unique via Mongoose.
+- **API gestion** (/api/gestion/formations) :
+  - equireAuth(), equireMode('gestion'), equireDev restrict access to development accounts in gestion mode.
+  - GET /api/gestion/formations returns the list ordered by creation via ormationGestionController.listFormations.
+  - POST /api/gestion/formations creates an entry (payload validated: required name, limited type/status, numeric price, cleaned URLs).
+  - PUT /api/gestion/formations/:id ensures the ObjectId identifier is valid, updates allowed fields, and returns the updated document.
+- **Module ormationManagerModule.js** : loaded dynamically in gestion.html, exposes a catalog view + a form (type and status selectors) and uses the existing classes (module-panel, manager-section, orm-actions, module-placeholder, orm-message). No colors are hardcoded: the UI relies on ui.css and theme variables.
+- **Process** : the module consumes /api/gestion/formations to show cards, uses POST/PUT to persist data, then reloads the list (separating read/write, Mongo remains the single source of truth). The setup is ready for future upgrades (public display, further flows).

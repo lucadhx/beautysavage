@@ -1,0 +1,212 @@
+/* servicesModule.css — Catalogue prestations vitrine — préfixe svs- */
+
+.svs-root {
+  display: flex;
+  flex-direction: column;
+  gap: 1.75rem;
+  padding: var(--space-lg);
+}
+
+.svs-header {
+  text-align: center;
+}
+
+.svs-title {
+  font-size: clamp(1.4rem, 2.5vw, 2rem);
+  font-weight: 800;
+  margin: 0 0 0.4rem;
+  color: var(--color-text);
+}
+
+.svs-subtitle {
+  font-size: 0.95rem;
+  color: var(--color-muted);
+  margin: 0;
+}
+
+.svs-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 1.25rem;
+}
+
+.svs-grid--loading {
+  pointer-events: none;
+}
+
+/* Skeleton */
+
+.svs-card--skeleton {
+  height: 320px;
+  border-radius: 12px;
+  background: linear-gradient(90deg,
+    color-mix(in oklab, var(--color-border) 40%, var(--color-background) 60%) 25%,
+    color-mix(in oklab, var(--color-border) 20%, var(--color-background) 80%) 50%,
+    color-mix(in oklab, var(--color-border) 40%, var(--color-background) 60%) 75%
+  );
+  background-size: 200% 100%;
+  animation: svsShimmer 1.4s infinite linear;
+}
+
+@keyframes svsShimmer {
+  from { background-position: 200% 0; }
+  to   { background-position: -200% 0; }
+}
+
+/* Cards */
+
+.svs-card {
+  display: flex;
+  flex-direction: column;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.svs-card:hover {
+  box-shadow: 0 8px 28px var(--color-shadow);
+  transform: translateY(-3px);
+}
+
+.svs-card:focus-visible {
+  outline: 2px solid var(--theme-accent);
+  outline-offset: 2px;
+}
+
+.svs-card__img-wrap {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+}
+
+.svs-card__img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.3s ease;
+}
+
+.svs-card:hover .svs-card__img {
+  transform: scale(1.04);
+}
+
+.svs-card__img--empty {
+  background: color-mix(in oklab, var(--color-primary) 10%, var(--color-background) 90%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-muted);
+  font-size: 2.5rem;
+}
+
+.svs-promo-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  background: var(--color-secondary);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+}
+
+.svs-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.9rem;
+  flex: 1;
+}
+
+.svs-card__title {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--color-text);
+}
+
+.svs-card__desc {
+  font-size: 0.8rem;
+  color: var(--color-muted);
+  margin: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.svs-card__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: auto;
+}
+
+.svs-card__duration {
+  font-size: 0.8rem;
+  color: var(--color-muted);
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.svs-card__price-wrap {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+}
+
+.svs-price {
+  font-weight: 800;
+  font-size: 1rem;
+  color: var(--color-text);
+}
+
+.svs-price--promo {
+  color: var(--color-secondary);
+}
+
+.svs-price--original {
+  font-size: 0.8rem;
+  font-weight: 400;
+  color: var(--color-muted);
+  text-decoration: line-through;
+}
+
+.svs-book-btn {
+  width: 100%;
+  padding: 0.55rem;
+  border-radius: 6px;
+  background: var(--theme-accent);
+  color: #fff;
+  border: none;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  transition: background 0.18s ease;
+  margin-top: 0.25rem;
+}
+
+.svs-book-btn:hover {
+  background: var(--theme-accent-strong);
+}
+
+.svs-empty {
+  grid-column: 1 / -1;
+  text-align: center;
+  color: var(--color-muted);
+  padding: 2rem;
+}
+
+.svs-error {
+  text-align: center;
+  color: var(--color-danger);
+  padding: 2rem;
+}

@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install stripe)",
+      "Bash(node -e \"import\\(''stripe''\\).then\\(m => console.log\\(''stripe ok'', m.default.name || ''loaded''\\)\\)\")",
+      "Read(//c/Users/Luca/.claude/projects/c--Users-Luca-Desktop-PERSO-Dev-Web-Beauty-Savage-backend/memory/**)",
+      "Bash(node -e ':*)"
+    ],
+    "additionalDirectories": [
+      "c:\\Users\\Luca\\.claude\\projects\\c--Users-Luca-Desktop-PERSO-Dev-Web-Beauty-Savage-backend\\memory"
+    ]
+  }
+}

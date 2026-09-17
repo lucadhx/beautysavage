@@ -1,0 +1,15 @@
+{
+  "name": "beautysavage",
+  "private": true,
+  "version": "1.0.0",
+  "description": "BeautySavage — vitrine e-commerce, espace client et manager d'institut.",
+  "scripts": {
+    "install": "npm install --prefix backend && npm install --prefix backend/frontend-react",
+    "dev": "npm run dev --prefix backend",
+    "build": "npm run build --prefix backend",
+    "start": "npm run start --prefix backend",
+    "seed": "npm run seed:all --prefix backend",
+    "pair:panel": "npm run panel:pair --prefix backend",
+    "test": "npm test --prefix backend && npm run react:test --prefix backend"
+  }
+}

@@ -1,0 +1,9 @@
+/* RX-BLOCKER-2 — Pages d'auth manager autonomes. Tokens --bs-* only, mobile-first, 44px. */
+.ma { min-height: 100vh; display: flex; flex-direction: column; background: var(--bs-color-background); }
+.ma__brand { padding: var(--bs-space-3); text-align: center; font-weight: 700; color: var(--bs-color-primary); border-bottom: 1px solid var(--bs-color-border); background: var(--bs-color-surface); }
+.ma__main { flex: 1; display: flex; align-items: flex-start; justify-content: center; padding: var(--bs-space-4) var(--bs-space-3); }
+.ma__card { width: 100%; max-width: 420px; display: flex; flex-direction: column; gap: var(--bs-space-3); }
+.ma__title { margin: 0; font-size: 1.3rem; }
+.ma__form { display: flex; flex-direction: column; gap: var(--bs-space-3); }
+.ma__meta { font-size: 0.9rem; color: var(--bs-color-muted); margin: 0; }
+.ma__ok { display: inline-flex; align-items: center; gap: 6px; color: var(--bs-color-success); }

@@ -1,0 +1,288 @@
+/* monContratModule.css — Mon contrat (admin view) v1.0
+   Préfixe unique : mc-*
+   Couleurs via var(--theme-*) / var(--color-*)
+   Mobile-first — aucune valeur hex hardcodée
+   ════════════════════════════════════════════════════════ */
+
+/* ── Layout ──────────────────────────────────────────────── */
+
+.mc-module {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  max-width: 560px;
+}
+
+.mc-title {
+  font-size: 1.35rem;
+  font-weight: 800;
+  margin: 0;
+  color: inherit;
+}
+
+/* ── Card infos ──────────────────────────────────────────── */
+
+.mc-card {
+  background: var(--color-surface, #fff);
+  border-radius: 1rem;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.07);
+  overflow: hidden;
+}
+
+.mc-info-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 1.25rem;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  font-size: 0.9rem;
+}
+
+.mc-info-row:last-child {
+  border-bottom: none;
+}
+
+.mc-info-label {
+  color: var(--color-muted, rgba(15, 23, 42, 0.5));
+  flex-shrink: 0;
+  min-width: 8rem;
+}
+
+.mc-info-value {
+  font-weight: 600;
+  text-align: right;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.4rem;
+}
+
+.mc-period-line {
+  font-size: 0.82rem;
+  color: var(--color-muted, rgba(15, 23, 42, 0.5));
+  margin: 0;
+  padding: 0.3rem 1.25rem 0.65rem;
+  text-align: right;
+}
+
+/* ── Badges ──────────────────────────────────────────────── */
+
+.mc-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.18rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.mc-badge--success {
+  background: rgba(31, 122, 58, 0.1);
+  color: var(--color-success, #1f7a3a);
+}
+
+.mc-badge--warning {
+  background: rgba(245, 158, 11, 0.12);
+  color: #b45309;
+}
+
+.mc-badge--muted {
+  background: rgba(15, 23, 42, 0.07);
+  color: var(--color-muted, rgba(15, 23, 42, 0.5));
+}
+
+/* Status-specific badges */
+.mc-badge--active {
+  background: rgba(31, 122, 58, 0.1);
+  color: var(--color-success, #1f7a3a);
+}
+
+.mc-badge--pending {
+  background: rgba(245, 158, 11, 0.12);
+  color: #b45309;
+}
+
+.mc-badge--cancelled {
+  background: rgba(220, 38, 38, 0.1);
+  color: var(--color-danger, #dc2626);
+}
+
+/* ── Cancel banner ───────────────────────────────────────── */
+
+.mc-cancel-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.75rem 1rem;
+  background: rgba(245, 158, 11, 0.1);
+  border-radius: 0.75rem;
+  font-size: 0.87rem;
+  color: #b45309;
+  border: 1px solid rgba(245, 158, 11, 0.25);
+}
+
+.mc-cancel-banner i {
+  font-size: 1.05rem;
+  flex-shrink: 0;
+}
+
+/* ── Actions ─────────────────────────────────────────────── */
+
+.mc-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.mc-cancel-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.6rem 1.25rem;
+  border-radius: 999px;
+  border: 1.5px solid var(--color-danger, #dc2626);
+  background: none;
+  color: var(--color-danger, #dc2626);
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s, color 0.15s;
+  align-self: flex-start;
+}
+
+.mc-cancel-btn:hover {
+  background: rgba(220, 38, 38, 0.07);
+}
+
+/* ── Modal ───────────────────────────────────────────────── */
+
+.mc-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.mc-overlay[hidden] {
+  display: none;
+}
+
+.mc-modal {
+  background: var(--color-surface, #fff);
+  border-radius: 1.1rem;
+  padding: 1.5rem;
+  width: 100%;
+  max-width: 400px;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.2);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.mc-modal-title {
+  font-size: 1rem;
+  font-weight: 800;
+  margin: 0;
+}
+
+.mc-modal-body {
+  font-size: 0.88rem;
+  color: var(--color-muted, rgba(15, 23, 42, 0.6));
+  margin: 0;
+  line-height: 1.5;
+}
+
+.mc-modal-error {
+  font-size: 0.85rem;
+  color: var(--color-danger, #dc2626);
+  background: rgba(220, 38, 38, 0.07);
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+}
+
+.mc-modal-error[hidden] {
+  display: none;
+}
+
+.mc-modal-actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-top: 0.25rem;
+}
+
+.mc-modal-cancel {
+  flex: 1;
+  padding: 0.6rem 1rem;
+  border-radius: 999px;
+  border: 1.5px solid rgba(0, 0, 0, 0.14);
+  background: none;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  color: inherit;
+  transition: background 0.12s;
+}
+
+.mc-modal-cancel:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.mc-modal-confirm {
+  flex: 2;
+  padding: 0.6rem 1rem;
+  border-radius: 999px;
+  border: none;
+  background: var(--color-danger, #dc2626);
+  color: #fff;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  transition: opacity 0.15s;
+}
+
+.mc-modal-confirm:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* ── États chargement / erreur ───────────────────────────── */
+
+.mc-loading {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  color: var(--color-muted, rgba(15, 23, 42, 0.5));
+  font-size: 0.9rem;
+  padding: 1rem 0;
+}
+
+@keyframes mcSpin {
+  to { transform: rotate(360deg); }
+}
+
+.mc-spin {
+  animation: mcSpin 0.9s linear infinite;
+  display: inline-block;
+}
+
+.mc-error-state {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  color: var(--color-danger, #dc2626);
+  font-size: 0.9rem;
+  padding: 1rem 0;
+}

@@ -1,0 +1,75 @@
+﻿<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Connexion - Beauty Savage</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="/css/app.css">
+  <link rel="stylesheet" href="/css/login.css">
+</head>
+<body class="login-body">
+  <main class="login-shell">
+    <section class="login-card">
+      <header class="login-brand">
+        <div class="brand-identity login-brand__identity">
+          <img class="login-logo" data-login-logo alt="Logo du site" hidden>
+          <span class="brand-logo-fallback login-logo-fallback" data-login-logo-fallback hidden>BS</span>
+          <div class="login-brand__copy">
+            <p class="login-brand__eyebrow">Espace sécurisé</p>
+            <h1 data-login-site-name>Beauty Savage</h1>
+            <p class="login-brand__lead">
+              Connectez-vous pour accéder à votre espace client ou à la gestion selon votre rôle.
+            </p>
+          </div>
+        </div>
+      </header>
+
+      <section class="login-card__panel">
+        <div class="login-card__intro">
+          <p class="muted" data-login-context-heading hidden>Connectez-vous pour télécharger votre facture</p>
+          <p class="muted" data-login-context-subtext hidden>Après connexion, votre facture sera téléchargée automatiquement.</p>
+        </div>
+
+        <form class="login-form" data-login-form>
+          <div class="form-group">
+            <label for="email">Email</label>
+            <input id="email" name="email" type="email" required autocomplete="username">
+          </div>
+          <div class="form-group">
+            <label for="password">Mot de passe</label>
+            <input id="password" name="password" type="password" required autocomplete="current-password">
+          </div>
+          <div class="error" data-login-error></div>
+          <button class="secondary-link login-resend-link" type="button" data-login-resend hidden>
+            Renvoyer le code de vérification
+          </button>
+          <button class="primary-button login-submit" type="submit">Se connecter</button>
+        </form>
+
+        <div class="login-links">
+          <a class="secondary-link" href="/reset-password-request.html">Mot de passe oublié ?</a>
+          <a class="secondary-link" href="/vitrine.html?page=signup">Créer un compte</a>
+          <a class="secondary-link" href="/vitrine.html">Retour à la vitrine</a>
+        </div>
+
+        <section class="login-dev-bootstrap" data-dev-bootstrap-section hidden>
+          <p class="login-dev-bootstrap__title">Création du compte développeur (temporaire)</p>
+          <form data-dev-bootstrap-form>
+            <div class="form-group">
+              <label for="dev-email">Email</label>
+              <input id="dev-email" name="dev-email" type="email" required>
+            </div>
+            <div class="form-group">
+              <label for="dev-password">Mot de passe</label>
+              <input id="dev-password" name="dev-password" type="password" required>
+            </div>
+            <div class="error" data-dev-bootstrap-error></div>
+            <button class="primary-button" type="submit">Créer compte développeur</button>
+          </form>
+        </section>
+      </section>
+    </section>
+  </main>
+  <script type="module" src="/js/modules/auth.js"></script>
+</body>
+</html>

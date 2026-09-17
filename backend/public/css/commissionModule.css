@@ -1,0 +1,528 @@
+/* commissionModule.css — Commission 3-tab UI — préfixe cmm- */
+
+/* ─── Tabs ──────────────────────────────────────────────── */
+
+.cmm-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.9rem;
+  border-bottom: 1px solid color-mix(in oklab, var(--color-border) 70%, transparent 30%);
+  margin-bottom: 1.5rem;
+  padding-bottom: 0.2rem;
+}
+
+.cmm-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.05rem 0.46rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--color-text, #0f172a);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  position: relative;
+}
+
+.cmm-tab::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: -1px;
+  width: 100%;
+  height: 2px;
+  background: var(--theme-accent, #5f4ff7);
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 0.22s ease;
+}
+
+.cmm-tab:hover,
+.cmm-tab:focus-visible {
+  color: var(--theme-accent, #5f4ff7);
+}
+
+.cmm-tab--active {
+  color: var(--theme-accent, #5f4ff7);
+}
+
+.cmm-tab--active::after {
+  transform: scaleX(1);
+}
+
+.cmm-tab-panel { outline: none; }
+
+/* ─── Config card ────────────────────────────────────────── */
+
+.cmm-config-card {
+  background: var(--color-surface, #fff);
+  border: 1px solid var(--color-border, rgba(15,23,42,.1));
+  border-radius: 12px;
+  padding: 1.5rem;
+  max-width: 540px;
+  margin: 0 auto;
+}
+
+.cmm-config-section-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-muted, rgba(15,23,42,.5));
+  margin-bottom: 0.85rem;
+}
+
+.cmm-config-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--color-border, rgba(15,23,42,.07));
+  gap: 1rem;
+}
+
+.cmm-config-row:last-of-type { border-bottom: none; }
+
+.cmm-config-row--total {
+  margin-top: 0.25rem;
+  padding-top: 0.65rem;
+}
+
+.cmm-config-label {
+  font-size: 0.85rem;
+  color: var(--color-muted, rgba(15,23,42,.5));
+  flex-shrink: 0;
+}
+
+.cmm-config-value {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--color-text, #0f172a);
+  text-align: right;
+}
+
+.cmm-config-value.is-positive { color: var(--color-success, #1f7a3a); }
+.cmm-config-value.is-negative { color: var(--color-danger,  #dc2626); }
+
+.cmm-config-divider {
+  height: 1px;
+  background: var(--color-border, rgba(15,23,42,.1));
+  margin: 1.1rem 0;
+}
+
+.cmm-config-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  align-items: flex-start;
+  margin-top: 0.25rem;
+}
+
+.cmm-delete-config-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 1rem;
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--color-danger, #dc2626);
+  background: transparent;
+  border: 1px solid var(--color-danger, #dc2626);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.cmm-delete-config-btn:hover:not(:disabled) {
+  background: var(--color-danger, #dc2626);
+  color: #fff;
+}
+
+.cmm-delete-config-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.cmm-config-blocked-note {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  color: var(--color-danger, #dc2626);
+  margin: 0;
+  animation: cmm-fadein 0.2s ease;
+}
+
+@keyframes cmm-fadein { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+
+/* ─── Config empty state ─────────────────────────────────── */
+
+.cmm-config-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding: 3.5rem 1rem;
+  text-align: center;
+}
+
+.cmm-config-empty__icon {
+  font-size: 3.5rem;
+  color: var(--color-muted, rgba(15,23,42,.3));
+  line-height: 1;
+}
+
+.cmm-config-empty__label {
+  font-size: 1rem;
+  color: var(--color-muted, rgba(15,23,42,.5));
+  margin: 0;
+}
+
+.cmm-create-config-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.6rem 1.4rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #fff;
+  background: var(--color-primary, #5f4ff7);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: opacity 0.15s, box-shadow 0.15s;
+}
+
+.cmm-create-config-btn:hover { opacity: 0.88; box-shadow: 0 4px 12px rgba(95,79,247,.25); }
+
+/* ─── Create config modal ────────────────────────────────── */
+
+.cmm-create-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 1200;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.cmm-create-overlay--visible { opacity: 1; }
+
+.cmm-create-modal {
+  background: var(--color-surface, #fff);
+  border-radius: 16px 16px 0 0;
+  width: 100%;
+  max-width: 520px;
+  max-height: 90vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  transform: translateY(40px);
+  transition: transform 0.25s cubic-bezier(.22,.68,0,1.2);
+  box-shadow: 0 -8px 40px rgba(0,0,0,.15);
+}
+
+.cmm-create-overlay--visible .cmm-create-modal { transform: translateY(0); }
+
+@media (min-width: 640px) {
+  .cmm-create-overlay { align-items: center; }
+  .cmm-create-modal { border-radius: 16px; max-height: 80vh; transform: translateY(20px) scale(0.97); }
+  .cmm-create-overlay--visible .cmm-create-modal { transform: none; }
+}
+
+.cmm-create-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.25rem 1.5rem 1rem;
+  border-bottom: 1px solid var(--color-border, rgba(15,23,42,.08));
+  flex-shrink: 0;
+}
+
+.cmm-create-modal__header h3 {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--color-text, #0f172a);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+}
+
+.cmm-create-modal__close {
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  border-radius: 50%;
+  color: var(--color-muted, rgba(15,23,42,.5));
+  cursor: pointer;
+  transition: background 0.15s;
+  flex-shrink: 0;
+}
+
+.cmm-create-modal__close:hover { background: var(--color-background, #f5f4ef); }
+.cmm-create-modal__close:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.cmm-create-modal__body {
+  padding: 1.25rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.cmm-create-modal__footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding: 1rem 1.5rem;
+  border-top: 1px solid var(--color-border, rgba(15,23,42,.08));
+  flex-shrink: 0;
+}
+
+.cmm-create-modal__cancel {
+  padding: 0.55rem 1.1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  background: none;
+  border: 1px solid var(--color-border, rgba(15,23,42,.15));
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--color-text, #0f172a);
+  transition: background 0.15s;
+}
+
+.cmm-create-modal__cancel:hover:not(:disabled) { background: var(--color-background, #f5f4ef); }
+.cmm-create-modal__cancel:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.cmm-create-modal__confirm {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.55rem 1.25rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #fff;
+  background: var(--color-primary, #5f4ff7);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.cmm-create-modal__confirm:hover:not(:disabled) { opacity: 0.88; }
+.cmm-create-modal__confirm:disabled { opacity: 0.55; cursor: not-allowed; }
+
+/* ─── Form elements ──────────────────────────────────────── */
+
+.cmm-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.cmm-form-label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--color-text, #0f172a);
+}
+
+.cmm-form-error {
+  font-size: 0.8rem;
+  color: var(--color-danger, #dc2626);
+  margin: 0;
+}
+
+/* Custom select */
+.cmm-custom-select { position: relative; }
+
+.cmm-custom-select__trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.6rem 0.9rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--color-text, #0f172a);
+  background: var(--color-background, #f5f4ef);
+  border: 1px solid var(--color-border, rgba(15,23,42,.15));
+  border-radius: 8px;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s;
+}
+
+.cmm-custom-select__trigger:hover,
+.cmm-custom-select__trigger--open {
+  border-color: var(--color-primary, #5f4ff7);
+}
+
+.cmm-custom-select__trigger--open .bi-chevron-down {
+  transform: rotate(180deg);
+  transition: transform 0.15s;
+}
+
+.cmm-custom-select__dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: var(--color-surface, #fff);
+  border: 1px solid var(--color-border, rgba(15,23,42,.12));
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.1);
+  z-index: 10;
+  overflow: hidden;
+}
+
+.cmm-custom-select__option {
+  display: block;
+  width: 100%;
+  padding: 0.65rem 0.9rem;
+  font-size: 0.875rem;
+  text-align: left;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text, #0f172a);
+  transition: background 0.1s;
+}
+
+.cmm-custom-select__option:hover { background: var(--color-background, #f5f4ef); }
+
+.cmm-custom-select__option--active {
+  color: var(--color-primary, #5f4ff7);
+  font-weight: 600;
+  background: color-mix(in srgb, var(--color-primary, #5f4ff7) 8%, transparent);
+}
+
+/* Stepper */
+.cmm-stepper {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.cmm-stepper__btn {
+  width: 2.25rem;
+  height: 2.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-background, #f5f4ef);
+  border: 1px solid var(--color-border, rgba(15,23,42,.15));
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--color-text, #0f172a);
+  flex-shrink: 0;
+  transition: background 0.12s;
+}
+
+.cmm-stepper__btn:hover { background: rgba(95,79,247,.1); border-color: var(--color-primary, #5f4ff7); }
+
+.cmm-stepper__input {
+  width: 6rem;
+  text-align: center;
+  padding: 0.5rem 0.4rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  border: 1px solid var(--color-border, rgba(15,23,42,.15));
+  border-radius: 6px;
+  background: var(--color-surface, #fff);
+  color: var(--color-text, #0f172a);
+  -moz-appearance: textfield;
+}
+
+.cmm-stepper__input::-webkit-outer-spin-button,
+.cmm-stepper__input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+
+.cmm-stepper__unit {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--color-muted, rgba(15,23,42,.5));
+  min-width: 1.5rem;
+  text-align: left;
+}
+
+/* Config preview */
+.cmm-config-preview {
+  padding: 0.75rem 1rem;
+  background: color-mix(in srgb, var(--color-primary, #5f4ff7) 8%, transparent);
+  border-left: 3px solid var(--color-primary, #5f4ff7);
+  border-radius: 0 6px 6px 0;
+  font-size: 0.85rem;
+  font-style: italic;
+  color: var(--color-text, #0f172a);
+}
+
+/* ─── History list ───────────────────────────────────────── */
+
+.cmm-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.cmm-history-card {
+  background: var(--color-surface, #fff);
+  border: 1px solid var(--color-border, rgba(15,23,42,.1));
+  border-radius: 10px;
+  padding: 1rem 1.25rem;
+  transition: box-shadow 0.15s;
+}
+
+.cmm-history-card:hover { box-shadow: 0 3px 10px rgba(0,0,0,.08); }
+
+.cmm-history-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.6rem;
+}
+
+.cmm-history-card__num {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--color-text, #0f172a);
+}
+
+.cmm-history-card__deleted {
+  font-size: 0.78rem;
+  color: var(--color-muted, rgba(15,23,42,.5));
+}
+
+.cmm-history-card__meta,
+.cmm-history-card__period,
+.cmm-history-card__revenue {
+  font-size: 0.83rem;
+  color: var(--color-muted, rgba(15,23,42,.6));
+  margin: 0 0 0.3rem;
+}
+
+.cmm-history-card__revenue { color: var(--color-text, #0f172a); margin-bottom: 0; }
+.cmm-history-card__revenue strong { color: var(--color-success, #1f7a3a); }
+
+/* ─── Responsive ─────────────────────────────────────────── */
+
+@media (max-width: 600px) {
+  .cmm-tab  { white-space: nowrap; }
+  .cmm-config-card { max-width: 100%; }
+}

@@ -1,0 +1,1060 @@
+/* serviceModule.css — Gestion des prestations — préfixe svm- */
+
+/* ─── Layout ─────────────────────────────────────────────── */
+
+.svm-root {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.svm-loader {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 3rem;
+  color: var(--color-muted);
+  font-size: 1rem;
+}
+
+/* ─── Tabs ───────────────────────────────────────────────── */
+
+.svm-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.9rem;
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: 0.2rem;
+}
+
+.svm-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.05rem 0.46rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--color-muted);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  position: relative;
+  transition: color 0.18s ease;
+}
+
+.svm-tab::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: -1px;
+  width: 100%;
+  height: 2px;
+  background: var(--theme-accent);
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 0.22s ease;
+}
+
+.svm-tab--active,
+.svm-tab:hover {
+  color: var(--color-text);
+}
+
+.svm-tab--active::after {
+  transform: scaleX(1);
+}
+
+/* ─── Toolbar ────────────────────────────────────────────── */
+
+.svm-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.svm-count {
+  font-size: 0.85rem;
+  color: var(--color-muted);
+}
+
+/* ─── Cards grid ─────────────────────────────────────────── */
+
+.svm-cards {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.85rem;
+}
+
+@media (min-width: 640px) {
+  .svm-cards {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 960px) {
+  .svm-cards {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.svm-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.85rem;
+  padding: 0.85rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  transition: box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.svm-card:hover {
+  box-shadow: 0 4px 16px var(--color-shadow);
+  transform: translateY(-1px);
+}
+
+.svm-card__thumb {
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.svm-card__thumb--round {
+  border-radius: 50%;
+}
+
+.svm-card__thumb--empty {
+  background: color-mix(in oklab, var(--color-primary) 10%, var(--color-background) 90%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-muted);
+  font-size: 1.4rem;
+}
+
+.svm-card__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.svm-card__title {
+  font-weight: 700;
+  font-size: 0.95rem;
+  margin-bottom: 0.2rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.svm-card__meta {
+  font-size: 0.8rem;
+  color: var(--color-muted);
+  margin-bottom: 0.3rem;
+}
+
+.svm-card__meta--overflow {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.svm-card__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: 0.35rem;
+}
+
+.svm-card__actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+
+/* ─── Badges ─────────────────────────────────────────────── */
+
+.svm-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.svm-badge--active {
+  background: color-mix(in oklab, var(--color-success) 12%, transparent 88%);
+  color: var(--color-success);
+}
+
+.svm-badge--inactive {
+  background: color-mix(in oklab, var(--color-muted) 12%, transparent 88%);
+  color: var(--color-muted);
+}
+
+.svm-badge--boost {
+  background: color-mix(in oklab, var(--color-primary) 14%, transparent 86%);
+  color: var(--color-primary);
+}
+
+.svm-badge--promo {
+  background: color-mix(in oklab, var(--color-secondary) 14%, transparent 86%);
+  color: var(--color-secondary);
+}
+
+/* ─── Buttons ────────────────────────────────────────────── */
+
+.svm-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: background 0.18s ease, opacity 0.18s ease;
+  white-space: nowrap;
+}
+
+.svm-btn--primary {
+  background: var(--theme-accent);
+  color: #fff;
+}
+
+.svm-btn--primary:hover {
+  background: var(--theme-accent-strong);
+}
+
+.svm-btn--outline {
+  background: transparent;
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+}
+
+.svm-btn--outline:hover {
+  background: color-mix(in oklab, var(--color-primary) 6%, transparent 94%);
+}
+
+.svm-btn--ghost {
+  background: transparent;
+  color: var(--color-muted);
+}
+
+.svm-btn--ghost:hover {
+  background: color-mix(in oklab, var(--color-muted) 8%, transparent 92%);
+  color: var(--color-text);
+}
+
+.svm-btn--sm {
+  padding: 0.3rem 0.65rem;
+  font-size: 0.8rem;
+}
+
+.svm-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.svm-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  background: transparent;
+  color: var(--color-muted);
+  transition: background 0.15s ease;
+}
+
+.svm-icon-btn--danger:hover {
+  background: color-mix(in oklab, var(--color-danger) 12%, transparent 88%);
+  color: var(--color-danger);
+}
+
+/* ─── Kebab ──────────────────────────────────────────────── */
+
+.svm-kebab-wrap {
+  position: relative;
+}
+
+.svm-kebab-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  background: transparent;
+  cursor: pointer;
+  color: var(--color-muted);
+  transition: background 0.15s ease;
+}
+
+.svm-kebab-btn:hover {
+  background: color-mix(in oklab, var(--color-primary) 6%, transparent 94%);
+  color: var(--color-text);
+}
+
+.svm-kebab-menu {
+  display: none;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 100;
+  list-style: none;
+  margin: 0;
+  padding: 0.3rem 0;
+  min-width: 180px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px var(--color-shadow);
+}
+
+.svm-kebab-menu--open {
+  display: block;
+  animation: svmFadeIn 0.14s ease;
+}
+
+.svm-kebab-menu li button {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.45rem 0.85rem;
+  background: transparent;
+  border: none;
+  font-size: 0.85rem;
+  cursor: pointer;
+  color: var(--color-text);
+  transition: background 0.12s ease;
+}
+
+.svm-kebab-menu li button:hover {
+  background: color-mix(in oklab, var(--color-primary) 6%, transparent 94%);
+}
+
+.svm-kebab-menu__danger button {
+  color: var(--color-danger) !important;
+}
+
+.svm-kebab-menu__danger button:hover {
+  background: color-mix(in oklab, var(--color-danger) 8%, transparent 92%) !important;
+}
+
+@keyframes svmFadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ─── Empty state ────────────────────────────────────────── */
+
+.svm-empty {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 3rem 1rem;
+  color: var(--color-muted);
+  text-align: center;
+}
+
+.svm-empty i {
+  font-size: 2.5rem;
+  opacity: 0.35;
+}
+
+/* ─── Modal overlay ──────────────────────────────────────── */
+
+.svm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 500;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  animation: svmFadeIn 0.18s ease;
+}
+
+.svm-modal {
+  background: var(--color-surface);
+  border-radius: 14px;
+  width: min(640px, 100%);
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 24px 64px rgba(15, 23, 42, 0.22);
+  animation: svmSlideUp 0.2s ease;
+}
+
+@keyframes svmSlideUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.svm-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.1rem 1.4rem;
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.svm-modal__title {
+  font-weight: 800;
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.svm-modal__close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--color-muted);
+  font-size: 1rem;
+  transition: background 0.15s ease;
+}
+
+.svm-modal__close:hover {
+  background: color-mix(in oklab, var(--color-muted) 10%, transparent 90%);
+}
+
+/* Modal tab bar */
+
+.svm-modal-tabs {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 0;
+  border-bottom: 1px solid var(--color-border);
+  overflow-x: auto;
+  flex-shrink: 0;
+  padding: 0 0.75rem;
+}
+
+.svm-modal-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.6rem 0.75rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--color-muted);
+  border-bottom: 2px solid transparent;
+  white-space: nowrap;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.svm-modal-tab--active {
+  color: var(--color-text);
+  border-bottom-color: var(--theme-accent);
+}
+
+.svm-modal-tab:hover {
+  color: var(--color-text);
+}
+
+/* Modal body / footer */
+
+.svm-modal__body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.25rem 1.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.svm-modal__footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.65rem;
+  padding: 0.85rem 1.4rem;
+  border-top: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+/* ─── Form elements ──────────────────────────────────────── */
+
+.svm-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.svm-field label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--color-text);
+  margin: 0;
+}
+
+.svm-required {
+  color: var(--color-danger);
+}
+
+.svm-hint {
+  font-size: 0.75rem;
+  color: var(--color-muted);
+}
+
+.svm-muted {
+  font-size: 0.8rem;
+  color: var(--color-muted);
+  font-style: italic;
+}
+
+.svm-input {
+  width: 100%;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-family: inherit;
+  color: var(--color-text);
+  background: var(--color-surface);
+  transition: border-color 0.15s ease;
+}
+
+.svm-input:focus {
+  outline: none;
+  border-color: var(--theme-accent);
+}
+
+.svm-input--sm {
+  flex: 1;
+}
+
+.svm-input--xs {
+  width: 80px;
+  flex-shrink: 0;
+}
+
+.svm-input--center {
+  text-align: center;
+  width: 70px;
+}
+
+.svm-input--color {
+  padding: 0.25rem 0.35rem;
+  height: 38px;
+  cursor: pointer;
+}
+
+.svm-textarea {
+  width: 100%;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-family: inherit;
+  color: var(--color-text);
+  resize: vertical;
+  background: var(--color-surface);
+}
+
+.svm-textarea:focus {
+  outline: none;
+  border-color: var(--theme-accent);
+}
+
+.svm-select {
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-family: inherit;
+  background: var(--color-surface);
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.svm-row {
+  display: flex;
+  gap: 0.9rem;
+  flex-wrap: wrap;
+}
+
+.svm-row .svm-field {
+  flex: 1;
+  min-width: 140px;
+}
+
+/* Duration widget */
+
+.svm-duration-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.svm-dur-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  background: transparent;
+  cursor: pointer;
+  color: var(--color-text);
+  font-size: 1rem;
+  transition: background 0.15s ease;
+}
+
+.svm-dur-btn:hover {
+  background: color-mix(in oklab, var(--color-primary) 8%, transparent 92%);
+}
+
+/* Payment type group */
+
+.svm-payment-type-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.svm-pt-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.4rem 0.75rem;
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  background: transparent;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  color: var(--color-muted);
+  transition: all 0.15s ease;
+}
+
+.svm-pt-btn--active {
+  background: color-mix(in oklab, var(--color-primary) 12%, transparent 88%);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+/* Toggle */
+
+.svm-toggle-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.svm-toggle-label--sm {
+  font-size: 0.8rem;
+}
+
+.svm-toggle {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.svm-toggle-track {
+  display: inline-block;
+  position: relative;
+  width: 36px;
+  height: 20px;
+  background: var(--color-border);
+  border-radius: 999px;
+  transition: background 0.2s ease;
+  flex-shrink: 0;
+}
+
+.svm-toggle-track::after {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+  transition: transform 0.2s ease;
+}
+
+.svm-toggle:checked + .svm-toggle-track {
+  background: var(--theme-accent);
+}
+
+.svm-toggle:checked + .svm-toggle-track::after {
+  transform: translateX(16px);
+}
+
+/* Checkbox */
+
+.svm-check-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0;
+  cursor: pointer;
+  font-size: 0.875rem;
+  border-bottom: 1px solid color-mix(in oklab, var(--color-border) 50%, transparent 50%);
+}
+
+.svm-check-label:last-child {
+  border-bottom: none;
+}
+
+.svm-check {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--color-primary);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.svm-service-checks {
+  display: flex;
+  flex-direction: column;
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 0.3rem 0.75rem;
+}
+
+/* Section title */
+
+.svm-section-title {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--color-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding-top: 0.3rem;
+  margin-top: 0.3rem;
+  border-top: 1px solid color-mix(in oklab, var(--color-border) 60%, transparent 40%);
+}
+
+/* Options list */
+
+.svm-options-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.svm-option-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+/* Photos grid */
+
+.svm-photos-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 0.6rem;
+}
+
+.svm-photo-item {
+  position: relative;
+  border-radius: 8px;
+  overflow: hidden;
+  aspect-ratio: 1;
+}
+
+.svm-photo-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.svm-photo-remove {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  background: rgba(220, 38, 38, 0.85);
+  color: #fff;
+  border: none;
+  border-radius: 50%;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.svm-photo-item:hover .svm-photo-remove {
+  opacity: 1;
+}
+
+.svm-photo-dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  aspect-ratio: 1;
+  border: 2px dashed var(--color-border);
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--color-muted);
+  font-size: 0.8rem;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.svm-photo-dropzone i {
+  font-size: 1.5rem;
+}
+
+.svm-photo-dropzone:hover {
+  border-color: var(--theme-accent);
+  color: var(--theme-accent);
+}
+
+/* ─── Spinner ────────────────────────────────────────────── */
+
+@keyframes svmSpin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+.svm-spin {
+  animation: svmSpin 0.7s linear infinite;
+}
+
+/* Practitioners tab v2 */
+
+.svm-pract-subtabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--color-surface-header) 55%, transparent 45%);
+}
+
+.svm-pract-subtab {
+  border: none;
+  background: transparent;
+  color: var(--color-muted);
+  padding: 0.45rem 0.85rem;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease;
+}
+
+.svm-pract-subtab:hover {
+  color: var(--color-text);
+}
+
+.svm-pract-subtab--active {
+  background: color-mix(in oklab, var(--theme-accent) 18%, var(--color-surface) 82%);
+  color: var(--theme-accent-strong);
+}
+
+.svm-pract-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.svm-pract-card {
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+  padding: 1rem 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.svm-pract-card__name {
+  font-weight: 700;
+  color: var(--color-text);
+  font-size: 0.95rem;
+}
+
+.svm-pract-card__email {
+  color: var(--color-muted);
+  font-size: 0.83rem;
+}
+
+.svm-pract-card__status-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.svm-pract-card__services {
+  font-size: 0.82rem;
+  color: var(--color-text);
+}
+
+.svm-pract-card__granularity {
+  font-size: 0.8rem;
+  color: var(--color-muted);
+}
+
+.svm-pract-panel {
+  margin-top: 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.95rem;
+}
+
+.svm-pract-panel--inactive {
+  align-items: center;
+  text-align: center;
+  padding: 1.5rem 1rem;
+}
+
+.svm-pract-panel__icon {
+  font-size: 4rem;
+  color: var(--color-muted);
+  line-height: 1;
+}
+
+.svm-pract-panel__title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.svm-pract-panel__action {
+  margin-top: 0.4rem;
+}
+
+.svm-pract-status-head {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.svm-pract-status-head__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--color-success);
+}
+
+.svm-pract-radios {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(88px, 1fr));
+  gap: 0.45rem;
+}
+
+.svm-pract-radio {
+  position: relative;
+  display: inline-flex;
+}
+
+.svm-pract-radio input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.svm-pract-radio span {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  padding: 0.42rem 0.65rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--color-muted);
+  background: var(--color-surface);
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.svm-pract-radio:hover span {
+  border-color: color-mix(in oklab, var(--theme-accent) 50%, var(--color-border) 50%);
+  color: var(--color-text);
+}
+
+.svm-pract-radio--active span {
+  border-color: var(--theme-accent);
+  background: color-mix(in oklab, var(--theme-accent) 12%, var(--color-surface) 88%);
+  color: var(--theme-accent-strong);
+}
+
+.svm-pract-actions {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.svm-pract-danger {
+  margin-top: 0.15rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.svm-pract-danger .svm-btn {
+  border-color: color-mix(in oklab, var(--color-danger) 45%, var(--color-border) 55%);
+  color: var(--color-danger);
+}
+
+.svm-pract-danger .svm-btn:hover {
+  background: color-mix(in oklab, var(--color-danger) 8%, transparent 92%);
+}

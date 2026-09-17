@@ -1,0 +1,358 @@
+/* Accueil — refonte MINIMALISTE & moderne : lignes, aplats, icônes de couleur simples bien intégrées.
+   Aucun dégradé. Angles peu arrondis. Tokens --bs-* only, mobile-first, ≥44px, zéro scroll horizontal. */
+.home {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(var(--bs-space-4), 6vw, 56px);
+}
+.home-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bs-space-3);
+}
+
+/* Révélation douce des sections (subtile). */
+.home > * { animation: home-reveal var(--bs-motion-slow, 360ms) var(--bs-motion-ease-out, ease) both; }
+.home > *:nth-child(2) { animation-delay: 60ms; }
+.home > *:nth-child(3) { animation-delay: 120ms; }
+.home > *:nth-child(4) { animation-delay: 180ms; }
+.home > *:nth-child(5) { animation-delay: 240ms; }
+.home > *:nth-child(n + 6) { animation-delay: 300ms; }
+@keyframes home-reveal { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .home > * { animation: none; } }
+
+/* ── Bannière d'accueil (CMS) : visuel large en tête de page ─────────────────── */
+.home-banner { border-radius: 10px; overflow: hidden; border: 1px solid var(--bs-color-border); line-height: 0; }
+.home-banner__img {
+  display: block;
+  width: 100%;
+  height: clamp(180px, 34vw, 420px);
+  object-fit: cover;
+}
+
+/* ── Hero : aplat clair, filet primaire à gauche ─────────────────────────────── */
+.home-hero {
+  border-radius: 8px;
+  padding: clamp(var(--bs-space-4), 5vw, 48px);
+  background: color-mix(in srgb, var(--bs-color-primary) 6%, var(--bs-color-surface));
+  border: 1px solid var(--bs-color-border);
+  border-left: 3px solid var(--bs-color-primary);
+  overflow: hidden;
+}
+.home-hero--image { background-size: cover; background-position: center; position: relative; border-left-color: var(--bs-color-border); }
+.home-hero--image::before { content: ''; position: absolute; inset: 0; background: rgba(15, 23, 42, 0.45); }
+.home-hero__inner { position: relative; display: flex; flex-direction: column; gap: var(--bs-space-3); min-height: 220px; justify-content: center; }
+.home-hero__title { margin: 0; font-size: clamp(1.9rem, 6vw, 2.6rem); line-height: 1.08; letter-spacing: -0.02em; }
+.home-hero--image .home-hero__title, .home-hero--image .home-hero__slogan { color: #fff; }
+.home-hero__slogan { margin: 0; font-size: 1.05rem; max-width: 60ch; color: var(--bs-color-muted); }
+.home-hero--image .home-hero__slogan { color: rgba(255, 255, 255, 0.9); }
+.home-hero__cta { display: flex; flex-wrap: wrap; gap: var(--bs-space-2); }
+
+/* ── Section header (icône couleur simple + titre + « Voir tout ») ───────────── */
+.home-cf-section { gap: var(--bs-space-3); }
+.home-cf__head { display: flex; align-items: center; justify-content: space-between; gap: var(--bs-space-3); flex-wrap: wrap; padding-bottom: var(--bs-space-2); border-bottom: 1px solid var(--bs-color-border); }
+.home-cf__heading { display: flex; align-items: center; gap: var(--bs-space-3); min-width: 0; }
+.home-cf__title-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 40px; height: 40px; flex-shrink: 0; border-radius: 8px; font-size: 1.2rem;
+  color: var(--bs-color-primary);
+  background: color-mix(in srgb, var(--bs-color-primary) 12%, var(--bs-color-surface));
+}
+.home-cf__headings { min-width: 0; }
+.home-cf__title { margin: 0; font-size: 1.35rem; line-height: 1.15; letter-spacing: -0.01em; }
+.home-cf__subtitle { margin: 4px 0 0; color: var(--bs-color-muted); font-size: 0.92rem; line-height: 1.5; max-width: 60ch; }
+.home-cf__viewall {
+  display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 14px;
+  border-radius: 4px; border: 1px solid var(--bs-color-border);
+  background: var(--bs-color-surface); color: var(--bs-color-primary); font-weight: 600; font-size: 0.9rem; text-decoration: none;
+  transition: background var(--bs-motion-fast, 160ms) var(--bs-motion-ease-out, ease), border-color var(--bs-motion-fast, 160ms) var(--bs-motion-ease-out, ease);
+}
+.home-cf__viewall i { transition: transform var(--bs-motion-fast, 160ms) var(--bs-motion-ease-out, ease); }
+.home-cf__viewall:hover { background: color-mix(in srgb, var(--bs-color-primary) 8%, var(--bs-color-surface)); border-color: color-mix(in srgb, var(--bs-color-primary) 40%, var(--bs-color-border)); }
+.home-cf__viewall:hover i { transform: translateX(3px); }
+
+/* ── Variante « fond header » : bloc au fond couleur primaire, textes adaptés en on-primary ── */
+.home-cf-section--primary {
+  background: var(--bs-color-primary);
+  color: var(--bs-color-on-primary, #fff);
+  border-radius: 12px;
+  padding: clamp(var(--bs-space-4), 4vw, 40px);
+}
+.home-cf-section--primary .home-cf__head { border-bottom-color: color-mix(in srgb, var(--bs-color-on-primary, #fff) 24%, transparent); }
+.home-cf-section--primary .home-cf__title { color: var(--bs-color-on-primary, #fff); }
+.home-cf-section--primary .home-cf__subtitle { color: color-mix(in srgb, var(--bs-color-on-primary, #fff) 82%, transparent); }
+.home-cf-section--primary .home-cf__title-icon {
+  color: var(--bs-color-on-primary, #fff);
+  background: color-mix(in srgb, var(--bs-color-on-primary, #fff) 16%, transparent);
+}
+.home-cf-section--primary .home-cf__viewall {
+  color: var(--bs-color-on-primary, #fff);
+  background: color-mix(in srgb, var(--bs-color-on-primary, #fff) 12%, transparent);
+  border-color: color-mix(in srgb, var(--bs-color-on-primary, #fff) 34%, transparent);
+}
+.home-cf-section--primary .home-cf__viewall:hover {
+  background: color-mix(in srgb, var(--bs-color-on-primary, #fff) 22%, transparent);
+  border-color: color-mix(in srgb, var(--bs-color-on-primary, #fff) 50%, transparent);
+}
+.home-cf-section--primary .home-cf__empty { color: color-mix(in srgb, var(--bs-color-on-primary, #fff) 85%, transparent); }
+.home-cf-section--primary .home-cf__empty i { color: var(--bs-color-on-primary, #fff); }
+/* Les cartes / le panneau vedette gardent leur fond clair : on rétablit le texte sombre
+   à l'intérieur (sinon le on-primary de la section les rend blanc-sur-blanc). */
+.home-cf-section--primary .home-card,
+.home-cf-section--primary .home-feat__panel { color: var(--bs-color-text); }
+/* Points de navigation du panneau vedette lisibles sur fond primaire. */
+.home-cf-section--primary .home-feat__dot { background: color-mix(in srgb, var(--bs-color-on-primary, #fff) 40%, transparent); }
+.home-cf-section--primary .home-feat__dot--active { background: var(--bs-color-on-primary, #fff); }
+
+/* ── Piste 3D (conservée, cartes aplaties) ───────────────────────────────────── */
+.home-cf { position: relative; perspective: 1500px; perspective-origin: 50% 45%; }
+.home-cf__track {
+  display: flex; gap: var(--bs-space-3); overflow-x: auto; overflow-y: hidden;
+  scroll-snap-type: x mandatory; transform-style: preserve-3d;
+  padding: var(--bs-space-3) max(var(--bs-space-3), calc(50% - 130px));
+  scrollbar-width: none; -webkit-overflow-scrolling: touch;
+}
+.home-cf__track::-webkit-scrollbar { display: none; }
+.home-cf__cell {
+  flex: 0 0 auto; width: 260px; scroll-snap-align: center; transform-style: preserve-3d;
+  transition: transform var(--bs-motion-normal, 240ms) var(--bs-motion-ease-out, ease), opacity var(--bs-motion-normal, 240ms) var(--bs-motion-ease-out, ease);
+  will-change: transform, opacity;
+}
+.home-cf-single { display: flex; justify-content: center; padding-top: var(--bs-space-2); }
+.home-cf-single .home-card { width: 100%; max-width: 320px; }
+.home-cf__empty {
+  display: flex; flex-direction: column; align-items: center; gap: var(--bs-space-2);
+  padding: var(--bs-space-4); border: 1px dashed var(--bs-color-border); border-radius: 8px;
+  color: var(--bs-color-muted); background: var(--bs-color-surface);
+}
+.home-cf__empty i { font-size: 1.8rem; color: color-mix(in srgb, var(--bs-color-primary) 55%, var(--bs-color-muted)); }
+
+/* Carte carrée minimaliste (aplat + filet, ombre discrète) */
+.home-card {
+  padding: 0; overflow: hidden; display: flex; flex-direction: column; height: 100%;
+  border-radius: 8px; border: 1px solid var(--bs-color-border);
+  transition: border-color var(--bs-motion-fast, 160ms) var(--bs-motion-ease-out, ease), box-shadow var(--bs-motion-fast, 160ms) var(--bs-motion-ease-out, ease);
+}
+.home-cf__cell:hover .home-card, .home-cf-single .home-card:hover {
+  border-color: color-mix(in srgb, var(--bs-color-primary) 35%, var(--bs-color-border));
+  box-shadow: 0 12px 26px -20px rgba(15, 23, 42, 0.45);
+}
+.home-card__media { position: relative; display: block; overflow: hidden; }
+.home-card__media .bs-media__img { transition: transform var(--bs-motion-slow, 360ms) var(--bs-motion-ease-out, ease); }
+.home-card:hover .home-card__media .bs-media__img { transform: scale(1.04); }
+.home-card__badge {
+  position: absolute; top: var(--bs-space-2); left: var(--bs-space-2); z-index: 2;
+  background: var(--bs-color-secondary); color: #fff; border-radius: 4px; padding: 3px 9px; font-size: 0.72rem; font-weight: 700;
+}
+.home-card__body { padding: var(--bs-space-3); display: flex; flex-direction: column; gap: var(--bs-space-2); flex: 1; }
+.home-card__title { margin: 0; font-size: 1rem; font-weight: 700; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.home-card__row { display: flex; align-items: center; justify-content: space-between; gap: var(--bs-space-2); }
+.home-card__meta { font-size: 0.76rem; color: var(--bs-color-muted); display: inline-flex; align-items: center; gap: 5px; }
+.home-card__price { font-size: 0.95rem; font-weight: 700; }
+.home-card__cta { margin-top: auto; width: 100%; padding: var(--bs-space-2); font-size: 0.88rem; min-height: 42px; border-radius: 4px; }
+
+/* Flèches (desktop) */
+.home-cf__nav {
+  position: absolute; top: 50%; transform: translateY(-50%); z-index: 200; width: 44px; height: 44px;
+  display: none; align-items: center; justify-content: center;
+  border: 1px solid var(--bs-color-border); border-radius: 8px;
+  background: var(--bs-color-surface); color: var(--bs-color-text); cursor: pointer; font-size: 1.1rem;
+  transition: background var(--bs-motion-fast, 160ms) var(--bs-motion-ease-out, ease), color var(--bs-motion-fast, 160ms) var(--bs-motion-ease-out, ease);
+}
+.home-cf__nav:hover { background: var(--bs-color-primary); color: var(--bs-color-on-primary, #fff); border-color: var(--bs-color-primary); }
+.home-cf__nav--prev { left: calc(var(--bs-space-2) * -1); }
+.home-cf__nav--next { right: calc(var(--bs-space-2) * -1); }
+@media (min-width: 768px) {
+  .home-cf__cell { width: 280px; }
+  .home-cf__track { padding-left: max(var(--bs-space-4), calc(50% - 140px)); padding-right: max(var(--bs-space-4), calc(50% - 140px)); }
+  .home-cf__nav { display: inline-flex; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .home-cf__cell { transition: none; }
+  .home-cf__track { scroll-snap-type: x proximity; }
+  .home-card__media .bs-media__img { transition: none; }
+}
+
+/* ── Cartes cadeaux (aplat + filet) ──────────────────────────────────────────── */
+.home-gift {
+  display: grid; grid-template-columns: 1fr; gap: var(--bs-space-4); align-items: center;
+  overflow: hidden; padding: 0; border: 1px solid var(--bs-color-border); border-radius: 8px; background: var(--bs-color-surface);
+}
+.home-gift__media { position: relative; overflow: hidden; }
+.home-gift__ribbon {
+  position: absolute; top: var(--bs-space-3); right: var(--bs-space-3);
+  width: 40px; height: 40px; display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 8px; font-size: 1.15rem; color: #fff; background: var(--bs-color-secondary);
+}
+.home-gift__body { padding: clamp(var(--bs-space-3), 4vw, var(--bs-space-4)); }
+.home-gift__eyebrow { display: inline-flex; align-items: center; gap: 6px; font-size: 0.78rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--bs-color-secondary); margin-bottom: var(--bs-space-2); }
+.home-gift__title { margin: 0 0 var(--bs-space-2); font-size: 1.5rem; letter-spacing: -0.01em; }
+.home-gift__text { margin: 0 0 var(--bs-space-3); color: var(--bs-color-muted); }
+
+/* ── Pourquoi (grille de cartes filet, icône couleur simple) ─────────────────── */
+.home-why { display: grid; grid-template-columns: 1fr; gap: var(--bs-space-3); }
+.home-why__card { padding: var(--bs-space-4); border: 1px solid var(--bs-color-border); border-radius: 8px; background: var(--bs-color-surface); }
+.home-why__icon {
+  display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px;
+  border-radius: 8px; background: color-mix(in srgb, var(--bs-color-primary) 12%, var(--bs-color-surface));
+  color: var(--bs-color-primary); font-size: 1.35rem; margin-bottom: var(--bs-space-2);
+}
+.home-why__title { margin: 0 0 var(--bs-space-1); font-size: 1.05rem; }
+.home-why__text { margin: 0; color: var(--bs-color-muted); font-size: 0.9rem; line-height: 1.5; }
+
+/* ── Avis ────────────────────────────────────────────────────────────────────── */
+.home-reviews { display: flex; gap: var(--bs-space-3); overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: var(--bs-space-2); }
+.home-review { flex: 0 0 82%; max-width: 340px; scroll-snap-align: start; margin: 0; padding: var(--bs-space-3); border: 1px solid var(--bs-color-border); border-radius: 8px; background: var(--bs-color-surface); display: flex; flex-direction: column; gap: var(--bs-space-2); }
+.home-review__text { margin: 0; font-style: italic; }
+.home-review__date { font-size: 0.8rem; color: var(--bs-color-muted); }
+
+/* ── CTA final : bloc minimaliste (aplat clair, filet, icônes couleur simples) ── */
+.home-cta {
+  text-align: center; padding: clamp(var(--bs-space-4), 6vw, 56px) var(--bs-space-4);
+  border-radius: 8px; border: 1px solid var(--bs-color-border);
+  border-top: 3px solid var(--bs-color-primary);
+  background: var(--bs-color-surface); color: var(--bs-color-text);
+}
+.home-cta__inner { display: flex; flex-direction: column; align-items: center; gap: var(--bs-space-3); max-width: 760px; margin: 0 auto; }
+.home-cta__badge {
+  display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 4px;
+  font-size: 0.78rem; font-weight: 700; letter-spacing: 0.04em;
+  color: var(--bs-color-primary); background: color-mix(in srgb, var(--bs-color-primary) 10%, var(--bs-color-surface));
+}
+.home-cta__title { margin: 0; font-size: clamp(1.7rem, 5vw, 2.4rem); line-height: 1.05; letter-spacing: -0.02em; }
+.home-cta__lead { margin: 0; font-size: 1rem; max-width: 52ch; color: var(--bs-color-muted); }
+.home-cta__cards { display: grid; grid-template-columns: 1fr; gap: var(--bs-space-2); width: 100%; margin-top: var(--bs-space-2); }
+.home-cta__card {
+  position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+  padding: var(--bs-space-3) 46px var(--bs-space-3) var(--bs-space-3);
+  border-radius: 8px; text-align: left; text-decoration: none; color: var(--bs-color-text);
+  background: var(--bs-color-surface); border: 1px solid var(--bs-color-border);
+  transition: border-color var(--bs-motion-fast, 160ms) var(--bs-motion-ease-out, ease), transform var(--bs-motion-fast, 160ms) var(--bs-motion-ease-out, ease);
+}
+.home-cta__card:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--bs-color-primary) 40%, var(--bs-color-border)); }
+.home-cta__card-icon {
+  display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px;
+  border-radius: 8px; font-size: 1.2rem; margin-bottom: 6px;
+  background: color-mix(in srgb, var(--bs-color-primary) 12%, var(--bs-color-surface)); color: var(--bs-color-primary);
+}
+.home-cta__card-title { font-weight: 700; font-size: 1.05rem; }
+.home-cta__card-sub { font-size: 0.82rem; color: var(--bs-color-muted); }
+.home-cta__card-go {
+  position: absolute; top: 50%; right: var(--bs-space-3); transform: translateY(-50%);
+  font-size: 1.1rem; color: var(--bs-color-muted);
+  transition: transform var(--bs-motion-fast, 160ms) var(--bs-motion-ease-out, ease), color var(--bs-motion-fast, 160ms) var(--bs-motion-ease-out, ease);
+}
+.home-cta__card:hover .home-cta__card-go { transform: translateY(-50%) translateX(3px); color: var(--bs-color-primary); }
+
+@media (min-width: 640px) {
+  .home-why { grid-template-columns: repeat(2, 1fr); }
+  .home-review { flex-basis: 320px; }
+  .home-cta__cards { grid-template-columns: repeat(3, 1fr); }
+  .home-cta__card { align-items: center; text-align: center; padding: var(--bs-space-4) var(--bs-space-3) var(--bs-space-3); }
+  .home-cta__card-go { top: var(--bs-space-2); right: var(--bs-space-2); transform: none; }
+  .home-cta__card:hover .home-cta__card-go { transform: translateX(3px); }
+}
+@media (min-width: 960px) {
+  .home-why { grid-template-columns: repeat(4, 1fr); }
+  .home-gift { grid-template-columns: 320px 1fr; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .home-cta__card { transition: none; }
+}
+
+/* ── Panneau vedette grand écran (≥1024px, piloté en JS) ─────────────────────────
+   Remplace la rangée de petites cartes : photo à gauche, détails à droite (note en
+   pattes « secondaire » en évidence, titre, description, mini-carrousel d'avis, CTA).
+   Flèches = transition animée (sortie + entrée simultanées). */
+.home-feat { position: relative; padding: 0 calc(var(--bs-space-4) + 8px); }
+.home-feat__stage { position: relative; overflow: hidden; border-radius: 12px; }
+
+.home-feat__panel {
+  display: grid;
+  grid-template-columns: clamp(220px, 24vw, 300px) minmax(0, 1fr);
+  align-items: stretch;
+  min-height: clamp(320px, 30vw, 420px);
+  background: var(--bs-color-surface);
+  border: 1px solid var(--bs-color-border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+/* Le panneau sortant se superpose (absolu) tandis que l'entrant reste dans le flux
+   et fixe la hauteur du stage — évite tout effondrement pendant la transition. */
+.home-feat__panel--leaving { position: absolute; inset: 0; z-index: 2; }
+
+.home-feat__media { position: relative; display: block; overflow: hidden; background: color-mix(in srgb, var(--bs-color-primary) 5%, var(--bs-color-surface)); }
+.home-feat__media .bs-media { height: 100%; aspect-ratio: auto !important; }
+.home-feat__media .bs-media__img { width: 100%; height: 100%; object-fit: cover; transition: transform var(--bs-motion-slow, 360ms) var(--bs-motion-ease-out, ease); }
+.home-feat__media:hover .bs-media__img { transform: scale(1.04); }
+.home-feat__badge {
+  position: absolute; top: var(--bs-space-3); left: var(--bs-space-3);
+  background: var(--bs-color-primary); color: var(--bs-color-on-primary, #fff);
+  font-size: 0.74rem; font-weight: 700; letter-spacing: 0.02em;
+  padding: 5px 10px; border-radius: 999px;
+}
+
+.home-feat__side {
+  display: flex; flex-direction: column; align-items: flex-start;
+  gap: var(--bs-space-3);
+  padding: clamp(var(--bs-space-4), 3vw, 40px);
+  min-width: 0;
+}
+
+/* Note moyenne en pattes « secondaire », mise en évidence. */
+.home-feat__rating {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 6px 12px; border-radius: 999px;
+  background: color-mix(in srgb, var(--bs-color-secondary) 12%, var(--bs-color-surface));
+  border: 1px solid color-mix(in srgb, var(--bs-color-secondary) 34%, transparent);
+}
+.home-feat__rating-score { color: var(--bs-color-secondary); font-size: 1rem; font-weight: 800; }
+.home-feat__rating-count { color: var(--bs-color-muted); font-size: 0.82rem; }
+
+.home-feat__title { margin: 0; font-size: clamp(1.5rem, 2.4vw, 2rem); line-height: 1.12; letter-spacing: -0.015em; }
+.home-feat__meta { display: inline-flex; align-items: center; gap: 6px; font-size: 0.82rem; color: var(--bs-color-muted); }
+.home-feat__desc {
+  margin: 0; color: var(--bs-color-muted); font-size: 0.98rem; line-height: 1.6; max-width: 52ch;
+  display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden;
+}
+.home-feat__price { font-size: 1.35rem; font-weight: 800; }
+.home-feat__reviews { width: 100%; max-width: 420px; margin-top: auto; }
+.home-feat__cta { min-height: 48px; padding: 0 clamp(20px, 3vw, 32px); font-size: 0.98rem; border-radius: 6px; }
+
+/* Flèches (mêmes repères visuels que le coverflow). */
+.home-feat__nav {
+  position: absolute; top: 50%; transform: translateY(-50%); z-index: 5;
+  width: 46px; height: 46px; border-radius: 999px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--bs-color-surface); color: var(--bs-color-text);
+  border: 1px solid var(--bs-color-border); box-shadow: 0 6px 20px -10px rgba(15, 23, 42, 0.5);
+  cursor: pointer; font-size: 1.2rem;
+  transition: background var(--bs-motion-fast, 160ms) ease, color var(--bs-motion-fast, 160ms) ease, border-color var(--bs-motion-fast, 160ms) ease;
+}
+.home-feat__nav:hover { background: var(--bs-color-primary); color: var(--bs-color-on-primary, #fff); border-color: var(--bs-color-primary); }
+.home-feat__nav--prev { left: 0; }
+.home-feat__nav--next { right: 0; }
+
+.home-feat__dots { display: flex; justify-content: center; gap: 8px; margin-top: var(--bs-space-3); }
+.home-feat__dot {
+  width: 8px; height: 8px; border-radius: 999px; border: none; cursor: pointer; padding: 0;
+  background: color-mix(in srgb, var(--bs-color-muted) 45%, transparent);
+  transition: transform var(--bs-motion-fast, 160ms) ease, background var(--bs-motion-fast, 160ms) ease;
+}
+.home-feat__dot--active { background: var(--bs-color-secondary); transform: scale(1.35); }
+
+/* Transitions entrée/sortie (in & out). */
+.home-feat__panel--from-right { animation: feat-in-right var(--feat-dur, 460ms) var(--bs-motion-ease-out, cubic-bezier(0.22, 1, 0.36, 1)) both; }
+.home-feat__panel--from-left { animation: feat-in-left var(--feat-dur, 460ms) var(--bs-motion-ease-out, cubic-bezier(0.22, 1, 0.36, 1)) both; }
+.home-feat__panel--to-left { animation: feat-out-left var(--feat-dur, 460ms) var(--bs-motion-ease-out, cubic-bezier(0.22, 1, 0.36, 1)) both; }
+.home-feat__panel--to-right { animation: feat-out-right var(--feat-dur, 460ms) var(--bs-motion-ease-out, cubic-bezier(0.22, 1, 0.36, 1)) both; }
+@keyframes feat-in-right { from { opacity: 0; transform: translateX(6%) scale(0.985); } to { opacity: 1; transform: none; } }
+@keyframes feat-in-left { from { opacity: 0; transform: translateX(-6%) scale(0.985); } to { opacity: 1; transform: none; } }
+@keyframes feat-out-left { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateX(-6%) scale(0.985); } }
+@keyframes feat-out-right { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateX(6%) scale(0.985); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .home-feat__panel--from-right, .home-feat__panel--from-left,
+  .home-feat__panel--to-left, .home-feat__panel--to-right { animation-duration: 1ms; }
+  .home-feat__media .bs-media__img { transition: none; }
+}

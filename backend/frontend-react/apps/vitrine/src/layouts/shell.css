@@ -1,0 +1,237 @@
+/* RX3 — Shell vitrine (header/footer). Tokens --bs-* uniquement, mobile-first, zéro scroll horizontal. */
+
+/* ── En-tête ─────────────────────────────────────────────────────────────── */
+/* RX-HEADER — l'en-tête adopte la couleur primaire ; texte/icônes lisibles via --bs-color-on-primary. */
+.bs-shell__header {
+  position: sticky;
+  top: 0;
+  /* Sous le drawer du menu mobile (--bs-z-drawer: 1001) mais au-dessus du contenu. */
+  z-index: var(--bs-z-overlay, 1000);
+  background: var(--bs-color-primary);
+  border-bottom-color: color-mix(in srgb, var(--bs-color-on-primary, #fff) 22%, transparent);
+  color: var(--bs-color-on-primary, #fff);
+  box-shadow: 0 2px 12px -6px rgba(15, 23, 42, 0.4);
+}
+.vh {
+  display: flex;
+  align-items: center;
+  gap: var(--bs-space-3);
+  width: 100%;
+  color: var(--bs-color-on-primary, #fff);
+}
+.vh__brand {
+  display: inline-flex;
+  align-items: center;
+  font-weight: 700;
+  font-size: 1.15rem;
+  letter-spacing: 0.02em;
+  color: var(--bs-color-on-primary, #fff);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.vh__logo {
+  display: block;
+  height: clamp(32px, 5vw, 44px);
+  width: auto;
+  max-width: 200px;
+  object-fit: contain;
+}
+
+/* Liens de navigation et actions : lisibles sur fond primaire, états au voile clair. */
+.vh .bs-nav-link {
+  color: var(--bs-color-on-primary, #fff);
+}
+.vh .bs-nav-link:hover {
+  background: color-mix(in srgb, var(--bs-color-on-primary, #fff) 16%, transparent);
+}
+.vh .bs-nav-link.active,
+.vh .bs-nav-link[aria-current='page'] {
+  color: var(--bs-color-on-primary, #fff);
+  background: color-mix(in srgb, var(--bs-color-on-primary, #fff) 22%, transparent);
+}
+.vh .bs-icon-btn,
+.vh__burger .bs-icon-btn {
+  color: var(--bs-color-on-primary, #fff);
+}
+.vh__nav {
+  display: none;
+  gap: var(--bs-space-1);
+  margin-right: auto;
+}
+.vh__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--bs-space-1);
+  margin-left: auto;
+}
+.vh-cart {
+  position: relative;
+  gap: var(--bs-space-1);
+}
+.vh-cart__text,
+.vh__account-text {
+  display: none;
+}
+.vh-cart__badge {
+  position: absolute;
+  top: 2px;
+  right: 0;
+}
+.vh__account {
+  gap: var(--bs-space-1);
+}
+.vh__burger {
+  display: inline-flex;
+}
+
+/* ── Menu mobile = VRAIE sidebar à gauche (jamais un bottom-sheet), couleur du header ─────── */
+.vh-side-root { position: fixed; inset: 0; z-index: var(--bs-z-drawer, 1001); }
+.vh-side-scrim {
+  position: absolute; inset: 0; background: rgba(15, 23, 42, 0.5);
+  animation: vh-side-scrim-in var(--bs-motion-normal) var(--bs-motion-ease-out) both;
+}
+.vh-side {
+  position: absolute; top: 0; bottom: 0; left: 0; height: 100%;
+  width: min(300px, 86vw);
+  padding: var(--bs-space-3);
+  padding-top: max(var(--bs-space-3), env(safe-area-inset-top));
+  padding-bottom: max(var(--bs-space-3), env(safe-area-inset-bottom));
+  display: flex; flex-direction: column; gap: 4px;
+  overflow-y: auto;
+  background: var(--bs-color-primary);
+  color: var(--bs-color-on-primary, #fff);
+  box-shadow: 10px 0 40px rgba(15, 23, 42, 0.28);
+  animation: vh-side-in var(--bs-motion-normal) var(--bs-motion-ease-out) both;
+}
+.vh-side__head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: var(--bs-space-2); padding-bottom: var(--bs-space-2);
+  border-bottom: 1px solid color-mix(in srgb, var(--bs-color-on-primary, #fff) 20%, transparent);
+}
+.vh-side__title { font-weight: 700; font-size: 1.05rem; color: var(--bs-color-on-primary, #fff); }
+.vh-side .bs-icon-btn { color: var(--bs-color-on-primary, #fff); }
+.vh-side .bs-icon-btn:hover { background: color-mix(in srgb, var(--bs-color-on-primary, #fff) 16%, transparent); }
+.vh-side__link { width: 100%; min-height: 46px; color: var(--bs-color-on-primary, #fff); }
+.vh-side__link:hover { background: color-mix(in srgb, var(--bs-color-on-primary, #fff) 14%, transparent); }
+/* État actif : pastille claire, texte primaire (contraste fort) */
+.vh-side__link.active,
+.vh-side__link[aria-current='page'] {
+  background: var(--bs-color-on-primary, #fff);
+  color: var(--bs-color-primary);
+  font-weight: 700;
+}
+.vh-side__sep {
+  border: none;
+  border-top: 1px solid color-mix(in srgb, var(--bs-color-on-primary, #fff) 20%, transparent);
+  margin: var(--bs-space-2) 0; width: 100%;
+}
+
+/* Entrée progressive item par item (stagger) */
+.vh-side > * {
+  opacity: 0;
+  animation: vh-side-item var(--bs-motion-normal) var(--bs-motion-ease-out) forwards;
+}
+.vh-side > *:nth-child(1) { animation-delay: 40ms; }
+.vh-side > *:nth-child(2) { animation-delay: 85ms; }
+.vh-side > *:nth-child(3) { animation-delay: 130ms; }
+.vh-side > *:nth-child(4) { animation-delay: 175ms; }
+.vh-side > *:nth-child(5) { animation-delay: 220ms; }
+.vh-side > *:nth-child(6) { animation-delay: 265ms; }
+.vh-side > *:nth-child(7) { animation-delay: 310ms; }
+.vh-side > *:nth-child(8) { animation-delay: 355ms; }
+.vh-side > *:nth-child(n+9) { animation-delay: 400ms; }
+
+@keyframes vh-side-in { from { transform: translateX(-100%); } to { transform: none; } }
+@keyframes vh-side-item { from { opacity: 0; transform: translateX(-16px); } to { opacity: 1; transform: none; } }
+@keyframes vh-side-scrim-in { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .vh-side, .vh-side-scrim { animation: none; }
+  .vh-side > * { opacity: 1; animation: none; }
+}
+
+/* Desktop : navigation inline visible, actions texte, plus de burger. */
+@media (min-width: 860px) {
+  .vh__nav {
+    display: flex;
+  }
+  .vh-cart__text,
+  .vh__account-text {
+    display: inline;
+  }
+  .vh-cart__badge {
+    position: static;
+  }
+  .vh__burger {
+    display: none;
+  }
+}
+
+/* ── Pied de page ────────────────────────────────────────────────────────── */
+.vf {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--bs-space-4);
+  width: 100%;
+}
+.vf__name {
+  font-size: 1.05rem;
+  color: var(--bs-color-text);
+}
+.vf__tagline {
+  margin: var(--bs-space-1) 0 0;
+  color: var(--bs-color-muted);
+  font-size: 0.9rem;
+}
+.vf__col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bs-space-1);
+}
+.vf__col-title {
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: var(--bs-color-text);
+  margin-bottom: var(--bs-space-1);
+}
+.vf__link {
+  min-height: var(--bs-tap-target);
+  display: inline-flex;
+  align-items: center;
+  color: var(--bs-color-muted);
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+.vf__link:hover {
+  color: var(--bs-color-primary);
+}
+.vf__copy {
+  margin: 0;
+  color: var(--bs-color-muted);
+  font-size: 0.82rem;
+}
+.vf__social-icons {
+  display: flex;
+  gap: var(--bs-space-1);
+}
+.vf__social-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--bs-tap-target);
+  min-height: var(--bs-tap-target);
+  color: var(--bs-color-muted);
+  text-decoration: none;
+  font-size: 1.2rem;
+}
+.vf__social-link:hover {
+  color: var(--bs-color-primary);
+}
+
+@media (min-width: 640px) {
+  .vf {
+    grid-template-columns: 2fr 1fr 1fr;
+  }
+  .vf__copy {
+    grid-column: 1 / -1;
+  }
+}

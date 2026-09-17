@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Connexion Administrateur — Beauty Savage</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="/css/app.css">
+  <link rel="stylesheet" href="/css/login.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <style>
+    /* ── Modal de règlement ─────────────────────────────── */
+    .settlement-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.6);
+      backdrop-filter: blur(4px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      padding: 1rem;
+    }
+    #contract-modal { display: none; }
+    #contract-modal:not([hidden]) {
+      display: flex;
+    }
+    .settlement-modal {
+      background: var(--color-surface, #fff);
+      border-radius: 1.25rem;
+      width: 100%;
+      max-width: 540px;
+      max-height: 90vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      box-shadow: 0 8px 64px rgba(0,0,0,0.18);
+    }
+    .settlement-header {
+      flex-shrink: 0;
+      padding: 1.25rem 1.5rem 1rem;
+      border-bottom: 1px solid rgba(0,0,0,0.07);
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+    .settlement-title {
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--color-text, #0f172a);
+      margin: 0;
+    }
+    .settlement-dots {
+      display: flex;
+      gap: 0.4rem;
+      align-items: center;
+    }
+    .settlement-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: rgba(0,0,0,0.15);
+      transition: background 0.25s, transform 0.25s;
+    }
+    .settlement-dot.active {
+      background: var(--theme-accent, var(--color-primary, #5f4ff7));
+      transform: scale(1.3);
+    }
+    .settlement-dot.done {
+      background: var(--color-success, #1f7a3a);
+    }
+    .settlement-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+    .settlement-footer {
+      flex-shrink: 0;
+      padding: 1rem 1.5rem;
+      border-top: 1px solid rgba(0,0,0,0.07);
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    /* Slides */
+    .slide { display: none; }
+    .slide.active { display: flex; flex-direction: column; gap: 1rem; }
+
+    /* Slide 1 — Présentation */
+    .slide-intro-header { text-align: center; }
+    .slide-institute-name {
+      font-size: 1.3rem;
+      font-weight: 800;
+      color: var(--theme-accent, var(--color-primary, #5f4ff7));
+    }
+    .slide-amount-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.5rem 0;
+      border-bottom: 1px solid rgba(0,0,0,0.06);
+      font-size: 0.9rem;
+    }
+    .slide-amount-row:last-child { border-bottom: none; }
+    .slide-amount-label { opacity: 0.65; }
+    .slide-amount-value { font-weight: 600; }
+    .slide-policy-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.35rem 0.75rem;
+      border-radius: 2rem;
+      font-size: 0.82rem;
+      font-weight: 600;
+    }
+    .slide-policy-badge.anytime {
+      background: rgba(31,122,58,0.1);
+      color: var(--color-success, #1f7a3a);
+    }
+    .slide-policy-badge.locked {
+      background: rgba(245,158,11,0.12);
+      color: #b45309;
+      font-weight: 700;
+    }
+    .slide-steps {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+    }
+    .slide-steps li {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.87rem;
+      opacity: 0.75;
+    }
+    .slide-steps li i { color: var(--theme-accent, var(--color-primary, #5f4ff7)); }
+
+    /* Slide 2 — Acceptation */
+    .slide-file-icon {
+      text-align: center;
+      font-size: 5rem;
+      color: var(--theme-accent, var(--color-primary, #5f4ff7));
+      line-height: 1;
+    }
+    .slide-checkbox-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.75rem;
+      padding: 0.75rem;
+      border: 1px solid rgba(0,0,0,0.1);
+      border-radius: 0.75rem;
+      cursor: pointer;
+    }
+    .slide-checkbox-row input[type="checkbox"] {
+      flex-shrink: 0;
+      margin-top: 0.15rem;
+      width: 1.1rem;
+      height: 1.1rem;
+      cursor: pointer;
+      accent-color: var(--color-primary, #5f4ff7);
+    }
+    .slide-checkbox-row label { cursor: pointer; font-size: 0.88rem; }
+
+    /* Slides 3/6 — Checkout */
+    #launch-payment-element,
+    #monthly-payment-element { min-height: 200px; }
+    .stripe-amount-display {
+      font-size: 1.4rem;
+      font-weight: 800;
+      color: var(--theme-accent, var(--color-primary, #5f4ff7));
+      text-align: center;
+    }
+
+    /* Slides 4/7 — Résultat */
+    .result-center {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 1rem;
+      min-height: 180px;
+      text-align: center;
+    }
+    .result-icon {
+      font-size: 4rem;
+      line-height: 1;
+    }
+    .result-icon.success { color: var(--color-success, #1f7a3a); }
+    .result-icon.error { color: var(--color-danger, #dc2626); }
+    .result-label { font-size: 1rem; font-weight: 600; }
+
+    @keyframes popIn {
+      from { opacity: 0; transform: scale(0.5); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      20%, 60% { transform: translateX(-8px); }
+      40%, 80% { transform: translateX(8px); }
+    }
+    .pop-in { animation: popIn 0.45s cubic-bezier(.34,1.56,.64,1) both; }
+    .shake { animation: shake 0.5s ease-in-out both; }
+
+    /* Slide 8 — Succès final */
+    .slide-success-final {
+      text-align: center;
+      padding: 1rem 0;
+    }
+    .slide-success-final .success-icon-wrap {
+      font-size: 4.5rem;
+      color: var(--color-success, #1f7a3a);
+      display: block;
+      margin-bottom: 1rem;
+    }
+    .slide-success-final h2 {
+      font-size: 1.4rem;
+      font-weight: 800;
+      margin-bottom: 0.5rem;
+    }
+    .slide-success-final p {
+      font-size: 0.9rem;
+      opacity: 0.7;
+    }
+    .slide-polling-status {
+      font-size: 0.82rem;
+      opacity: 0.55;
+      text-align: center;
+    }
+
+    /* Loader spinner */
+    .spin-loader {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 120px;
+    }
+    .spin-loader::after {
+      content: '';
+      width: 2.5rem;
+      height: 2.5rem;
+      border: 3px solid rgba(0,0,0,0.1);
+      border-top-color: var(--theme-accent, var(--color-primary, #5f4ff7));
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Error banner */
+    .stripe-error {
+      color: var(--color-danger, #dc2626);
+      font-size: 0.85rem;
+      padding: 0.5rem 0.75rem;
+      background: rgba(220,38,38,0.07);
+      border-radius: 0.5rem;
+      min-height: 0;
+    }
+    .stripe-error:empty { display: none; }
+
+    /* Transition slide */
+    .slide-transition-content { text-align: center; padding: 0.5rem 0; }
+    .slide-transition-content i {
+      font-size: 3rem;
+      color: var(--color-success, #1f7a3a);
+      margin-bottom: 0.75rem;
+      display: block;
+    }
+
+    /* Amount summary box */
+    .amount-box {
+      background: rgba(95,79,247,0.05);
+      border-radius: 0.75rem;
+      padding: 0.75rem 1rem;
+    }
+
+    /* ── Resume banner ─────────────────────────────────────── */
+    .resume-banner {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.6rem 1.5rem;
+      background: var(--color-surface, #fff);
+      border-bottom: 2px solid var(--theme-accent, var(--color-primary, #5f4ff7));
+      font-size: 0.82rem;
+      font-weight: 500;
+      color: var(--theme-accent, var(--color-primary, #5f4ff7));
+      opacity: 0;
+      transition: opacity 200ms ease;
+      flex-shrink: 0;
+    }
+    .resume-banner--visible { opacity: 1; }
+    @keyframes banner-fade-out {
+      from { opacity: 1; }
+      to   { opacity: 0; }
+    }
+    .resume-banner--hiding {
+      animation: banner-fade-out 400ms ease forwards;
+    }
+
+    /* ── Retry button ──────────────────────────────────────── */
+    .retry-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      padding: 0.65rem 1.5rem;
+      border-radius: 2rem;
+      border: none;
+      background: var(--theme-accent-strong, var(--color-secondary, #f24692));
+      color: #fff;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 200ms ease-out, box-shadow 200ms ease-out;
+    }
+    .retry-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(0,0,0,0.18);
+    }
+    .retry-btn .retry-icon {
+      display: inline-block;
+    }
+    @keyframes retry-spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+    .retry-btn.spinning .retry-icon {
+      animation: retry-spin 0.6s ease;
+    }
+
+    /* ── Checkbox lock states ──────────────────────────────── */
+    #s2-lock-icon {
+      flex-shrink: 0;
+      font-size: 1rem;
+      color: var(--theme-accent-strong, var(--color-secondary, #f24692));
+      transition: opacity 200ms ease, color 200ms ease;
+    }
+    .slide-checkbox-row--locked {
+      cursor: not-allowed;
+      opacity: 0.6;
+    }
+    .slide-checkbox-row--locked input[type="checkbox"] {
+      pointer-events: none;
+      cursor: not-allowed;
+    }
+    .slide-checkbox-row--unlocked #s2-lock-icon {
+      color: var(--theme-accent, var(--color-primary, #5f4ff7));
+    }
+    @keyframes unlock-pulse {
+      0%   { transform: scale(1); }
+      50%  { transform: scale(1.25); }
+      100% { transform: scale(1); }
+    }
+    .s2-lock-unlocking {
+      animation: unlock-pulse 300ms ease-out;
+    }
+    @keyframes checkbox-pop {
+      0%   { transform: scale(0.8); }
+      50%  { transform: scale(1.1); }
+      100% { transform: scale(1); }
+    }
+    .s2-checkbox-popping {
+      animation: checkbox-pop 300ms ease-out;
+    }
+    .slide-checkbox-row--unlocked label,
+    .slide-checkbox-row--unlocked span {
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body class="login-body">
+  <main class="login-shell">
+    <section class="login-card">
+      <header class="login-brand">
+        <div class="brand-identity login-brand__identity">
+          <img class="login-logo" data-login-logo alt="Logo du site" hidden>
+          <span class="brand-logo-fallback login-logo-fallback" data-login-logo-fallback hidden>BS</span>
+          <div class="login-brand__copy">
+            <p class="login-brand__eyebrow">Espace sécurisé</p>
+            <h1 data-login-site-name>Beauty Savage</h1>
+            <p class="login-brand__lead">Connectez-vous à l'interface d'administration.</p>
+          </div>
+        </div>
+      </header>
+
+      <section class="login-card__panel">
+        <form class="login-form" id="login-form">
+          <div class="form-group">
+            <label for="email">Email</label>
+            <input id="email" name="email" type="email" required autocomplete="username">
+          </div>
+          <div class="form-group">
+            <label for="password">Mot de passe</label>
+            <input id="password" name="password" type="password" required autocomplete="current-password">
+          </div>
+          <div class="error" id="login-error"></div>
+          <button class="primary-button" type="button" id="login-btn">Se connecter</button>
+        </form>
+        <div class="login-links">
+          <a class="secondary-link" href="/reset-password-request.html">Mot de passe oublié ?</a>
+          <a class="secondary-link" href="/vitrine.html">Retour à la vitrine</a>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       MODAL DE RÈGLEMENT — non fermable
+  ══════════════════════════════════════════════════════════════ -->
+  <div class="settlement-overlay" id="contract-modal" hidden aria-modal="true" role="dialog">
+    <div class="settlement-modal">
+
+      <!-- Resume banner -->
+      <div id="resume-banner" class="resume-banner" hidden>
+        <i class="bi bi-arrow-clockwise" aria-hidden="true"></i>
+        <span class="resume-banner__text"></span>
+      </div>
+
+      <!-- Header fixe -->
+      <div class="settlement-header">
+        <p class="settlement-title" id="settlement-slide-title">Bienvenue</p>
+        <div class="settlement-dots" id="settlement-dots" aria-hidden="true"></div>
+      </div>
+
+      <!-- Body scroll -->
+      <div class="settlement-body" id="settlement-body">
+
+        <!-- Slide 1 — Présentation -->
+        <div class="slide" id="slide-1">
+          <div class="slide-intro-header">
+            <p class="slide-institute-name" id="s1-institute-name">Beauty Savage</p>
+          </div>
+          <div id="s1-amounts"></div>
+          <div id="s1-policy-wrap"></div>
+          <div style="margin-top:0.25rem">
+            <p style="font-size:0.82rem;opacity:0.55;margin-bottom:0.4rem">Étapes de règlement :</p>
+            <ol class="slide-steps" id="s1-steps"></ol>
+          </div>
+        </div>
+
+        <!-- Slide 2 — Acceptation contrat -->
+        <div class="slide" id="slide-2">
+          <div class="slide-file-icon">
+            <i class="bi bi-file-earmark-text" id="s2-file-icon" aria-hidden="true"></i>
+          </div>
+          <div style="text-align:center">
+            <p style="font-size:0.88rem;opacity:0.7">Téléchargez et lisez attentivement le contrat avant de continuer.</p>
+          </div>
+          <button class="primary-button" type="button" id="s2-download-btn">
+            <i class="bi bi-download" aria-hidden="true"></i>&nbsp;Lire le contrat
+          </button>
+          <div id="s2-download-status" style="font-size:0.82rem;text-align:center;opacity:0.6;min-height:1.2rem"></div>
+          <label class="slide-checkbox-row slide-checkbox-row--locked" id="s2-accept-label" title="Téléchargez d'abord le contrat">
+            <i class="bi bi-lock-fill" id="s2-lock-icon" aria-hidden="true"></i>
+            <input type="checkbox" id="s2-accept-checkbox" disabled>
+            <span>J'ai lu et j'accepte les termes du contrat</span>
+          </label>
+          <div class="error" id="s2-error"></div>
+        </div>
+
+        <!-- Slide 3 — Checkout frais de lancement -->
+        <div class="slide" id="slide-3">
+          <div class="stripe-amount-display" id="s3-amount-display"></div>
+          <div class="amount-box" style="text-align:center;font-size:0.82rem;opacity:0.65" id="s3-amount-detail"></div>
+          <div id="launch-payment-element"></div>
+          <div class="stripe-error" id="s3-error"></div>
+        </div>
+
+        <!-- Slide 4 — Résultat lancement -->
+        <div class="slide" id="slide-4">
+          <div class="result-center" id="s4-result">
+            <div class="spin-loader"></div>
+            <p style="opacity:0.55;font-size:0.85rem">Vérification du paiement…</p>
+          </div>
+        </div>
+
+        <!-- Slide 5 — Transition -->
+        <div class="slide" id="slide-5">
+          <div class="slide-transition-content">
+            <i class="bi bi-check-circle-fill pop-in" aria-hidden="true"></i>
+            <h3 style="font-size:1rem;font-weight:700;margin-bottom:0.5rem">Frais de lancement réglés</h3>
+            <p style="font-size:0.88rem;opacity:0.7">Excellente nouvelle ! Il reste la souscription mensuelle.</p>
+            <div class="amount-box" style="margin-top:1rem;text-align:center" id="s5-monthly-recap"></div>
+          </div>
+        </div>
+
+        <!-- Slide 6 — Checkout mensualité -->
+        <div class="slide" id="slide-6">
+          <div class="stripe-amount-display" id="s6-amount-display"></div>
+          <div class="amount-box" style="text-align:center;font-size:0.82rem;opacity:0.65" id="s6-amount-detail"></div>
+          <div id="monthly-payment-element"></div>
+          <div class="stripe-error" id="s6-error"></div>
+        </div>
+
+        <!-- Slide 7 — Résultat mensualité -->
+        <div class="slide" id="slide-7">
+          <div class="result-center" id="s7-result">
+            <div class="spin-loader"></div>
+            <p style="opacity:0.55;font-size:0.85rem">Souscription en cours…</p>
+          </div>
+        </div>
+
+        <!-- Slide 8 — Activation -->
+        <div class="slide" id="slide-8">
+          <div class="slide-content" id="slide-8-content"></div>
+        </div>
+
+      </div><!-- /settlement-body -->
+
+      <!-- Footer fixe -->
+      <div class="settlement-footer">
+        <button class="primary-button" type="button" id="settlement-next-btn">Démarrer</button>
+        <button class="retry-btn" type="button" id="settlement-retry-btn" hidden>
+          <i class="bi bi-arrow-clockwise retry-icon" aria-hidden="true"></i>
+          <span>Réessayer</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://js.stripe.com/v3/"></script>
+  <script src="/js/admin-login.js"></script>
+</body>
+</html>

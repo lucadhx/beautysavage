@@ -1,0 +1,22 @@
+.cev { display: flex; flex-direction: column; gap: var(--bs-space-3); margin-top: var(--bs-space-4); }
+.cev-msg, .cev-desc { color: var(--bs-color-muted); }
+.cev--done, .cev--sent { border: 1px solid var(--bs-color-border); border-radius: var(--bs-radius); padding: var(--bs-space-4); text-align: center; }
+.cev-banner { border: 1px solid var(--bs-color-warning); border-radius: var(--bs-radius); padding: var(--bs-space-3); background: var(--bs-color-surface-2); }
+.cev-banner p { margin: var(--bs-space-1) 0 0; }
+.cev-steps { display: flex; gap: var(--bs-space-2); list-style: none; padding: 0; margin: 0; flex-wrap: wrap; }
+.cev-steps li { padding: var(--bs-space-1) var(--bs-space-2); border-radius: 999px; border: 1px solid var(--bs-color-border); font-size: 0.85rem; color: var(--bs-color-muted); }
+.cev-steps li.on { border-color: var(--bs-color-accent, var(--bs-color-border)); font-weight: 600; color: var(--bs-color-text); }
+.cev-section { display: flex; flex-direction: column; gap: var(--bs-space-2); }
+.cev-card { border: 1px solid var(--bs-color-border); border-radius: var(--bs-radius); padding: var(--bs-space-3); display: flex; flex-direction: column; gap: var(--bs-space-2); }
+.cev-card h4 { margin: 0; }
+.cev-q { border: none; padding: 0; margin: 0; }
+.cev-q legend { font-weight: 600; padding: 0; }
+.cev-choices { display: flex; gap: var(--bs-space-3); flex-wrap: wrap; }
+.cev-choices--col { flex-direction: column; gap: var(--bs-space-1); }
+.cev-choices label { display: flex; align-items: center; gap: var(--bs-space-1); cursor: pointer; }
+.cev-uploads { display: flex; gap: var(--bs-space-2); flex-wrap: wrap; }
+.cev-upload { display: inline-flex; flex-direction: column; gap: var(--bs-space-1); padding: var(--bs-space-2); border: 1px dashed var(--bs-color-border); border-radius: var(--bs-radius); cursor: pointer; font-size: 0.9rem; }
+.cev-upload--done { border-style: solid; border-color: var(--bs-color-success); }
+.cev-actions { display: flex; gap: var(--bs-space-2); flex-wrap: wrap; }
+.cev-btn { display: inline-block; padding: var(--bs-space-2) var(--bs-space-3); border-radius: var(--bs-radius); border: 1px solid var(--bs-color-border); text-decoration: none; }
+.cev-error { color: var(--bs-color-danger); }

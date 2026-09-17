@@ -1,0 +1,1363 @@
+/* planningModule.css — préfixe plm- */
+
+/* ─── Root ─────────────────────────────────────────────────────────────────── */
+
+.plm-root {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+/* ─── Toolbar ───────────────────────────────────────────────────────────────── */
+
+.plm-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0 0 0.75rem;
+  border-bottom: 1px solid var(--color-border, rgba(0, 0, 0, 0.1));
+}
+
+.plm-toolbar__left,
+.plm-toolbar__right {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+/* ─── Nav ───────────────────────────────────────────────────────────────────── */
+
+.plm-nav {
+  display: flex;
+  gap: 0.25rem;
+  align-items: center;
+}
+
+.plm-btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--color-border, rgba(0, 0, 0, 0.15));
+  border-radius: 6px;
+  background: var(--color-surface, #fff);
+  color: var(--color-text, #0f172a);
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.plm-btn-icon:hover {
+  background: var(--color-background, #f5f4ef);
+  border-color: var(--color-primary, #5f4ff7);
+}
+
+.plm-btn-today {
+  padding: 0 0.75rem;
+  height: 32px;
+  border: 1px solid var(--color-border, rgba(0, 0, 0, 0.15));
+  border-radius: 6px;
+  background: var(--color-surface, #fff);
+  color: var(--color-text, #0f172a);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.plm-btn-today:hover {
+  background: var(--color-background, #f5f4ef);
+  border-color: var(--color-primary, #5f4ff7);
+}
+
+.plm-btn-today--away {
+  color: var(--color-primary, #5f4ff7);
+  border-color: color-mix(in oklab, var(--color-primary, #5f4ff7) 50%, transparent 50%);
+  background: color-mix(in oklab, var(--color-primary, #5f4ff7) 6%, var(--color-surface, #fff) 94%);
+}
+
+.plm-btn-today--away:hover {
+  background: color-mix(in oklab, var(--color-primary, #5f4ff7) 12%, var(--color-surface, #fff) 88%);
+  border-color: var(--color-primary, #5f4ff7);
+}
+
+.plm-title {
+  font-size: 1rem;
+  font-weight: 700;
+  margin: 0;
+  color: var(--color-text, #0f172a);
+  white-space: nowrap;
+}
+
+/* ─── Événement "Indisponible" — fond sombre, non cliquable ─────────────────── */
+
+.plm-event-unavailable {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-size: 0.75rem !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.05em !important;
+  text-transform: uppercase !important;
+  opacity: 0.9 !important;
+  cursor: default !important;
+  pointer-events: none !important;
+}
+
+.plm-event-unavailable .fc-event-title {
+  text-align: center !important;
+}
+
+/* ─── Select ────────────────────────────────────────────────────────────────── */
+
+.plm-select {
+  height: 32px;
+  padding: 0 0.625rem;
+  border: 1px solid var(--color-border, rgba(0, 0, 0, 0.15));
+  border-radius: 6px;
+  background: var(--color-surface, #fff);
+  color: var(--color-text, #0f172a);
+  font-size: 0.8125rem;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%230f172a' opacity='.4'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.5rem center;
+  padding-right: 1.75rem;
+}
+
+.plm-select:focus {
+  outline: none;
+  border-color: var(--color-primary, #5f4ff7);
+}
+
+/* ─── Config button ──────────────────────────────────────────────────────────── */
+
+.plm-btn-config {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  height: 32px;
+  padding: 0 0.75rem;
+  border: 1px solid var(--color-border, rgba(0, 0, 0, 0.15));
+  border-radius: 6px;
+  background: var(--color-surface, #fff);
+  color: var(--color-text, #0f172a);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.plm-btn-config:hover {
+  background: var(--color-background, #f5f4ef);
+  border-color: var(--color-primary, #5f4ff7);
+}
+
+/* ─── Legend ─────────────────────────────────────────────────────────────────── */
+
+.plm-legend {
+  display: flex;
+  gap: 1.25rem;
+  padding: 0.4rem 0;
+  margin-bottom: 0.5rem;
+}
+
+.plm-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.78rem;
+  color: var(--color-muted, rgba(15, 23, 42, 0.5));
+}
+
+.plm-legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.plm-legend-dot--available {
+  background: rgba(95, 79, 247, 0.25);
+  border: 1px solid rgba(95, 79, 247, 0.4);
+}
+
+.plm-legend-dot--unavailable {
+  background: repeating-linear-gradient(
+    -45deg,
+    rgba(0, 0, 0, 0.022),
+    rgba(0, 0, 0, 0.022) 3px,
+    transparent 3px,
+    transparent 9px
+  );
+  border: 1px solid rgba(0, 0, 0, 0.12);
+}
+
+.plm-legend-dot--blocked {
+  background: rgba(30, 30, 30, 0.75);
+  border: 1px solid rgba(30, 30, 30, 0.85);
+}
+
+.plm-legend-dot--formation {
+  background: #5f4ff7;
+  border: 1px solid #5f4ff7;
+}
+
+/* ─── Calendar container ─────────────────────────────────────────────────────── */
+
+.plm-calendar {
+  width: 100%;
+  min-height: 400px;
+}
+
+/* FullCalendar overrides */
+.plm-calendar .fc-button,
+.plm-calendar .fc-button-group {
+  display: none !important;
+}
+
+.plm-calendar .fc-event {
+  border-radius: 4px;
+  font-size: 0.75rem;
+}
+
+.plm-calendar .fc-daygrid-event {
+  border-radius: 4px;
+}
+
+.plm-calendar .fc-timegrid-event {
+  border-radius: 4px;
+}
+
+.plm-calendar .fc-col-header-cell {
+  font-weight: 600;
+  font-size: 0.8125rem;
+  color: var(--color-text, #0f172a);
+}
+
+.plm-calendar .fc-today-button {
+  display: none !important;
+}
+
+.plm-calendar .fc-toolbar {
+  display: none !important;
+}
+
+/* ─── Context menu ───────────────────────────────────────────────────────────── */
+
+.plm-ctx-menu {
+  position: fixed;
+  z-index: 200;
+  background: var(--color-surface, #fff);
+  border: 1px solid var(--color-border, rgba(0, 0, 0, 0.12));
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  padding: 0.35rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 160px;
+  animation: plmFadeIn 0.15s ease;
+}
+
+.plm-ctx-menu[hidden] {
+  display: none;
+}
+
+@keyframes plmFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.plm-ctx-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.75rem;
+  border: none;
+  background: transparent;
+  border-radius: 5px;
+  font-size: 0.875rem;
+  cursor: pointer;
+  color: var(--color-text, #0f172a);
+  width: 100%;
+  text-align: left;
+  transition: background 0.12s ease;
+}
+
+.plm-ctx-btn:hover {
+  background: color-mix(in oklab, var(--color-primary, #5f4ff7) 8%, transparent 92%);
+}
+
+.plm-ctx-btn--danger {
+  color: var(--color-danger, #dc2626);
+}
+
+.plm-ctx-btn--danger:hover {
+  background: color-mix(in oklab, var(--color-danger, #dc2626) 8%, transparent 92%);
+}
+
+/* ─── Modals ─────────────────────────────────────────────────────────────────── */
+
+.plm-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.plm-modal-overlay[hidden] {
+  display: none;
+}
+
+.plm-modal {
+  background: var(--color-surface, #fff);
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.18);
+  width: 100%;
+  max-width: 520px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.plm-modal--small {
+  max-width: 380px;
+}
+
+.plm-modal__header {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 1.25rem 1.25rem 1rem;
+  border-bottom: 1px solid var(--color-border, rgba(0, 0, 0, 0.08));
+  flex-shrink: 0;
+}
+
+.plm-modal__header i {
+  color: var(--color-primary, #5f4ff7);
+  font-size: 1.125rem;
+}
+
+.plm-modal__header h3 {
+  font-size: 1rem;
+  font-weight: 700;
+  margin: 0;
+  flex: 1;
+  color: var(--color-text, #0f172a);
+}
+
+.plm-modal__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: none;
+  color: var(--color-muted, rgba(15, 23, 42, 0.5));
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.plm-modal__close:hover {
+  background: var(--color-background, #f5f4ef);
+  color: var(--color-text, #0f172a);
+}
+
+.plm-modal__body {
+  padding: 1.25rem;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.plm-modal__footer {
+  padding: 0.875rem 1.25rem;
+  border-top: 1px solid var(--color-border, rgba(0, 0, 0, 0.08));
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+/* ─── Form elements ──────────────────────────────────────────────────────────── */
+
+.plm-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  margin-bottom: 1rem;
+}
+
+.plm-form-group:last-child {
+  margin-bottom: 0;
+}
+
+.plm-form-group label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-text, #0f172a);
+}
+
+.plm-form-row {
+  display: flex;
+  gap: 1rem;
+}
+
+.plm-form-row .plm-form-group {
+  flex: 1;
+}
+
+.plm-input {
+  height: 36px;
+  padding: 0 0.625rem;
+  border: 1px solid var(--color-border, rgba(0, 0, 0, 0.15));
+  border-radius: 6px;
+  background: var(--color-surface, #fff);
+  color: var(--color-text, #0f172a);
+  font-size: 0.875rem;
+  transition: border-color 0.15s ease;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.plm-input:focus {
+  outline: none;
+  border-color: var(--color-primary, #5f4ff7);
+}
+
+.plm-radio-group {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.plm-radio {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.875rem;
+  cursor: pointer;
+  color: var(--color-text, #0f172a);
+}
+
+.plm-optional {
+  font-weight: 400;
+  color: var(--color-muted, rgba(15, 23, 42, 0.5));
+}
+
+.plm-time-range {
+  margin-bottom: 1rem;
+  overflow: hidden;
+  transition: max-height 0.3s ease, opacity 0.3s ease;
+  max-height: 200px;
+  opacity: 1;
+}
+
+.plm-time-range.plm-day-slots--collapsed {
+  max-height: 0;
+  opacity: 0;
+  pointer-events: none;
+  margin-bottom: 0;
+}
+
+/* ─── Time picker dropdown ───────────────────────────────────────────────────── */
+
+.plm-tp {
+  position: relative;
+  display: inline-block;
+}
+
+.plm-tp-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  height: 32px;
+  padding: 0 0.75rem;
+  border: 1px solid var(--color-border, rgba(0, 0, 0, 0.15));
+  border-radius: 6px;
+  background: var(--color-surface, #fff);
+  color: var(--color-text, #0f172a);
+  font-size: 0.875rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  white-space: nowrap;
+}
+
+.plm-tp-trigger:hover {
+  border-color: var(--color-primary, #5f4ff7);
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--color-primary, #5f4ff7) 15%, transparent 85%);
+}
+
+.plm-tp-caret {
+  font-size: 0.65rem;
+  opacity: 0.5;
+  transition: transform 0.15s ease;
+}
+
+.plm-tp[data-open] .plm-tp-caret {
+  transform: rotate(180deg);
+}
+
+.plm-tp-dropdown {
+  /* Base styles — position overridden to fixed by JS when appended to body */
+  background: var(--color-surface, #fff);
+  border: 1px solid var(--color-border, rgba(0, 0, 0, 0.12));
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  padding: 0.5rem;
+  min-width: 260px;
+  animation: plmDropIn 0.15s ease;
+}
+
+.plm-tp-dropdown-floating {
+  position: fixed;
+  z-index: 99999 !important;
+  display: block !important;
+  background: var(--theme-surface, #ffffff) !important;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  min-width: 260px;
+  overflow: hidden;
+}
+
+@keyframes plmDropIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.plm-tp-dropdown[hidden] {
+  display: none;
+}
+
+.plm-tp-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.2rem;
+}
+
+.plm-tp-slot {
+  padding: 0.3rem 0.25rem;
+  font-size: 0.78rem;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--color-text, #0f172a);
+  cursor: pointer;
+  text-align: center;
+  transition: background 0.1s ease, color 0.1s ease;
+}
+
+.plm-tp-slot:hover:not(.plm-tp-slot--disabled) {
+  background: color-mix(in oklab, var(--color-primary, #5f4ff7) 10%, transparent 90%);
+  color: var(--color-primary, #5f4ff7);
+}
+
+.plm-tp-slot--selected {
+  background: var(--color-primary, #5f4ff7);
+  color: #fff;
+}
+
+.plm-tp-slot--selected:hover {
+  background: var(--color-primary, #5f4ff7);
+  color: #fff;
+  opacity: 0.9;
+}
+
+.plm-tp-slot--disabled {
+  color: var(--color-muted, rgba(15, 23, 42, 0.25));
+  text-decoration: line-through;
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+/* ─── Toggle slide ───────────────────────────────────────────────────────────── */
+
+.plm-toggle-slide {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.plm-toggle-slide__input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.plm-toggle-slide__track {
+  position: relative;
+  width: 38px;
+  height: 22px;
+  border-radius: 11px;
+  background: rgba(0, 0, 0, 0.15);
+  transition: background 0.25s ease;
+  flex-shrink: 0;
+}
+
+.plm-toggle-slide__input:checked ~ .plm-toggle-slide__track {
+  background: var(--color-primary, #5f4ff7);
+}
+
+.plm-toggle-slide__thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+  transition: transform 0.25s ease;
+}
+
+.plm-toggle-slide__input:checked ~ .plm-toggle-slide__track .plm-toggle-slide__thumb {
+  transform: translateX(16px);
+}
+
+.plm-toggle-slide__label {
+  font-size: 0.8rem;
+  color: var(--color-muted, rgba(15, 23, 42, 0.5));
+  min-width: 32px;
+  transition: color 0.2s;
+}
+
+.plm-toggle-slide__input:checked ~ .plm-toggle-slide__label {
+  color: var(--color-primary, #5f4ff7);
+  font-weight: 600;
+}
+
+/* ─── Day slots animation ────────────────────────────────────────────────────── */
+
+.plm-day-slots {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding-left: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease, opacity 0.3s ease;
+  max-height: 500px;
+  opacity: 1;
+}
+
+.plm-day-slots--collapsed {
+  max-height: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ─── Buttons ────────────────────────────────────────────────────────────────── */
+
+.plm-btn-save {
+  padding: 0 1.25rem;
+  height: 36px;
+  background: var(--color-primary, #5f4ff7);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.plm-btn-save:hover {
+  opacity: 0.88;
+}
+
+.plm-btn-save:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.plm-btn-cancel {
+  padding: 0 1.25rem;
+  height: 36px;
+  background: none;
+  color: var(--color-text, #0f172a);
+  border: 1px solid var(--color-border, rgba(0, 0, 0, 0.15));
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.plm-btn-cancel:hover {
+  background: var(--color-background, #f5f4ef);
+}
+
+/* ─── Day rows (schedule modal) ──────────────────────────────────────────────── */
+
+.plm-day-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.plm-day-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.625rem 0;
+  border-bottom: 1px solid var(--color-border, rgba(0, 0, 0, 0.06));
+}
+
+.plm-day-row:last-child {
+  border-bottom: none;
+}
+
+.plm-day-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.plm-day-name {
+  width: 90px;
+  flex-shrink: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-text, #0f172a);
+  white-space: nowrap;
+}
+
+/* ─── Slot rows (multi-plages) ───────────────────────────────────────────────── */
+
+.plm-slot-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.plm-time-sep {
+  font-size: 0.875rem;
+  color: var(--color-muted, rgba(15, 23, 42, 0.5));
+}
+
+.plm-slot-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: none;
+  color: var(--color-danger, #dc2626);
+  cursor: pointer;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  transition: background 0.12s ease;
+}
+
+.plm-slot-remove:hover {
+  background: color-mix(in oklab, var(--color-danger, #dc2626) 10%, transparent 90%);
+}
+
+.plm-slot-remove--hidden {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.plm-slot-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.25rem 0.625rem;
+  height: 28px;
+  border: 1px dashed var(--color-border, rgba(0, 0, 0, 0.2));
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-primary, #5f4ff7);
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease;
+  align-self: flex-start;
+}
+
+.plm-slot-add:hover {
+  background: color-mix(in oklab, var(--color-primary, #5f4ff7) 8%, transparent 92%);
+  border-color: var(--color-primary, #5f4ff7);
+}
+
+.plm-slot-add--hidden {
+  display: none;
+}
+
+/* ─── FullCalendar — off-hours hatching ──────────────────────────────────────── */
+
+.plm-calendar .fc-non-business {
+  background: repeating-linear-gradient(
+    -45deg,
+    rgba(0, 0, 0, 0.022),
+    rgba(0, 0, 0, 0.022) 3px,
+    transparent 3px,
+    transparent 9px
+  ) !important;
+}
+
+/* ─── Loading / error states ──────────────────────────────────────────────────── */
+
+.plm-loading,
+.plm-error {
+  font-size: 0.875rem;
+  padding: 0.5rem 0;
+}
+
+.plm-loading {
+  color: var(--color-muted, rgba(15, 23, 42, 0.5));
+}
+
+.plm-error {
+  color: var(--color-danger, #dc2626);
+}
+
+/* ─── Bouton modifier vue ────────────────────────────────────────────────────── */
+
+.plm-btn-edit-view {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  height: 32px;
+  padding: 0 0.75rem;
+  border: 1px solid var(--color-primary, #5f4ff7);
+  border-radius: 6px;
+  background: color-mix(in oklab, var(--color-primary, #5f4ff7) 8%, transparent 92%);
+  color: var(--color-primary, #5f4ff7);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.plm-btn-edit-view:hover {
+  background: color-mix(in oklab, var(--color-primary, #5f4ff7) 15%, transparent 85%);
+}
+
+/* ─── Modal large ────────────────────────────────────────────────────────────── */
+
+.plm-modal--wide {
+  max-width: 640px;
+}
+
+/* ─── Warning semaine ────────────────────────────────────────────────────────── */
+
+.plm-week-warning {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.625rem 0.875rem;
+  background: color-mix(in oklab, var(--color-secondary, #f24692) 8%, transparent 92%);
+  border: 1px solid color-mix(in oklab, var(--color-secondary, #f24692) 30%, transparent 70%);
+  border-radius: 8px;
+  font-size: 0.8125rem;
+  color: var(--color-secondary, #f24692);
+  margin-bottom: 1rem;
+}
+
+.plm-week-warning i {
+  flex-shrink: 0;
+}
+
+/* ─── Media queries ──────────────────────────────────────────────────────────── */
+
+@media (max-width: 767px) {
+  .plm-toolbar {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .plm-toolbar__left,
+  .plm-toolbar__right {
+    width: 100%;
+  }
+
+  .plm-title {
+    font-size: 0.9375rem;
+  }
+
+  .plm-form-row {
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .plm-day-header {
+    gap: 0.5rem;
+  }
+
+  .plm-legend {
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+}
+
+/* ─── Formation detail modal (plm-fdet-*) ────────────────────────────────────── */
+
+.plm-fdet-header-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.plm-fdet-header-info h3 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.plm-fdet-meta {
+  font-size: 0.8125rem;
+  color: var(--color-muted, rgba(15, 23, 42, 0.5));
+  margin-top: 2px;
+}
+
+.plm-fdet-footer {
+  justify-content: flex-end;
+}
+
+/* ─── Danger button ───────────────────────────────────────────────────────────── */
+
+.plm-btn-danger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.5rem 1rem;
+  background: var(--color-danger, #dc2626);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.plm-btn-danger:hover:not(:disabled) {
+  opacity: 0.85;
+}
+
+.plm-btn-danger:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ─── Participant cards ───────────────────────────────────────────────────────── */
+
+.plm-fdet-participant {
+  background: var(--color-background, #f5f4ef);
+  border-radius: 10px;
+  padding: 12px 16px;
+  margin-bottom: 10px;
+  border: 1.5px solid transparent;
+  transition: border-color 0.15s;
+}
+
+.plm-fdet-participant--cancelled {
+  opacity: 0.65;
+  border-color: var(--color-danger, #dc2626);
+}
+
+.plm-fdet-participant__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.plm-fdet-participant__name {
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--color-text, #0f172a);
+}
+
+.plm-fdet-participant__email {
+  display: block;
+  font-size: 0.8125rem;
+  color: var(--color-primary, #5f4ff7);
+  text-decoration: none;
+  margin-top: 2px;
+}
+
+.plm-fdet-participant__email:hover {
+  text-decoration: underline;
+}
+
+.plm-fdet-participant__joined {
+  font-size: 0.8125rem;
+  color: var(--color-muted, rgba(15, 23, 42, 0.5));
+  margin-top: 4px;
+}
+
+.plm-fdet-participant__refund {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.8125rem;
+  margin-top: 6px;
+}
+
+.plm-fdet-options {
+  margin-top: 6px;
+  font-size: 0.8125rem;
+}
+
+.plm-fdet-options__label {
+  font-weight: 600;
+  color: var(--color-muted, rgba(15, 23, 42, 0.5));
+}
+
+.plm-fdet-option {
+  display: block;
+  margin-left: 8px;
+  color: var(--color-text, #0f172a);
+  margin-top: 2px;
+}
+
+.plm-fdet-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  flex-shrink: 0;
+}
+
+.plm-fdet-badge--cancelled {
+  background: rgba(220, 38, 38, 0.1);
+  color: var(--color-danger, #dc2626);
+}
+
+/* ─── Skeleton loader ─────────────────────────────────────────────────────────── */
+
+.plm-fdet-skeleton {
+  background: var(--color-background, #f5f4ef);
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 10px;
+}
+
+.plm-fdet-skeleton__line {
+  height: 14px;
+  border-radius: 6px;
+  background: linear-gradient(
+    90deg,
+    rgba(0, 0, 0, 0.06) 25%,
+    rgba(0, 0, 0, 0.1) 50%,
+    rgba(0, 0, 0, 0.06) 75%
+  );
+  background-size: 200% 100%;
+  animation: plm-shimmer 1.2s linear infinite;
+  margin-bottom: 8px;
+}
+
+.plm-fdet-skeleton__line--wide  { width: 70%; }
+.plm-fdet-skeleton__line--narrow { width: 40%; }
+
+@keyframes plm-shimmer {
+  from { background-position: 200% 0; }
+  to   { background-position: -200% 0; }
+}
+
+/* ─── Cancel confirm message ──────────────────────────────────────────────────── */
+
+.plm-fdet-confirm-msg {
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: var(--color-text, #0f172a);
+  margin: 0;
+}
+
+/* ─── Modified bar (badge + reset button in day/week modals) ─────────────────── */
+
+.plm-modified-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: rgba(95, 79, 247, 0.06);
+  border: 1px solid rgba(95, 79, 247, 0.18);
+  border-radius: 8px;
+  margin-bottom: 14px;
+}
+
+.plm-modified-badge {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--color-primary, #5f4ff7);
+}
+
+.plm-btn-reset {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: auto;
+  padding: 4px 10px;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--color-primary, #5f4ff7);
+  background: transparent;
+  border: 1px solid var(--color-primary, #5f4ff7);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.plm-btn-reset:hover {
+  background: var(--color-primary, #5f4ff7);
+  color: #fff;
+}
+
+/* ─── Booking events (FullCalendar) ──────────────────────────────────────────── */
+
+.plm-event-booking {
+  border-radius: 4px;
+  font-size: 0.73rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.plm-event-booking--completed {
+  opacity: 0.85;
+  background-color: rgba(31, 122, 58, 0.82) !important;
+}
+
+.plm-event-booking--no_show {
+  opacity: 0.7;
+  background-color: rgba(220, 38, 38, 0.6) !important;
+}
+
+/* ─── Legend dot — booking ───────────────────────────────────────────────────── */
+
+.plm-legend-dot--booking {
+  background: var(--color-primary, #5f4ff7);
+  border: 1px solid var(--color-primary, #5f4ff7);
+  border-radius: 50%;
+}
+
+/* ─── Simulate reminders button ──────────────────────────────────────────────── */
+
+.plm-btn-remind {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  height: 32px;
+  padding: 0 0.75rem;
+  border: 1px solid var(--color-border, rgba(0, 0, 0, 0.15));
+  border-radius: 6px;
+  background: var(--color-surface, #fff);
+  color: var(--color-text, #0f172a);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.plm-btn-remind:hover {
+  background: var(--color-background, #f5f4ef);
+  border-color: var(--color-primary, #5f4ff7);
+}
+
+.plm-btn-remind:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ─── Booking detail modal (pbm-*) ───────────────────────────────────────────── */
+
+.pbm-header-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.pbm-header-info h3 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pbm-header-meta {
+  font-size: 0.8125rem;
+  color: var(--color-muted, rgba(15, 23, 42, 0.5));
+  margin-top: 2px;
+}
+
+.pbm-badge-wrap {
+  flex-shrink: 0;
+}
+
+.pbm-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.pbm-badge--confirmed {
+  background: color-mix(in oklab, var(--color-primary, #5f4ff7) 12%, transparent 88%);
+  color: var(--color-primary, #5f4ff7);
+}
+
+.pbm-badge--completed {
+  background: rgba(31, 122, 58, 0.12);
+  color: var(--color-success, #1f7a3a);
+}
+
+.pbm-badge--noshow {
+  background: rgba(220, 38, 38, 0.1);
+  color: var(--color-danger, #dc2626);
+}
+
+.pbm-badge--cancelled {
+  background: rgba(100, 100, 100, 0.1);
+  color: var(--color-muted, rgba(15, 23, 42, 0.5));
+}
+
+.pbm-section {
+  margin-bottom: 1.25rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--color-border, rgba(0, 0, 0, 0.06));
+}
+
+.pbm-section:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+
+.pbm-section__title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-muted, rgba(15, 23, 42, 0.5));
+  margin-bottom: 0.625rem;
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.pbm-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin-bottom: 0.375rem;
+  font-size: 0.875rem;
+}
+
+.pbm-label {
+  flex-shrink: 0;
+  width: 130px;
+  color: var(--color-muted, rgba(15, 23, 42, 0.5));
+  font-size: 0.8125rem;
+}
+
+.pbm-value {
+  color: var(--color-text, #0f172a);
+  font-weight: 500;
+}
+
+.pbm-link {
+  color: var(--color-primary, #5f4ff7);
+  font-weight: 500;
+  text-decoration: none;
+  font-size: 0.875rem;
+}
+
+.pbm-link:hover {
+  text-decoration: underline;
+}
+
+.pbm-refund {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+}
+
+.pbm-refund--yes {
+  background: rgba(31, 122, 58, 0.08);
+  color: var(--color-success, #1f7a3a);
+}
+
+.pbm-refund--no {
+  background: rgba(220, 38, 38, 0.07);
+  color: var(--color-danger, #dc2626);
+}
+
+@media (max-width: 767px) {
+  .pbm-label {
+    width: 100px;
+  }
+}
+
+/* ─── Simulate reminders date modal ─── */
+.plm-remind-date__desc {
+  margin: 0 0 12px;
+  font-size: 0.9375rem;
+}
+.plm-remind-date__input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 6px;
+  font-size: 0.9375rem;
+  margin-bottom: 12px;
+  background: var(--color-surface, #fff);
+  color: inherit;
+}
+.plm-remind-date__warning {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--color-muted, rgba(15,23,42,0.5));
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+}
+.plm-remind-date__warning i { color: #f59e0b; flex-shrink: 0; margin-top: 2px; }

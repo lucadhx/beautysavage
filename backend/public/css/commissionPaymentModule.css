@@ -1,0 +1,698 @@
+/* ============================================================
+   commissionPaymentModule.css — Paiement des commissions
+   Beauty Savage · préfixe cpm-
+   ============================================================ */
+
+/* ─── Module wrapper ─────────────────────────────────────── */
+.cpm-module {
+  width: min(1500px, 95vw);
+  max-width: none;
+  margin: 0 auto;
+  padding: 0 0 2rem;
+}
+
+/* ─── Onglets ─────────────────────────────────────────────── */
+.cpm-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.9rem;
+  border-bottom: 1px solid color-mix(in oklab, var(--color-border) 70%, transparent 30%);
+  margin-bottom: 1.5rem;
+  padding-bottom: 0.2rem;
+}
+
+.cpm-tab {
+  background: transparent;
+  border: none;
+  padding: 0.3rem 0.05rem 0.46rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--color-text, #0f172a);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  position: relative;
+}
+
+.cpm-tab::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: -1px;
+  width: 100%;
+  height: 2px;
+  background: var(--theme-accent, #5f4ff7);
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 0.22s ease;
+}
+
+.cpm-tab:hover,
+.cpm-tab:focus-visible {
+  color: var(--theme-accent, #5f4ff7);
+}
+
+.cpm-tab--active {
+  color: var(--theme-accent, #5f4ff7);
+}
+
+.cpm-tab--active::after {
+  transform: scaleX(1);
+}
+
+/* ─── Cards grille ────────────────────────────────────────── */
+.cpm-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1rem;
+}
+
+/* ─── Card — style comptable ──────────────────────────────── */
+.cpm-card {
+  background: var(--color-surface, #fff);
+  border: 1px solid rgba(0,0,0,.08);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 1px 3px rgba(0,0,0,.06);
+  overflow: visible;
+  position: relative;
+  transition: box-shadow .15s;
+}
+
+.cpm-card:hover {
+  box-shadow: 0 3px 10px rgba(0,0,0,.1);
+}
+
+/* Header : fond légèrement différencié */
+.cpm-card__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: .7rem 1rem;
+  background: rgba(0,0,0,.025);
+  border-bottom: 1px solid rgba(0,0,0,.06);
+}
+
+.cpm-card__month {
+  font-weight: 700;
+  font-size: .88rem;
+  letter-spacing: .06em;
+  color: rgba(15,23,42,.8);
+}
+
+/* ─── Badges état ─────────────────────────────────────────── */
+.cpm-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: .25rem;
+  border-radius: 4px;
+  padding: .15rem .55rem;
+  font-size: .72rem;
+  font-weight: 600;
+  letter-spacing: .03em;
+}
+.cpm-badge--unavailable { background: rgba(15,23,42,.06); color: rgba(15,23,42,.5); }
+.cpm-badge--available   { background: #dcfce7; color: #15803d; }
+.cpm-badge--warning     { background: #fff7ed; color: #c2410c; }
+.cpm-badge--late        { background: #fee2e2; color: #b91c1c; }
+.cpm-badge--paid        { background: #dcfce7; color: #15803d; }
+
+/* ─── Séparateur ──────────────────────────────────────────── */
+.cpm-divider {
+  border: none;
+  border-top: 1px solid rgba(0,0,0,.06);
+  margin: 0;
+}
+
+/* ─── Métadonnées ─────────────────────────────────────────── */
+.cpm-card__meta {
+  display: flex;
+  flex-direction: column;
+  gap: .5rem;
+  padding: .85rem 1rem;
+}
+
+.cpm-card__meta-row {
+  display: flex;
+  align-items: baseline;
+  gap: .45rem;
+  font-size: .83rem;
+  color: rgba(15,23,42,.6);
+}
+
+.cpm-card__meta-row i {
+  flex-shrink: 0;
+  font-size: .8rem;
+  color: rgba(15,23,42,.35);
+}
+
+.cpm-meta-label {
+  flex-shrink: 0;
+  min-width: 110px;
+  color: rgba(15,23,42,.45);
+  font-size: .78rem;
+}
+
+.cpm-meta-value {
+  color: rgba(15,23,42,.8);
+  font-size: .83rem;
+}
+
+.cpm-amount {
+  font-family: 'Courier New', 'Courier', monospace;
+  font-size: .9rem;
+  font-weight: 700;
+  color: rgba(15,23,42,.85);
+  letter-spacing: .02em;
+}
+
+/* ─── Footer card (état + kebab) ──────────────────────────── */
+.cpm-card__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: .6rem 1rem;
+  background: rgba(0,0,0,.015);
+}
+
+.cpm-card__state {
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+  font-size: .82rem;
+}
+
+.cpm-card__state--unavailable { color: rgba(15,23,42,.4); }
+.cpm-card__state--available   { color: #15803d; }
+.cpm-card__state--warning     { color: #c2410c; }
+.cpm-card__state--late        { color: #b91c1c; font-weight: 600; }
+.cpm-card__state--paid        { color: #15803d; }
+
+/* ─── Countdown ───────────────────────────────────────────── */
+.cpm-countdown {
+  font-family: 'Courier New', monospace;
+  font-size: .78rem;
+  color: rgba(15,23,42,.4);
+  letter-spacing: .05em;
+  margin-left: .2rem;
+}
+
+/* ─── Zone bouton Payer ───────────────────────────────────── */
+.cpm-card__pay-wrap {
+  padding: .65rem 1rem .85rem;
+}
+
+/* ─── Boutons Payer ───────────────────────────────────────── */
+.cpm-btn-pay {
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  background: #15803d;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: .45rem 1rem;
+  font-size: .83rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity .15s;
+  width: 100%;
+  justify-content: center;
+}
+
+.cpm-btn-pay:hover { opacity: .88; }
+
+.cpm-btn-pay--warning { background: #c2410c; }
+.cpm-btn-pay--late    { background: #b91c1c; }
+
+/* ─── Kebab menu ──────────────────────────────────────────── */
+.cpm-kebab {
+  position: relative;
+}
+
+.cpm-kebab__trigger {
+  background: none;
+  border: none;
+  border-radius: 6px;
+  padding: .3rem .45rem;
+  color: var(--color-muted, rgba(15,23,42,.5));
+  cursor: pointer;
+  line-height: 1;
+  transition: background .12s;
+}
+
+.cpm-kebab__trigger:hover {
+  background: var(--color-background, #f5f4ef);
+  color: rgba(15,23,42,.8);
+}
+
+.cpm-kebab__menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  background: var(--color-surface, #fff);
+  border: 1px solid #e2e0f9;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(15,23,42,.1);
+  min-width: 190px;
+  z-index: 100;
+  overflow: hidden;
+}
+
+.cpm-kebab__item {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  padding: .6rem .9rem;
+  font-size: .85rem;
+  color: rgba(15,23,42,.8);
+  text-decoration: none;
+  transition: background .12s;
+}
+
+.cpm-kebab__item:hover {
+  background: var(--color-background, #f5f4ef);
+  color: var(--color-primary, #5f4ff7);
+}
+
+/* ─── Loader ──────────────────────────────────────────────── */
+.cpm-loader {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: .5rem;
+  min-height: 120px;
+  color: var(--color-muted, rgba(15,23,42,.5));
+  font-size: .9rem;
+}
+
+.cpm-spinner-icon {
+  display: inline-block;
+  animation: cpm-spin 1s linear infinite;
+}
+
+@keyframes cpm-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ─── Muted ───────────────────────────────────────────────── */
+.cpm-muted {
+  color: var(--color-muted, rgba(15,23,42,.5));
+  font-size: .87rem;
+}
+
+/* ─── Error ───────────────────────────────────────────────── */
+.cpm-error-msg {
+  color: var(--color-danger, #dc2626);
+  font-size: .85rem;
+  min-height: 1.2em;
+}
+
+/* ─── Boutons génériques ──────────────────────────────────── */
+.cpm-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  background: var(--color-primary, #5f4ff7);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: .55rem 1.3rem;
+  font-size: .88rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity .15s;
+}
+
+.cpm-btn-primary:hover:not(:disabled) { opacity: .88; }
+.cpm-btn-primary:disabled { opacity: .5; cursor: not-allowed; }
+
+.cpm-btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  background: transparent;
+  color: var(--color-muted, rgba(15,23,42,.5));
+  border: 1.5px solid #e2e0f9;
+  border-radius: 8px;
+  padding: .5rem 1.1rem;
+  font-size: .87rem;
+  cursor: pointer;
+  transition: border-color .12s, color .12s;
+}
+
+.cpm-btn-ghost:hover { border-color: var(--color-primary, #5f4ff7); color: var(--color-primary, #5f4ff7); }
+
+.cpm-btn-ghost--sm { padding: .25rem .6rem; font-size: .78rem; }
+
+/* ─── Modal ───────────────────────────────────────────────── */
+.cpm-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.cpm-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15,23,42,.5);
+  backdrop-filter: blur(3px);
+}
+
+.cpm-modal-panel {
+  position: relative;
+  background: var(--color-surface, #fff);
+  border-radius: 14px;
+  box-shadow: 0 8px 40px rgba(15,23,42,.18);
+  width: 100%;
+  max-width: 480px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  z-index: 1;
+}
+
+.cpm-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.1rem 1.3rem;
+  border-bottom: 1px solid #f0effe;
+  flex-shrink: 0;
+}
+
+.cpm-modal-title {
+  font-weight: 600;
+  font-size: .97rem;
+  color: var(--color-primary, #5f4ff7);
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+}
+
+.cpm-modal-close {
+  background: none;
+  border: none;
+  border-radius: 6px;
+  padding: .3rem .4rem;
+  color: var(--color-muted, rgba(15,23,42,.5));
+  cursor: pointer;
+  font-size: 1.1rem;
+  transition: background .12s;
+}
+
+.cpm-modal-close:hover { background: var(--color-background, #f5f4ef); }
+
+.cpm-modal-body {
+  padding: 1.3rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.cpm-modal-amount {
+  background: var(--color-background, #f5f4ef);
+  border-radius: 8px;
+  padding: .7rem 1rem;
+  font-size: .9rem;
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+}
+
+.cpm-modal-actions {
+  display: flex;
+  gap: .75rem;
+  flex-wrap: wrap;
+}
+
+/* ─── Résultat paiement ───────────────────────────────────── */
+.cpm-pay-result {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: .75rem;
+  padding: 1.5rem;
+  text-align: center;
+}
+
+.cpm-pay-result i {
+  font-size: 2.5rem;
+}
+
+.cpm-pay-result--success i { color: var(--color-success, #1f7a3a); }
+.cpm-pay-result--error i   { color: var(--color-danger, #dc2626); }
+
+/* ─── Réglages ────────────────────────────────────────────── */
+.cpm-settings-card {
+  background: var(--color-surface, #fff);
+  border: 1.5px solid #e8e6fc;
+  border-radius: 12px;
+  overflow: hidden;
+  max-width: 480px;
+}
+
+.cpm-settings-card__header {
+  background: var(--color-background, #f5f4ef);
+  padding: .85rem 1.2rem;
+  font-weight: 600;
+  font-size: .93rem;
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  color: rgba(15,23,42,.8);
+}
+
+.cpm-settings-card__body {
+  padding: 1.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.cpm-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: .4rem;
+}
+
+.cpm-form-label {
+  font-size: .83rem;
+  font-weight: 600;
+  color: rgba(15,23,42,.7);
+  letter-spacing: .01em;
+}
+
+/* ─── Stepper ─────────────────────────────────────────────── */
+.cpm-stepper {
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+  flex-wrap: wrap;
+}
+
+.cpm-stepper__btn {
+  width: 32px;
+  height: 32px;
+  border: 1.5px solid #e2e0f9;
+  border-radius: 6px;
+  background: var(--color-surface, #fff);
+  color: var(--color-primary, #5f4ff7);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  transition: background .12s;
+}
+
+.cpm-stepper__btn:hover { background: #f0effe; }
+
+.cpm-stepper__input {
+  width: 64px;
+  border: 1.5px solid #e2e0f9;
+  border-radius: 6px;
+  padding: .3rem .5rem;
+  text-align: center;
+  font-size: .9rem;
+}
+
+.cpm-stepper__input:focus {
+  outline: none;
+  border-color: var(--color-primary, #5f4ff7);
+}
+
+/* ─── Dev banner simulateur ───────────────────────────────── */
+.cpm-devbanner {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 8px;
+  padding: .55rem .9rem;
+  font-size: .82rem;
+  color: #92400e;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.cpm-devbanner input[type="date"] {
+  border: 1px solid #fed7aa;
+  border-radius: 5px;
+  padding: .18rem .4rem;
+  font-size: .8rem;
+  background: #fff;
+}
+
+/* ─── Toast ───────────────────────────────────────────────── */
+.cpm-toast {
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  padding: .7rem 1.2rem;
+  border-radius: 10px;
+  font-size: .88rem;
+  font-weight: 500;
+  box-shadow: 0 4px 20px rgba(15,23,42,.15);
+  animation: cpm-toastIn .2s ease;
+}
+
+.cpm-toast--success { background: #f0fdf4; color: var(--color-success, #1f7a3a); border: 1px solid #d1fae5; }
+.cpm-toast--error   { background: #fef2f2; color: var(--color-danger, #dc2626); border: 1px solid #fecaca; }
+
+@keyframes cpm-toastIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ─── Lecture seule commission (contractModule) ───────────── */
+.contract-commission-readonly {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  background: var(--color-background, #f5f4ef);
+  border-radius: 7px;
+  padding: .5rem .8rem;
+  font-size: .87rem;
+  flex-wrap: wrap;
+}
+
+.contract-commission-switch {
+  display: flex;
+  gap: .25rem;
+}
+
+/* ─── Chips de rappels ────────────────────────────────────── */
+.cpm-reminder-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  background: #f0effe;
+  border: 1px solid #e2e0f9;
+  border-radius: 20px;
+  padding: .25rem .65rem .25rem .55rem;
+  font-size: .8rem;
+  color: rgba(15,23,42,.75);
+  margin: .2rem .3rem .2rem 0;
+}
+
+.cpm-reminder-chip i { color: var(--color-primary, #5f4ff7); font-size: .75rem; }
+
+.cpm-reminder-chip__del {
+  background: none;
+  border: none;
+  border-radius: 50%;
+  padding: .05rem .15rem;
+  cursor: pointer;
+  color: rgba(15,23,42,.4);
+  font-size: .85rem;
+  line-height: 1;
+  transition: color .12s, background .12s;
+}
+
+.cpm-reminder-chip__del:hover {
+  color: var(--color-danger, #dc2626);
+  background: rgba(220,38,38,.08);
+}
+
+/* ─── Loader modal (processing) ──────────────────────────── */
+.cpm-modal-loader {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: .85rem;
+  padding: 2rem 1.3rem;
+  color: var(--color-muted, rgba(15,23,42,.5));
+  font-size: .88rem;
+}
+
+.cpm-loader-spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid rgba(95,79,247,.15);
+  border-top-color: var(--color-primary, #5f4ff7);
+  border-radius: 50%;
+  animation: cpmSpin .75s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes cpmSpin {
+  to { transform: rotate(360deg); }
+}
+
+/* ─── Transition hauteur modale (resizeModal) ─────────────── */
+.cpm-modal-panel--animating {
+  overflow: hidden;
+  transition: height 350ms cubic-bezier(.4,0,.2,1);
+}
+
+/* ─── Kebab item dev-only ─────────────────────────────────── */
+.cpm-kebab__item--dev {
+  color: #c2410c;
+}
+
+.cpm-kebab__item--dev:hover {
+  background: #fff7ed;
+  color: #9a3412;
+}
+
+/* ─── Responsive mobile ───────────────────────────────────── */
+@media (max-width: 480px) {
+  .cpm-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .cpm-modal-panel {
+    border-radius: 12px 12px 0 0;
+    position: fixed;
+    bottom: 0;
+    max-height: 85vh;
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .cpm-modal-overlay {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .cpm-toast {
+    left: 1rem;
+    right: 1rem;
+    bottom: 1rem;
+  }
+}

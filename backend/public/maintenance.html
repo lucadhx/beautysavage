@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Maintenance - Beauty Savage</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="/css/app.css">
+</head>
+<body class="maintenance-body">
+  <main class="maintenance-shell">
+    <section class="maintenance-card" aria-live="polite">
+      <p class="maintenance-pill">Maintenance en cours</p>
+      <h1>Nous revenons tres vite.</h1>
+      <p class="maintenance-subtitle">
+        Le site est temporairement indisponible. Merci pour votre patience.
+      </p>
+
+      <div class="maintenance-meta">
+        <p data-maintenance-reason hidden></p>
+        <p data-maintenance-eta hidden></p>
+        <p data-maintenance-started hidden></p>
+      </div>
+
+      <div class="maintenance-actions">
+        <a class="maintenance-login-link" href="/login">
+          Connexion
+        </a>
+      </div>
+    </section>
+  </main>
+  <script type="module" src="/js/maintenance.js"></script>
+</body>
+</html>

@@ -1,0 +1,1298 @@
+/* notificationManagerModule.css — préfixe nmm-* */
+
+/* ─── Shell & layout ─────────────────────────────────────────────────────────── */
+
+.nmm-shell {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 1.5rem 1rem;
+}
+
+/* ─── En-tête ────────────────────────────────────────────────────────────────── */
+
+.nmm-header {
+  margin-bottom: 1.5rem;
+}
+
+.nmm-title {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--color-text);
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0;
+}
+
+.nmm-title i {
+  color: var(--theme-accent);
+}
+
+/* ─── Tabs ───────────────────────────────────────────────────────────────────── */
+
+.nmm-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 2px solid var(--color-border);
+  margin-bottom: 1.5rem;
+}
+
+.nmm-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.6rem 1.25rem;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--color-text);
+  opacity: 0.5;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: opacity 150ms ease, color 150ms ease;
+  white-space: nowrap;
+}
+
+.nmm-tab:hover {
+  opacity: 0.8;
+}
+
+.nmm-tab--active {
+  opacity: 1;
+  border-bottom-color: var(--theme-accent);
+  color: var(--theme-accent);
+}
+
+/* ─── Tab content animation ──────────────────────────────────────────────────── */
+
+.nmm-tab-content {
+  animation: nmm-slide-up 200ms ease forwards;
+}
+
+/* ─── Cards ──────────────────────────────────────────────────────────────────── */
+
+.nmm-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 1.25rem 1.5rem;
+  margin-bottom: 0.75rem;
+  transition: box-shadow 150ms ease;
+}
+
+.nmm-card:hover {
+  box-shadow: 0 2px 12px var(--color-shadow);
+}
+
+/* ─── Toolbar notifications ──────────────────────────────────────────────────── */
+
+.nmm-notifs__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.nmm-notifs__filters {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+/* ─── Custom select ──────────────────────────────────────────────────────────── */
+
+.nmm-select {
+  position: relative;
+  display: inline-block;
+  min-width: 140px;
+  user-select: none;
+}
+
+.nmm-select__trigger {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: var(--color-text);
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+  white-space: nowrap;
+}
+
+.nmm-select__trigger:hover,
+.nmm-select__trigger:focus {
+  outline: none;
+  border-color: var(--theme-accent);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--theme-accent) 14%, transparent 86%);
+}
+
+.nmm-select__icon-wrap {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  font-size: 0.95rem;
+}
+
+.nmm-select__icon-wrap:empty {
+  display: none;
+}
+
+.nmm-select__value {
+  flex: 1;
+}
+
+.nmm-select__arrow {
+  font-size: 0.65rem;
+  color: var(--color-muted);
+  flex-shrink: 0;
+  transition: transform 150ms ease;
+}
+
+.nmm-select:has(.nmm-select__dropdown:not([hidden])) .nmm-select__arrow {
+  transform: rotate(180deg);
+}
+
+.nmm-select__dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 100%;
+  z-index: 9999;
+  background: var(--color-surface);
+  border: 1px solid color-mix(in oklab, var(--color-border) 80%, transparent 20%);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+  animation: nmm-dropdown-in 120ms ease forwards;
+  overflow: hidden;
+}
+
+.nmm-select__option {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 0.875rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background 100ms ease;
+  white-space: nowrap;
+}
+
+.nmm-select__option:hover {
+  background: color-mix(in oklab, var(--color-text) 5%, transparent 95%);
+}
+
+.nmm-select__option.is-selected {
+  font-weight: 600;
+  color: var(--theme-accent);
+  background: color-mix(in oklab, var(--theme-accent) 8%, transparent 92%);
+}
+
+.nmm-select--disabled .nmm-select__trigger {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+@keyframes nmm-dropdown-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ─── Boutons ────────────────────────────────────────────────────────────────── */
+
+.nmm-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.55rem 1.25rem;
+  background: var(--color-text);
+  color: var(--color-surface);
+  border: none;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 150ms ease, transform 100ms ease;
+}
+
+.nmm-btn-primary:hover {
+  opacity: 0.85;
+}
+
+.nmm-btn-primary:active {
+  transform: scale(0.97);
+}
+
+.nmm-btn-primary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.nmm-btn-primary--full {
+  width: 100%;
+  justify-content: center;
+}
+
+.nmm-btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 1rem;
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--color-text);
+  cursor: pointer;
+  transition: background 150ms ease, border-color 150ms ease;
+}
+
+.nmm-btn-secondary:hover {
+  background: color-mix(in oklab, var(--color-text) 5%, transparent 95%);
+  border-color: color-mix(in oklab, var(--color-text) 25%, var(--color-border) 75%);
+}
+
+.nmm-btn-sm {
+  padding: 0.4rem 0.9rem;
+  font-size: 0.8rem;
+}
+
+/* ─── Skeleton loader ────────────────────────────────────────────────────────── */
+
+.nmm-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.nmm-skeleton__item {
+  height: 72px;
+  border-radius: 10px;
+  background: linear-gradient(
+    90deg,
+    var(--color-border) 25%,
+    color-mix(in oklab, var(--color-border) 50%, var(--color-surface) 50%) 50%,
+    var(--color-border) 75%
+  );
+  background-size: 200% 100%;
+  animation: nmm-shimmer 1.4s ease infinite;
+}
+
+@keyframes nmm-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ─── Empty state ────────────────────────────────────────────────────────────── */
+
+.nmm-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 3rem 1rem;
+  color: var(--color-muted);
+  font-size: 0.95rem;
+  text-align: center;
+}
+
+.nmm-empty i {
+  font-size: 2.5rem;
+  opacity: 0.35;
+}
+
+/* ─── Error state ────────────────────────────────────────────────────────────── */
+
+.nmm-error {
+  padding: 1rem;
+  color: var(--color-danger);
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+/* ─── Items notification ─────────────────────────────────────────────────────── */
+
+.nmm-notif {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.875rem;
+  padding: 0.875rem 1rem;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  transition: background 150ms ease, border-color 150ms ease;
+  cursor: pointer;
+  margin-bottom: 0.25rem;
+}
+
+.nmm-notif:hover {
+  background: color-mix(in oklab, var(--color-text) 4%, transparent 96%);
+}
+
+.nmm-notif--unread {
+  background: color-mix(in oklab, var(--theme-accent) 5%, transparent 95%);
+  border-color: color-mix(in oklab, var(--theme-accent) 15%, transparent 85%);
+}
+
+.nmm-notif--unread:hover {
+  background: color-mix(in oklab, var(--theme-accent) 9%, transparent 91%);
+}
+
+.nmm-notif__icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.nmm-notif__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.nmm-notif__top {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  justify-content: space-between;
+}
+
+.nmm-notif__title {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--color-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nmm-notif--unread .nmm-notif__title {
+  font-weight: 700;
+}
+
+.nmm-notif__time {
+  font-size: 0.75rem;
+  color: var(--color-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.nmm-notif__msg {
+  font-size: 0.8125rem;
+  color: var(--color-muted);
+  margin-top: 0.2rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nmm-notif__meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.35rem;
+}
+
+/* Dot non-lu */
+.nmm-notif__dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--theme-accent);
+  flex-shrink: 0;
+  transition: opacity 300ms ease, transform 300ms ease;
+}
+
+.nmm-notif__dot--reading {
+  animation: nmm-fade-dot 300ms ease forwards;
+}
+
+@keyframes nmm-fade-dot {
+  to { opacity: 0; transform: scale(0); }
+}
+
+/* Actions (icônes) */
+.nmm-notif__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 150ms ease;
+}
+
+.nmm-notif:hover .nmm-notif__actions {
+  opacity: 1;
+}
+
+.nmm-notif__btn-read,
+.nmm-notif__btn-delete {
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: none;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.9rem;
+  transition: background 150ms ease, color 150ms ease;
+}
+
+.nmm-notif__btn-read {
+  color: var(--color-success);
+}
+
+.nmm-notif__btn-read:hover {
+  background: color-mix(in oklab, var(--color-success) 12%, transparent 88%);
+}
+
+.nmm-notif__btn-delete {
+  color: var(--color-danger);
+}
+
+.nmm-notif__btn-delete:hover {
+  background: color-mix(in oklab, var(--color-danger) 10%, transparent 90%);
+}
+
+/* ─── Badges ─────────────────────────────────────────────────────────────────── */
+
+.nmm-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.15rem 0.5rem;
+  border-radius: 20px;
+}
+
+.nmm-badge--cat {
+  background: color-mix(in oklab, var(--color-muted) 10%, transparent 90%);
+  color: var(--color-muted);
+}
+
+.nmm-badge--event-type {
+  background: color-mix(in oklab, var(--theme-accent) 10%, transparent 90%);
+  color: var(--theme-accent);
+  font-family: monospace;
+  font-size: 0.68rem;
+}
+
+/* ─── Events tab ─────────────────────────────────────────────────────────────── */
+
+.nmm-events {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+/* ─── Event card ─────────────────────────────────────────────────────────────── */
+
+.nmm-event-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  animation: nmm-slide-up 250ms ease forwards;
+  opacity: 0;
+  transition: border-color 200ms ease, box-shadow 200ms ease;
+}
+
+.nmm-event-card:hover {
+  box-shadow: 0 2px 12px var(--color-shadow);
+}
+
+/* Stagger animation */
+.nmm-event-card:nth-child(1)  { animation-delay: 0ms; }
+.nmm-event-card:nth-child(2)  { animation-delay: 50ms; }
+.nmm-event-card:nth-child(3)  { animation-delay: 100ms; }
+.nmm-event-card:nth-child(4)  { animation-delay: 150ms; }
+.nmm-event-card:nth-child(5)  { animation-delay: 200ms; }
+.nmm-event-card:nth-child(6)  { animation-delay: 250ms; }
+.nmm-event-card:nth-child(7)  { animation-delay: 300ms; }
+.nmm-event-card:nth-child(8)  { animation-delay: 350ms; }
+.nmm-event-card:nth-child(9)  { animation-delay: 400ms; }
+.nmm-event-card:nth-child(10) { animation-delay: 450ms; }
+
+/* Card inactive = grisée */
+.nmm-event-card--inactive {
+  opacity: 0.5;
+}
+
+.nmm-event-card--inactive .nmm-event-card__fields,
+.nmm-event-card--inactive .nmm-event-card__footer {
+  pointer-events: none;
+}
+
+/* Header */
+.nmm-event-card__header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem 1.25rem;
+  background: color-mix(in oklab, var(--color-text) 3%, transparent 97%);
+  border-bottom: 1px solid var(--color-border);
+  flex-wrap: wrap;
+}
+
+.nmm-event-card__label {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--color-text);
+  flex: 1;
+  min-width: 0;
+}
+
+/* Fields */
+.nmm-event-card__fields {
+  padding: 1.25rem 1.25rem 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+/* Footer */
+.nmm-event-card__footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding: 0.875rem 1.25rem;
+}
+
+/* ─── Field row ──────────────────────────────────────────────────────────────── */
+
+.nmm-field-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.nmm-field-row--full {
+  grid-column: 1 / -1;
+}
+
+.nmm-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--color-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.nmm-input,
+.nmm-textarea {
+  width: 100%;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  color: var(--color-text);
+  background: var(--color-surface);
+  font-family: inherit;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+.nmm-input:focus,
+.nmm-textarea:focus {
+  outline: none;
+  border-color: var(--theme-accent);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--theme-accent) 14%, transparent 86%);
+}
+
+/* ─── Variable chips ─────────────────────────────────────────────────────────── */
+
+.nmm-vars {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.nmm-var-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.55rem;
+  background: color-mix(in oklab, var(--theme-accent) 10%, transparent 90%);
+  color: var(--theme-accent);
+  border-radius: 4px;
+  font-size: 0.72rem;
+  font-family: monospace;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid color-mix(in oklab, var(--theme-accent) 20%, transparent 80%);
+  transition: background 150ms ease, transform 100ms ease;
+  user-select: none;
+}
+
+.nmm-var-chip:hover {
+  background: color-mix(in oklab, var(--theme-accent) 18%, transparent 82%);
+  transform: scale(1.04);
+}
+
+.nmm-var-chip:active {
+  transform: scale(0.97);
+}
+
+/* ─── Toggle slide ───────────────────────────────────────────────────────────── */
+
+.nmm-toggle {
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.nmm-toggle__input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.nmm-toggle__track {
+  position: relative;
+  width: 38px;
+  height: 22px;
+  border-radius: 11px;
+  background: var(--color-border);
+  transition: background 250ms ease;
+  flex-shrink: 0;
+}
+
+.nmm-toggle__input:checked ~ .nmm-toggle__track {
+  background: var(--color-primary);
+}
+
+.nmm-toggle__thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+  transition: transform 250ms ease;
+}
+
+.nmm-toggle__input:checked ~ .nmm-toggle__track .nmm-toggle__thumb {
+  transform: translateX(16px);
+}
+
+/* ─── Feedback ───────────────────────────────────────────────────────────────── */
+
+.nmm-feedback {
+  font-size: 0.8rem;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.nmm-feedback[data-status="success"] { color: var(--color-success); }
+.nmm-feedback[data-status="error"]   { color: var(--color-danger); }
+.nmm-feedback[data-status="info"]    { color: var(--color-muted); }
+
+/* ─── Settings tab ───────────────────────────────────────────────────────────── */
+
+.nmm-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.nmm-settings__section {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 1.25rem 1.5rem;
+}
+
+.nmm-settings__section-header {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 1rem;
+}
+
+.nmm-settings__section-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in oklab, var(--theme-accent) 10%, transparent 90%);
+  color: var(--theme-accent);
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.nmm-settings__section-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--color-text);
+  margin: 0;
+}
+
+.nmm-settings__section-sub {
+  font-size: 0.8rem;
+  color: var(--color-muted);
+  margin: 0.2rem 0 0;
+}
+
+/* ─── Position grid ──────────────────────────────────────────────────────────── */
+
+.nmm-position-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+
+.nmm-pos-card {
+  position: relative;
+  border: 2px solid var(--color-border);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+  transition: border-color 180ms ease, background 180ms ease;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--color-surface);
+}
+
+.nmm-pos-card:hover {
+  border-color: color-mix(in oklab, var(--theme-accent) 40%, var(--color-border) 60%);
+  background: color-mix(in oklab, var(--theme-accent) 4%, transparent 96%);
+}
+
+.nmm-pos-card--active {
+  border-color: var(--theme-accent);
+  background: color-mix(in oklab, var(--theme-accent) 7%, transparent 93%);
+}
+
+.nmm-pos-card input[type="radio"] {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.nmm-pos-card__preview {
+  width: 32px;
+  height: 24px;
+  border: 1.5px solid var(--color-border);
+  border-radius: 4px;
+  position: relative;
+  flex-shrink: 0;
+  background: color-mix(in oklab, var(--color-muted) 5%, transparent 95%);
+}
+
+.nmm-pos-card__dot {
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-border);
+  transition: background 180ms ease;
+}
+
+.nmm-pos-card--active .nmm-pos-card__dot,
+.nmm-pos-card:hover .nmm-pos-card__dot {
+  background: var(--theme-accent);
+}
+
+/* dot positions */
+.nmm-pos-card__dot--tl { top: 2px;  left: 2px;  }
+.nmm-pos-card__dot--tr { top: 2px;  right: 2px; }
+.nmm-pos-card__dot--bl { bottom: 2px; left: 2px; }
+.nmm-pos-card__dot--br { bottom: 2px; right: 2px; }
+
+.nmm-pos-card__label {
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--color-text);
+}
+
+.nmm-pos-card--active .nmm-pos-card__label {
+  color: var(--theme-accent);
+  font-weight: 700;
+}
+
+/* ─── Steppers ───────────────────────────────────────────────────────────────── */
+
+.nmm-stepper-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-top: 0.5rem;
+}
+
+.nmm-stepper-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: color-mix(in oklab, var(--color-text) 4%, transparent 96%);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 0.2rem;
+  width: fit-content;
+}
+
+.nmm-stepper-btn {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: none;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  color: var(--color-text);
+  transition: background 150ms ease;
+}
+
+.nmm-stepper-btn:hover {
+  background: color-mix(in oklab, var(--color-text) 8%, transparent 92%);
+}
+
+.nmm-stepper-input {
+  width: 64px;
+  text-align: center;
+  border: none;
+  background: none;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--color-text);
+  -moz-appearance: textfield;
+}
+
+.nmm-stepper-input::-webkit-outer-spin-button,
+.nmm-stepper-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.nmm-stepper-unit {
+  font-size: 0.82rem;
+  color: var(--color-muted);
+  margin-left: 0.25rem;
+}
+
+.nmm-hint {
+  font-size: 0.78rem;
+  color: var(--color-muted);
+  margin: 0.4rem 0 0;
+}
+
+/* ─── Settings footer ────────────────────────────────────────────────────────── */
+
+.nmm-settings__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  padding-top: 0.5rem;
+}
+
+/* ─── Spinner inline ─────────────────────────────────────────────────────────── */
+
+.nmm-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid transparent;
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: nmm-spin 0.6s linear infinite;
+  vertical-align: middle;
+}
+
+@keyframes nmm-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ─── Animations globales ────────────────────────────────────────────────────── */
+
+@keyframes nmm-slide-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes nmm-fade-dot {
+  to { opacity: 0; transform: scale(0); }
+}
+
+/* ─── Role field (slide-down) ────────────────────────────────────────────────── */
+
+.nmm-role-field {
+  animation: nmm-slide-up 200ms ease forwards;
+}
+
+.nmm-role-field--hidden {
+  display: none;
+}
+
+/* ─── Categories tab ─────────────────────────────────────────────────────────── */
+
+.nmm-categories {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.nmm-categories__list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 0.5rem;
+}
+
+.nmm-categories__add {
+  align-self: flex-start;
+}
+
+.nmm-cat-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.625rem 0.75rem;
+  border-radius: 8px;
+  transition: background 150ms ease;
+}
+
+.nmm-cat-row:hover {
+  background: color-mix(in oklab, var(--color-text) 4%, transparent 96%);
+}
+
+.nmm-cat-row__icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.nmm-cat-row__label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--color-text);
+  flex: 1;
+}
+
+.nmm-cat-row__id {
+  font-size: 0.72rem;
+  color: var(--color-muted);
+  background: color-mix(in oklab, var(--color-muted) 8%, transparent 92%);
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+  font-family: monospace;
+}
+
+.nmm-cat-row__actions {
+  display: flex;
+  gap: 0.25rem;
+  flex-shrink: 0;
+}
+
+.nmm-icon-btn {
+  width: 30px;
+  height: 30px;
+  border: none;
+  background: none;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  color: var(--color-muted);
+  transition: background 150ms ease, color 150ms ease;
+}
+
+.nmm-icon-btn:hover {
+  background: color-mix(in oklab, var(--color-text) 8%, transparent 92%);
+  color: var(--color-text);
+}
+
+.nmm-icon-btn--danger:hover {
+  background: color-mix(in oklab, var(--color-danger) 12%, transparent 88%);
+  color: var(--color-danger);
+}
+
+
+/* ─── Modal ──────────────────────────────────────────────────────────────────── */
+
+.nmm-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.4);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  animation: nmm-overlay-in 150ms ease forwards;
+}
+
+@keyframes nmm-overlay-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.nmm-modal {
+  background: var(--color-surface);
+  border-radius: 12px;
+  width: 100%;
+  max-width: 560px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.2);
+  animation: nmm-modal-in 180ms ease forwards;
+}
+
+@keyframes nmm-modal-in {
+  from { opacity: 0; transform: scale(0.96) translateY(8px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.nmm-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.25rem 1.5rem 0;
+}
+
+.nmm-modal__title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--color-text);
+  margin: 0;
+}
+
+.nmm-modal__close {
+  width: 30px;
+  height: 30px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-muted);
+  transition: background 150ms ease, color 150ms ease;
+}
+
+.nmm-modal__close:hover {
+  background: color-mix(in oklab, var(--color-danger) 10%, transparent 90%);
+  color: var(--color-danger);
+}
+
+.nmm-modal__body {
+  padding: 1.25rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.nmm-modal__footer {
+  padding: 0.75rem 1.5rem 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border-top: 1px solid var(--color-border);
+  flex-wrap: wrap;
+}
+
+.nmm-modal__actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-left: auto;
+}
+
+/* ─── Color picker ───────────────────────────────────────────────────────────── */
+
+.nmm-color-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.nmm-color-input {
+  width: 44px;
+  height: 36px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 2px;
+  cursor: pointer;
+  background: none;
+}
+
+.nmm-color-hex {
+  font-family: monospace;
+  font-size: 0.82rem;
+  color: var(--color-muted);
+}
+
+/* ─── Icon picker ────────────────────────────────────────────────────────────── */
+
+.nmm-icon-picker {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.nmm-icon-picker__search-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-muted);
+}
+
+.nmm-icon-picker__search {
+  flex: 1;
+  border: none;
+  background: none;
+  font-size: 0.85rem;
+  color: var(--color-text);
+  outline: none;
+}
+
+.nmm-icon-picker__grid {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 2px;
+  padding: 0.5rem;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.nmm-icon-tile {
+  width: 100%;
+  aspect-ratio: 1;
+  border: none;
+  background: none;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  color: var(--color-text);
+  transition: background 100ms ease, color 100ms ease;
+}
+
+.nmm-icon-tile:hover {
+  background: color-mix(in oklab, var(--theme-accent) 12%, transparent 88%);
+  color: var(--theme-accent);
+}
+
+.nmm-icon-tile.is-selected {
+  background: var(--theme-accent);
+  color: #fff;
+}
+
+.nmm-icon-picker__selected {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border-top: 1px solid var(--color-border);
+  font-size: 0.8rem;
+  color: var(--color-muted);
+}
+
+.nmm-icon-picker__selected code {
+  font-family: monospace;
+  color: var(--color-text);
+}
+
+/* ─── Responsive ─────────────────────────────────────────────────────────────── */
+
+@media (max-width: 600px) {
+  .nmm-shell {
+    padding: 1rem 0.75rem;
+  }
+
+  .nmm-tab {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.8rem;
+  }
+
+  .nmm-card {
+    padding: 1rem;
+  }
+
+  .nmm-event-card__fields {
+    grid-template-columns: 1fr;
+  }
+
+  .nmm-position-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .nmm-notifs__toolbar {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .nmm-notifs__filters {
+    width: 100%;
+  }
+
+  .nmm-notifs__filters .nmm-select {
+    flex: 1;
+  }
+
+  .nmm-event-card__header {
+    gap: 0.5rem;
+  }
+
+  .nmm-badge--event-type {
+    display: none;
+  }
+
+  .nmm-icon-picker__grid {
+    grid-template-columns: repeat(6, 1fr);
+  }
+
+  .nmm-modal {
+    max-height: 95vh;
+  }
+
+  .nmm-cat-row__id {
+    display: none;
+  }
+}

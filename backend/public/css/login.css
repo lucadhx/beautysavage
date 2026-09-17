@@ -1,0 +1,193 @@
+.login-body {
+  min-height: 100vh;
+  margin: 0;
+  background:
+    radial-gradient(circle at top left, color-mix(in oklab, var(--theme-accent) 16%, transparent 84%), transparent 32%),
+    radial-gradient(circle at bottom right, color-mix(in oklab, var(--theme-surface-header) 34%, transparent 66%), transparent 36%),
+    linear-gradient(160deg, color-mix(in oklab, var(--color-background) 92%, var(--color-surface) 8%), var(--color-background));
+  color: var(--color-text);
+}
+
+.login-shell {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: clamp(1.2rem, 4vw, 2rem);
+}
+
+.login-card {
+  width: min(1080px, 100%);
+  display: grid;
+  gap: 1rem;
+  padding: clamp(1rem, 2vw, 1.2rem);
+  border-radius: 32px;
+  border: 1px solid color-mix(in oklab, var(--color-border) 70%, transparent 30%);
+  background:
+    linear-gradient(145deg, color-mix(in oklab, var(--color-surface) 95%, var(--theme-surface-header) 5%), var(--color-surface));
+  box-shadow:
+    0 28px 60px color-mix(in oklab, var(--color-text) 12%, transparent 88%),
+    inset 0 1px 0 color-mix(in oklab, white 28%, transparent 72%);
+}
+
+.login-brand {
+  position: relative;
+  overflow: hidden;
+  border-radius: 24px;
+  padding: clamp(1.2rem, 4vw, 2rem);
+  background:
+    radial-gradient(circle at 18% 18%, color-mix(in oklab, var(--theme-accent) 26%, transparent 74%), transparent 28%),
+    linear-gradient(155deg, var(--theme-surface-header), color-mix(in oklab, var(--theme-accent-strong) 18%, var(--color-surface) 82%));
+  color: var(--color-text);
+}
+
+.login-brand__identity {
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.login-logo,
+.login-logo-fallback {
+  width: clamp(72px, 10vw, 96px);
+  height: clamp(72px, 10vw, 96px);
+  border-radius: 24px;
+  border: 1px solid color-mix(in oklab, var(--color-surface) 70%, transparent 30%);
+  background: color-mix(in oklab, var(--color-surface) 84%, transparent 16%);
+  box-shadow: 0 14px 30px color-mix(in oklab, var(--theme-accent-strong) 16%, transparent 84%);
+}
+
+.login-logo {
+  object-fit: cover;
+}
+
+.login-brand__copy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.login-brand__eyebrow {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--theme-accent-strong);
+}
+
+.login-brand__copy h1 {
+  margin: 0;
+  font-size: clamp(1.8rem, 4vw, 2.6rem);
+  line-height: 1.02;
+}
+
+.login-brand__lead {
+  margin: 0;
+  max-width: 44ch;
+  line-height: 1.6;
+  color: color-mix(in oklab, var(--color-text) 82%, var(--color-surface) 18%);
+}
+
+.login-card__panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: clamp(1rem, 2.2vw, 1.35rem);
+  border-radius: 24px;
+  border: 1px solid color-mix(in oklab, var(--color-border) 78%, transparent 22%);
+  background: color-mix(in oklab, var(--color-surface) 96%, var(--color-background) 4%);
+}
+
+.login-card__intro {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.login-card__intro .muted {
+  margin: 0;
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.login-form .form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.login-form label {
+  font-weight: 600;
+}
+
+.login-form input {
+  width: 100%;
+  border: 1px solid color-mix(in oklab, var(--color-border) 76%, transparent 24%);
+  border-radius: 14px;
+  padding: 0.88rem 0.95rem;
+  background: color-mix(in oklab, var(--color-surface) 92%, var(--theme-surface-header) 8%);
+  color: var(--color-text);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+}
+
+.login-form input:focus,
+.login-form input:focus-visible {
+  outline: none;
+  border-color: color-mix(in oklab, var(--theme-accent-strong) 42%, var(--color-border) 58%);
+  box-shadow: 0 0 0 4px color-mix(in oklab, var(--theme-accent) 18%, transparent 82%);
+  background: var(--color-surface);
+}
+
+.login-submit {
+  width: 100%;
+}
+
+.login-links {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.login-links .secondary-link,
+.login-resend-link {
+  width: fit-content;
+}
+
+.login-dev-bootstrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  padding-top: 1rem;
+  border-top: 1px solid color-mix(in oklab, var(--color-border) 76%, transparent 24%);
+}
+
+.login-dev-bootstrap__title {
+  margin: 0;
+  font-weight: 600;
+  color: var(--theme-accent-strong);
+}
+
+.login-dev-bootstrap form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+@media (min-width: 860px) {
+  .login-card {
+    grid-template-columns: minmax(320px, 1.05fr) minmax(360px, 0.95fr);
+    align-items: stretch;
+  }
+
+  .login-brand,
+  .login-card__panel {
+    min-height: 100%;
+  }
+
+  .login-brand__identity {
+    height: 100%;
+  }
+}

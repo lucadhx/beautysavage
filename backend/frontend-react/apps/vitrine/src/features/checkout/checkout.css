@@ -1,0 +1,227 @@
+/* RX3 S3 — Checkout multi-item premium. Tokens --bs-* only, mobile-first, ≥44px, zéro scroll horizontal. */
+.co {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bs-space-3);
+}
+.co-layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--bs-space-3);
+  align-items: start;
+}
+.co-main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bs-space-3);
+  min-width: 0;
+}
+.co-block__title {
+  margin: 0 0 var(--bs-space-2);
+  font-size: 1.05rem;
+}
+.co-separate {
+  margin-top: var(--bs-space-2);
+}
+
+/* Item */
+.co-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--bs-space-2);
+  padding: var(--bs-space-2) 0;
+  border-bottom: 1px solid var(--bs-color-border);
+}
+.co-item:last-child {
+  border-bottom: none;
+}
+.co-item--off {
+  opacity: 0.7;
+}
+.co-item__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.co-item__title {
+  font-weight: 600;
+}
+.co-item__subtitle {
+  font-size: 0.85rem;
+  color: var(--bs-color-muted);
+}
+.co-item__off {
+  font-size: 0.82rem;
+  color: var(--bs-color-danger);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--bs-space-1);
+  flex-wrap: wrap;
+  margin-top: 2px;
+}
+.co-item__aside {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--bs-space-1);
+  flex-shrink: 0;
+}
+.co-item__price {
+  font-weight: 600;
+}
+.co-item__remove {
+  min-height: var(--bs-tap-target);
+  background: none;
+  border: none;
+  color: var(--bs-color-muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.85rem;
+  text-decoration: underline;
+  padding: 0;
+}
+.co-item__remove:hover {
+  color: var(--bs-color-danger);
+}
+
+/* Carte cadeau */
+.co-gc {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bs-space-1);
+}
+.co-gc__label {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+.co-gc__row {
+  display: flex;
+  gap: var(--bs-space-2);
+  align-items: center;
+}
+.co-gc__row .bs-input {
+  flex: 1;
+}
+.co-gc__cancel {
+  align-self: flex-start;
+  background: none;
+  border: none;
+  color: var(--bs-color-muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.85rem;
+  text-decoration: underline;
+  padding: var(--bs-space-1) 0;
+}
+.co-gc__error {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--bs-color-danger);
+}
+.co-applied {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--bs-space-2);
+  padding: var(--bs-space-2);
+  border: 1px solid var(--bs-color-border);
+  border-radius: var(--bs-radius);
+  margin-bottom: var(--bs-space-2);
+  background: color-mix(in srgb, var(--bs-color-success) 6%, var(--bs-color-surface));
+}
+.co-applied__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.co-applied__code {
+  font-weight: 600;
+}
+.co-applied__meta {
+  font-size: 0.82rem;
+  color: var(--bs-color-muted);
+}
+
+/* Consentements */
+.co-legal {
+  border: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--bs-space-1);
+}
+.co-legal__title {
+  font-weight: 600;
+  font-size: 1.05rem;
+  padding: 0;
+  margin-bottom: var(--bs-space-2);
+}
+.co-legal__item {
+  align-items: flex-start;
+}
+
+/* Résumé paiement */
+.co-summary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bs-space-1);
+  margin-bottom: var(--bs-space-3);
+}
+.co-summary__row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--bs-space-2);
+}
+.co-summary__row--gc {
+  color: var(--bs-color-success);
+}
+.co-summary__row--total {
+  font-weight: 700;
+  font-size: 1.1rem;
+  border-top: 1px solid var(--bs-color-border);
+  padding-top: var(--bs-space-2);
+  margin-top: var(--bs-space-1);
+}
+.co-pay {
+  width: 100%;
+}
+.co-notice {
+  margin: var(--bs-space-2) 0;
+}
+.co-trust {
+  display: flex;
+  align-items: center;
+  gap: var(--bs-space-1);
+  margin: var(--bs-space-2) 0 0;
+}
+
+/* Sticky CTA mobile */
+.co-stickybar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.co-stickybar__price {
+  font-weight: 700;
+  font-size: 1.15rem;
+}
+.co-stickybar__cta {
+  flex: 0 0 auto;
+}
+
+@media (min-width: 960px) {
+  .co-layout {
+    grid-template-columns: minmax(0, 1fr) 340px;
+  }
+  .co-aside {
+    position: sticky;
+    top: var(--bs-space-3);
+  }
+  .co-stickybar {
+    display: none;
+  }
+}

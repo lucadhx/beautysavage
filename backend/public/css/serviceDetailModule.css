@@ -1,0 +1,432 @@
+/* serviceDetailModule.css — Fiche prestation vitrine — préfixe sdd- */
+
+.sdd-root {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  padding: var(--space-lg);
+}
+
+.sdd-loader {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4rem;
+  color: var(--color-muted);
+  font-size: 1.8rem;
+}
+
+.sdd-error {
+  text-align: center;
+  color: var(--color-danger);
+  padding: 2rem;
+}
+
+.sdd-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: transparent;
+  border: none;
+  color: var(--color-muted);
+  font-size: 0.85rem;
+  cursor: pointer;
+  padding: 0;
+  transition: color 0.15s ease;
+}
+
+.sdd-back-btn:hover {
+  color: var(--color-text);
+}
+
+/* Layout: main + aside */
+
+.sdd-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+@media (min-width: 768px) {
+  .sdd-layout {
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 2rem;
+  }
+
+  .sdd-col-main {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .sdd-col-aside {
+    width: 300px;
+    flex-shrink: 0;
+    position: sticky;
+    top: 1rem;
+  }
+}
+
+/* ─── Gallery ─────────────────────────────────────────────── */
+
+.sdd-gallery {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.sdd-gallery__main {
+  border-radius: 12px;
+  overflow: hidden;
+  aspect-ratio: 16 / 9;
+}
+
+.sdd-gallery__main-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: opacity 0.2s ease;
+}
+
+.sdd-gallery__thumbs {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.sdd-thumb-btn {
+  width: 64px;
+  height: 64px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 2px solid transparent;
+  cursor: pointer;
+  padding: 0;
+  transition: border-color 0.15s ease;
+}
+
+.sdd-thumb-btn img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.sdd-thumb-btn--active,
+.sdd-thumb-btn:hover {
+  border-color: var(--theme-accent);
+}
+
+/* ─── Sections ────────────────────────────────────────────── */
+
+.sdd-section {
+  margin-bottom: 1.5rem;
+}
+
+.sdd-section__title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+  margin: 0 0 0.75rem;
+  color: var(--color-text);
+}
+
+/* About section */
+
+.sdd-about-section {
+  background: var(--color-surface);
+  border-radius: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.07);
+  padding: 1.5rem;
+}
+
+.sdd-about-section .sdd-section__title {
+  border-bottom: 1px solid color-mix(in oklab, var(--color-border) 50%, transparent 50%);
+  padding-bottom: 1rem;
+  margin-bottom: 1rem;
+}
+
+.sdd-about-section .sdd-section__title i {
+  color: var(--theme-accent);
+}
+
+.sdd-about-body {
+  font-size: 0.9rem;
+  line-height: 1.75;
+  color: var(--color-text);
+  white-space: pre-wrap;
+}
+
+/* Options */
+
+.sdd-options-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.sdd-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.55rem 0.75rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  gap: 0.5rem;
+}
+
+.sdd-option__info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.sdd-option__name {
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.sdd-option__desc {
+  font-size: 0.78rem;
+  color: var(--color-muted);
+}
+
+.sdd-option__price {
+  font-weight: 700;
+  font-size: 0.875rem;
+  color: var(--theme-accent);
+  white-space: nowrap;
+}
+
+/* Cancellation policy */
+
+.sdd-policy-text {
+  font-size: 0.875rem;
+  color: var(--color-muted);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+/* Practitioners */
+
+.sdd-pract-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.sdd-pract {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.sdd-pract__photo {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.sdd-pract__photo--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(0,0,0,0.4);
+  font-size: 1.2rem;
+}
+
+.sdd-pract__name {
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+/* ─── Aside card ──────────────────────────────────────────── */
+
+.sdd-aside-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.sdd-aside-title {
+  font-size: 1.2rem;
+  font-weight: 800;
+  margin: 0;
+}
+
+.sdd-aside-short {
+  font-size: 0.875rem;
+  color: var(--color-muted);
+  margin: 0;
+}
+
+.sdd-aside-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.sdd-aside-meta__item {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+  color: var(--color-muted);
+}
+
+.sdd-aside-price {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.sdd-price {
+  font-weight: 800;
+  font-size: 1.5rem;
+  color: var(--color-text);
+}
+
+.sdd-price--effective {
+  color: var(--color-secondary);
+}
+
+.sdd-price--original {
+  font-size: 1rem;
+  font-weight: 400;
+  color: var(--color-muted);
+  text-decoration: line-through;
+}
+
+.sdd-promo-badge {
+  background: var(--color-secondary);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  align-self: center;
+}
+
+.sdd-aside-payment {
+  display: flex;
+}
+
+.sdd-payment-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.8rem;
+  color: var(--color-muted);
+  background: color-mix(in oklab, var(--color-border) 40%, var(--color-background) 60%);
+  padding: 0.3rem 0.65rem;
+  border-radius: 6px;
+}
+
+.sdd-payment-badge--deposit {
+  color: var(--color-primary);
+  background: color-mix(in oklab, var(--color-primary) 10%, transparent 90%);
+}
+
+/* Book CTA */
+
+.sdd-book-cta {
+  width: 100%;
+  padding: 0.75rem;
+  border-radius: 6px;
+  background: #000;
+  color: #fff;
+  border: none;
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  transition: opacity 0.18s ease;
+}
+
+.sdd-book-cta:hover {
+  opacity: 0.88;
+}
+
+/* Coming soon notice */
+
+.sdd-book-soon {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.65rem 0.85rem;
+  border-radius: 8px;
+  background: color-mix(in oklab, var(--color-primary) 10%, transparent 90%);
+  color: var(--color-primary);
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.sdd-book-soon__close {
+  margin-left: auto;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: inherit;
+  display: flex;
+  align-items: center;
+  padding: 0;
+}
+
+/* ─── Suspension banner ───────────────────────────────────── */
+
+.idd-suspension-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: rgba(251, 146, 60, 0.12);
+  border: 1px solid rgba(251, 146, 60, 0.35);
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin-top: 10px;
+  font-size: 0.875rem;
+  color: #92400e;
+}
+
+.idd-suspension-banner i {
+  color: #f97316;
+  font-size: 1.1rem;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.idd-suspension-banner strong {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.idd-suspension-banner p {
+  margin: 0;
+  opacity: 0.85;
+}
+
+/* ─── Spinner ─────────────────────────────────────────────── */
+
+@keyframes sddSpin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+.sdd-spin {
+  animation: sddSpin 0.7s linear infinite;
+  display: inline-block;
+}

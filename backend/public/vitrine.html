@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Beauty Savage - Vitrine</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/css/app.css">
+  <link rel="stylesheet" href="/css/bookingCalendar.css">
+</head>
+<body class="vitrine-body">
+  <main class="vitrine-shell">
+    <header class="vitrine-header" data-vitrine-header>
+      <button type="button" class="brand-identity vitrine-header__brand" data-theme-brand data-header-home>
+        <img data-theme-logo alt="Logo de l'institut" hidden>
+        <span class="brand-logo-fallback" data-theme-logo-fallback hidden>BS</span>
+        
+      </button>
+    <div class="vitrine-header__actions">
+      <div class="vitrine-header__icons" data-header-icons></div>
+      <button
+        class="vitrine-header__burger header-burger-button"
+        type="button"
+          data-burger-toggle
+          aria-label="Ouvrir le menu"
+          aria-controls="vitrine-burger-panel"
+          aria-expanded="false"
+        >
+        <i class="bi bi-list" aria-hidden="true"></i>
+        <span
+          class="header-icon-badge header-icon-badge--hidden burger-badge"
+          data-burger-notification-badge
+        ></span>
+      </button>
+      </div>
+    </header>
+    <div class="app-mode-subheader" data-mode-subheader>
+      <div class="app-mode-switch" data-mode-switch hidden>
+        <div class="app-mode-switch__thumb" aria-hidden="true"></div>
+        <button type="button" class="app-mode-switch__option" data-mode-option="vitrine" aria-pressed="false">
+          Vitrine
+        </button>
+        <button type="button" class="app-mode-switch__option" data-mode-option="gestion" aria-pressed="false">
+          Gestion
+        </button>
+      </div>
+    </div>
+    <section class="vitrine-content" data-vitrine-content>
+      <div id="vitrine-module" class="module-container flex flex-col gap-4">
+        <p class="module-placeholder">Chargement de la page...</p>
+      </div>
+      <footer class="vitrine-footer" data-global-footer>
+        <div class="footer-grid">
+          <div class="footer-block footer-identity" data-footer-identity>
+            <img data-footer-logo alt="Logo de l'institut" hidden>
+            <span class="footer-logo-fallback" data-footer-logo-fallback hidden>BS</span>
+            <div>
+              <p class="footer-identity__name" data-footer-name>Beauty Savage</p>
+              <p class="footer-identity__slogan" data-footer-slogan>L'institut premium</p>
+              <p class="footer-identity__copyright" data-footer-copyright>
+                © 2026 – Beauty Savage
+              </p>
+            </div>
+          </div>
+          <div class="footer-block footer-section">
+            <p class="footer-block__title">Navigation</p>
+            <div class="footer-links" data-footer-nav>
+              <p class="module-placeholder">Chargement…</p>
+            </div>
+          </div>
+          <div class="footer-block footer-section">
+            <p class="footer-block__title">Liens légaux</p>
+            <div class="footer-links" data-footer-legal>
+              <p class="module-placeholder">Chargement…</p>
+            </div>
+          </div>
+          <div class="footer-block footer-social" data-social-footer>
+            <p class="footer-block__title">Réseaux sociaux</p>
+            <div class="footer-social-links" data-social-links>
+              <p class="module-placeholder">Chargement des réseaux…</p>
+            </div>
+          </div>
+        </div>
+      </footer>
+    </section>
+  </main>
+  <div class="burger-overlay" data-burger-overlay></div>
+  <aside class="burger-panel" data-burger-panel id="vitrine-burger-panel" aria-hidden="true">
+    <div class="burger-panel__header">
+      <p class="burger-panel__title">Menu</p>
+      <button type="button" class="vitrine-header__burger-close" data-burger-close aria-label="Fermer le menu">
+        <i class="bi bi-x-lg" aria-hidden="true"></i>
+      </button>
+    </div>
+    <div class="burger-panel__list" data-burger-list>
+      <p class="module-placeholder">Chargement de la navigation...</p>
+    </div>
+  </aside>
+  <script type="module" src="/js/vitrine.js"></script>
+  <script type="module" src="/js/modules/auth.js"></script>
+</body>
+</html>

@@ -1,0 +1,361 @@
+/* ── Booking Calendar Component (bkc-*) ──────────────────────────────────────
+   Mobile-first. All colors use CSS variables — no hardcoded values.
+   Respects prefers-reduced-motion.
+────────────────────────────────────────────────────────────────────────────── */
+
+/* ── Root ────────────────────────────────────────────────────────────────── */
+
+.bkc-root {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  font-family: inherit;
+  color: var(--color-text, #0f172a);
+}
+
+/* ── Navigation ──────────────────────────────────────────────────────────── */
+
+.bkc-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.bkc-nav-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 10px;
+  color: var(--color-primary, #5f4ff7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease-out;
+}
+
+.bkc-nav-btn:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--color-primary) 12%, transparent);
+}
+
+.bkc-nav-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.bkc-title {
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--color-primary, #5f4ff7);
+  text-align: center;
+}
+
+/* ── Calendar grid ───────────────────────────────────────────────────────── */
+
+.bkc-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+
+.bkc-hcell {
+  text-align: center;
+  font-size: 0.72rem;
+  font-weight: 600;
+  opacity: 0.55;
+  padding: 4px 0 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.bkc-cell {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: default;
+  color: var(--color-muted, rgba(15, 23, 42, 0.5));
+  transition: background 200ms ease, color 200ms ease, transform 150ms ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.bkc-cell--empty {
+  background: transparent;
+}
+
+.bkc-cell--disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.bkc-cell--available {
+  background: color-mix(in oklab, var(--color-primary) 10%, transparent);
+  color: var(--color-primary, #5f4ff7);
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.bkc-cell--available:hover {
+  background: color-mix(in oklab, var(--color-primary) 20%, transparent);
+  transform: scale(1.08);
+}
+
+.bkc-cell--selected {
+  background: var(--color-primary, #5f4ff7) !important;
+  color: var(--color-surface, #fff) !important;
+  animation: bkc-select-pulse 250ms ease forwards;
+}
+
+.bkc-cell--selected::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 13px;
+  height: 13px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='white'%3E%3Cpath d='M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z'/%3E%3C/svg%3E");
+  background-size: contain;
+  background-repeat: no-repeat;
+  opacity: 0;
+  transform: scale(0);
+  animation: bkc-check-pop 250ms cubic-bezier(0.34, 1.56, 0.64, 1) 60ms forwards;
+}
+
+@keyframes bkc-select-pulse {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.12); }
+  100% { transform: scale(1.05); }
+}
+
+@keyframes bkc-check-pop {
+  0%   { opacity: 0; transform: scale(0) rotate(-10deg); }
+  60%  { opacity: 1; transform: scale(1.2) rotate(5deg); }
+  100% { opacity: 1; transform: scale(1) rotate(0deg); }
+}
+
+.bkc-cell--today:not(.bkc-cell--selected):not(.bkc-cell--disabled) {
+  outline: 2px solid color-mix(in oklab, var(--color-primary) 40%, transparent);
+  outline-offset: -2px;
+}
+
+/* ── Slots grid ──────────────────────────────────────────────────────────── */
+
+.bkc-slots-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+  gap: 6px;
+}
+
+.bkc-slot {
+  padding: 10px 6px;
+  background: color-mix(in oklab, var(--color-primary) 7%, transparent);
+  border: 1.5px solid transparent;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-primary, #5f4ff7);
+  cursor: pointer;
+  text-align: center;
+  transition: background 180ms ease, border-color 180ms ease, color 180ms ease, transform 150ms ease, box-shadow 150ms ease;
+}
+
+.bkc-slot:hover {
+  background: color-mix(in oklab, var(--color-primary) 16%, transparent);
+  border-color: var(--color-primary, #5f4ff7);
+  transform: scale(1.03);
+}
+
+.bkc-slot--selected {
+  background: var(--color-primary, #5f4ff7);
+  border-color: var(--color-primary, #5f4ff7);
+  color: var(--color-surface, #fff);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  animation: bkc-slot-select 200ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+@keyframes bkc-slot-select {
+  0%   { transform: scale(0.95); opacity: 0.7; }
+  60%  { transform: scale(1.08); }
+  100% { transform: scale(1.04); opacity: 1; }
+}
+
+/* ── Back button ─────────────────────────────────────────────────────────── */
+
+.bkc-back-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-primary, #5f4ff7);
+  padding: 0 0 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: opacity 0.12s ease-out;
+}
+
+.bkc-back-btn:hover {
+  opacity: 0.72;
+}
+
+/* ── Session cards ───────────────────────────────────────────────────────── */
+
+.bkc-session-card {
+  border: 1.5px solid var(--color-border, rgba(15, 15, 15, 0.12));
+  border-radius: 12px;
+  padding: 14px 16px;
+  cursor: pointer;
+  background: var(--color-surface, #fff);
+  display: grid;
+  gap: 4px;
+  transition: border-color 0.12s ease-out, box-shadow 0.12s ease-out;
+}
+
+.bkc-session-card:hover:not(.bkc-session-card--full) {
+  border-color: var(--theme-accent, #5f4ff7);
+  box-shadow: 0 2px 8px color-mix(in oklab, var(--color-primary) 14%, transparent);
+}
+
+.bkc-session-card--selected {
+  border-color: var(--theme-accent, #5f4ff7);
+  background: color-mix(in oklab, var(--color-primary) 6%, var(--color-surface));
+}
+
+.bkc-session-card--full {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.bkc-session-card__date {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--color-text, #0f172a);
+}
+
+.bkc-session-card__avail {
+  font-size: 12px;
+  color: var(--color-muted, rgba(15, 23, 42, 0.5));
+}
+
+.bkc-session-card__select {
+  font-size: 12px;
+  color: var(--color-primary, #5f4ff7);
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+/* ── Loading / empty / error ─────────────────────────────────────────────── */
+
+.bkc-loading {
+  text-align: center;
+  color: var(--color-muted, rgba(15, 23, 42, 0.5));
+  font-size: 13px;
+  padding: 20px 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.bkc-empty {
+  text-align: center;
+  color: var(--color-muted, rgba(15, 23, 42, 0.5));
+  font-size: 13px;
+  padding: 20px 0;
+}
+
+.bkc-error {
+  color: var(--color-danger, #dc2626);
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* ── Spin animation ──────────────────────────────────────────────────────── */
+
+.bkc-spin {
+  display: inline-block;
+  animation: bkc-rotate 0.7s linear infinite;
+}
+
+@keyframes bkc-rotate {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Reduced motion ──────────────────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  .bkc-cell,
+  .bkc-slot,
+  .bkc-session-card,
+  .bkc-nav-btn,
+  .bkc-back-btn {
+    transition: none !important;
+    transform: none !important;
+    animation: none !important;
+  }
+
+  .bkc-cell--selected::after {
+    animation: none !important;
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  .bkc-spin {
+    animation: none !important;
+  }
+}
+
+/* ── Mobile adjustments (320px) ──────────────────────────────────────────── */
+
+@media (max-width: 480px) {
+  .bkc-title {
+    font-size: 13px;
+  }
+
+  .bkc-cell {
+    font-size: 12px;
+    border-radius: 8px;
+  }
+
+  .bkc-hcell {
+    font-size: 0.65rem;
+  }
+
+  .bkc-slot {
+    font-size: 12px;
+    padding: 8px 4px;
+  }
+
+  .bkc-slots-grid {
+    grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
+    gap: 4px;
+  }
+}
+
+@media (max-width: 320px) {
+  .bkc-nav-btn {
+    padding: 6px;
+  }
+
+  .bkc-grid {
+    gap: 1px;
+  }
+
+  .bkc-slots-grid {
+    grid-template-columns: repeat(auto-fill, minmax(52px, 1fr));
+    gap: 3px;
+  }
+}

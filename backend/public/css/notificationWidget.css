@@ -1,0 +1,316 @@
+/* ─── Notification Widget ──────────────────────────────────────────────────── */
+
+/* Bouton flottant */
+.ntf-widget-btn {
+  position: fixed;
+  z-index: 9000;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: none;
+  background: var(--theme-accent);
+  color: #fff;
+  font-size: 1.25rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 16px color-mix(in oklab, var(--theme-accent) 40%, transparent 60%);
+  transition: transform 180ms ease, box-shadow 180ms ease, background 180ms ease;
+}
+
+.ntf-widget-btn:hover {
+  transform: scale(1.08);
+  box-shadow: 0 6px 20px color-mix(in oklab, var(--theme-accent) 55%, transparent 45%);
+  background: var(--theme-accent-strong);
+}
+
+.ntf-widget-btn:active {
+  transform: scale(0.96);
+}
+
+/* Positions */
+.ntf-widget-btn--bottom-right { bottom: 1.5rem; right: 1.5rem; }
+.ntf-widget-btn--bottom-left  { bottom: 1.5rem; left:  1.5rem; }
+.ntf-widget-btn--top-right    { top: calc(var(--header-height, 60px) + 1rem); right: 1.5rem; }
+.ntf-widget-btn--top-left     { top: calc(var(--header-height, 60px) + 1rem); left:  1.5rem; }
+
+/* Badge */
+.ntf-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 10px;
+  background: var(--color-danger, #ef4444);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 20px;
+  text-align: center;
+  border: 2px solid var(--color-background, #fff);
+  box-sizing: border-box;
+}
+
+/* ─── Bannière ──────────────────────────────────────────────────────────────── */
+
+.ntf-banner {
+  position: fixed;
+  z-index: 9050;
+  bottom: calc(1.5rem + 52px + 0.75rem);
+  right: 1.5rem;
+  max-width: 320px;
+  background: var(--color-surface, #fff);
+  border: 1px solid color-mix(in oklab, var(--theme-accent) 40%, var(--color-border, #e5e7eb) 60%);
+  border-radius: 12px;
+  padding: 0.75rem 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  box-shadow: 0 8px 24px color-mix(in oklab, var(--theme-accent) 15%, transparent 85%);
+  font-size: 0.875rem;
+  color: var(--color-text, #111);
+}
+
+.ntf-banner i {
+  color: var(--theme-accent);
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+
+.ntf-banner--bottom-right { bottom: calc(1.5rem + 52px + 0.75rem); right: 1.5rem; left: auto; top: auto; }
+.ntf-banner--bottom-left  { bottom: calc(1.5rem + 52px + 0.75rem); left:  1.5rem; right: auto; top: auto; }
+.ntf-banner--top-right    { top: calc(var(--header-height, 60px) + 1rem + 52px + 0.75rem); right: 1.5rem; left: auto; bottom: auto; }
+.ntf-banner--top-left     { top: calc(var(--header-height, 60px) + 1rem + 52px + 0.75rem); left:  1.5rem; right: auto; bottom: auto; }
+
+@keyframes ntf-slide-in {
+  from { transform: translateY(100%); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+@keyframes ntf-slide-out {
+  from { transform: translateY(0);    opacity: 1; }
+  to   { transform: translateY(100%); opacity: 0; }
+}
+
+.ntf-banner--visible {
+  animation: ntf-slide-in 400ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.ntf-banner--hiding {
+  animation: ntf-slide-out 300ms ease-in forwards;
+}
+
+/* ─── Overlay modal ─────────────────────────────────────────────────────────── */
+
+.ntf-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9090;
+  background: color-mix(in oklab, #000 40%, transparent 60%);
+  opacity: 0;
+  transition: opacity 300ms ease;
+  pointer-events: none;
+}
+
+.ntf-overlay--visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* ─── Modal ─────────────────────────────────────────────────────────────────── */
+
+.ntf-modal {
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%) translateY(100%);
+  width: min(600px, 96vw);
+  height: 70vh;
+  background: var(--color-surface, #fff);
+  border-radius: 16px 16px 0 0;
+  z-index: 9100;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: transform 350ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow: 0 -8px 32px color-mix(in oklab, #000 20%, transparent 80%);
+}
+
+.ntf-modal--open {
+  transform: translateX(-50%) translateY(0);
+}
+
+/* Header modal */
+.ntf-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.25rem 0.75rem;
+  border-bottom: 1px solid var(--color-border, #e5e7eb);
+  flex-shrink: 0;
+}
+
+.ntf-modal__title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--color-text, #111);
+  margin: 0;
+}
+
+.ntf-modal__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.ntf-modal__read-all-btn {
+  font-size: 0.8rem;
+  color: var(--theme-accent);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  border-radius: 6px;
+  transition: background 150ms;
+}
+
+.ntf-modal__read-all-btn:hover {
+  background: color-mix(in oklab, var(--theme-accent) 10%, transparent 90%);
+}
+
+.ntf-modal__close-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-muted, #6b7280);
+  font-size: 1rem;
+  transition: background 150ms;
+}
+
+.ntf-modal__close-btn:hover {
+  background: color-mix(in oklab, var(--color-text, #111) 8%, transparent 92%);
+}
+
+/* Liste */
+.ntf-modal__list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.5rem 0;
+}
+
+.ntf-modal__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 0.75rem;
+  color: var(--color-text-muted, #6b7280);
+  font-size: 0.9rem;
+}
+
+.ntf-modal__empty i {
+  font-size: 2.5rem;
+  opacity: 0.4;
+}
+
+/* Item de notification */
+.ntf-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.875rem 1.25rem;
+  border-bottom: 1px solid color-mix(in oklab, var(--color-border, #e5e7eb) 60%, transparent 40%);
+  cursor: pointer;
+  transition: background 150ms;
+  text-decoration: none;
+  color: inherit;
+}
+
+.ntf-item:hover {
+  background: color-mix(in oklab, var(--color-text, #111) 4%, transparent 96%);
+}
+
+.ntf-item--unread {
+  background: color-mix(in oklab, var(--theme-accent) 5%, transparent 95%);
+}
+
+.ntf-item--unread:hover {
+  background: color-mix(in oklab, var(--theme-accent) 9%, transparent 91%);
+}
+
+.ntf-item__icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.ntf-item__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.ntf-item__top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.ntf-item__title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-text, #111);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ntf-item__unread-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--theme-accent);
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+
+.ntf-item__message {
+  font-size: 0.8125rem;
+  color: var(--color-text-muted, #6b7280);
+  margin-top: 0.2rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ntf-item__time {
+  font-size: 0.75rem;
+  color: var(--color-text-muted, #6b7280);
+  margin-top: 0.3rem;
+}
+
+.ntf-item__link-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  color: var(--theme-accent);
+  margin-top: 0.3rem;
+  font-weight: 500;
+}

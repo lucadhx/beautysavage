@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Gestion - Beauty Savage</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script src="/js/tailwind-gestion.config.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/css/app.css">
+  <link rel="stylesheet" href="/css/themeManagerModule.css">
+  <link rel="stylesheet" href="/css/uiConfigManagerModule.css">
+  <link rel="stylesheet" href="/css/contractModule.css">
+  <link rel="stylesheet" href="/css/monContratModule.css">
+  <link rel="stylesheet" href="/css/commissionPaymentModule.css">
+  <link rel="stylesheet" href="/css/mailTemplateModule.css">
+  <link rel="stylesheet" href="/css/commissionModule.css">
+  <link rel="stylesheet" href="/css/serviceManagerModule.css">
+  <link rel="stylesheet" href="/css/notificationWidget.css">
+  <link rel="stylesheet" href="/css/notificationManagerModule.css">
+  <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@fullcalendar/core@6.1.11/locales/fr.global.min.js"></script>
+</head>
+<body class="vitrine-body gestion-body">
+  <main class="vitrine-shell gestion-shell">
+    <header class="vitrine-header gestion-header" data-gestion-header>
+      <button type="button" class="brand-identity vitrine-header__brand gestion-header__brand" data-gestion-home>
+        <img data-gestion-logo alt="Logo du site" hidden>
+        <span class="brand-logo-fallback" data-gestion-logo-fallback hidden>BS</span>
+        <div class="gestion-header__identity">
+          <p class="brand-name" data-gestion-site-name>Beauty Savage</p>
+          <p class="brand-slogan" data-user-email>Chargement...</p>
+        </div>
+      </button>
+      <div class="vitrine-header__actions">
+        <button
+          class="vitrine-header__burger header-burger-button"
+          type="button"
+          data-gestion-burger-toggle
+          aria-label="Ouvrir la navigation gestion"
+          aria-controls="gestion-burger-panel"
+          aria-expanded="false"
+        >
+          <i class="bi bi-list" aria-hidden="true"></i>
+        </button>
+      </div>
+    </header>
+    <div class="app-mode-subheader" data-mode-subheader>
+      <div class="app-mode-switch" data-mode-switch hidden>
+        <div class="app-mode-switch__thumb" aria-hidden="true"></div>
+        <button type="button" class="app-mode-switch__option" data-mode-option="vitrine" aria-pressed="false">
+          Vitrine
+        </button>
+        <button type="button" class="app-mode-switch__option" data-mode-option="gestion" aria-pressed="false">
+          Gestion
+        </button>
+      </div>
+    </div>
+    <section class="vitrine-content gestion-content" data-gestion-content>
+      <section class="module-container flex flex-col gap-6" id="module-container">
+        <p class="module-placeholder">Choisissez une page depuis le menu.</p>
+      </section>
+    </section>
+  </main>
+  <div class="burger-overlay gestion-burger-overlay" data-gestion-burger-overlay></div>
+  <aside class="burger-panel gestion-burger-panel" data-gestion-burger-panel id="gestion-burger-panel" aria-hidden="true">
+    <div class="burger-panel__header">
+      <p style="color: var(--theme-accent)">Navigation gestion</p>
+      <button type="button" class="vitrine-header__burger-close" data-gestion-burger-close aria-label="Fermer le menu">
+        <i class="bi bi-x-lg" aria-hidden="true"></i>
+      </button>
+    </div>
+    <div class="burger-panel__list gestion-burger-list" data-gestion-burger-list>
+      <p class="module-placeholder">Chargement de la navigation...</p>
+    </div>
+    <div class="gestion-burger-panel__footer">
+      <button class="primary-button" type="button" data-logout>Se deconnecter</button>
+    </div>
+  </aside>
+  <script type="module" src="/js/gestion.js"></script>
+  <script type="module" src="/js/modules/auth.js"></script>
+  <script type="module" src="/js/notificationWidget.js"></script>
+</body>
+</html>
