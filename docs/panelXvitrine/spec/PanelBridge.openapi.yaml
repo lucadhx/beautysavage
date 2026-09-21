@@ -1,0 +1,1858 @@
+# =============================================================================
+# CONTRAT OFFICIEL — PanelBridge (sens PROJET -> PANEL)
+# -----------------------------------------------------------------------------
+# Ce document décrit l'API que TOUT Panel (le nôtre, ou le système d'un
+# repreneur) doit exposer pour qu'un projet puisse s'y connecter. Le SEUL
+# consommateur de cette API est le composant PanelBridge embarqué dans le
+# backend de chaque projet (backend/src/services/panelBridge/).
+#
+# Références d'architecture :
+#   docs/panelXvitrine/01_PANEL_CONNECTOR.md  (philosophie du PanelBridge)
+#   docs/panelXvitrine/11_DONNEES_CENTRALISEES.md §1.1 (règles de synchro)
+#   docs/panelXvitrine/09_AUTHENTIFICATION_PANEL_MANAGER.md (jeton {admin,dev})
+#
+# Versionnement du contrat :
+#   - version sémantique portée par info.version ET par le header
+#     X-Bridge-Contract-Version présent sur CHAQUE requête et CHAQUE réponse ;
+#   - même MAJEURE exigée des deux côtés ; une mineure supérieure côté serveur
+#     est acceptable (évolutions additives uniquement) ;
+#   - majeure inconnue -> refus propre : 409 BRIDGE_CONTRACT_VERSION_UNSUPPORTED.
+#
+# Enveloppes :
+#   - succès : { "success": true,  "data": ... }
+#   - erreur : { "success": false, "code": "...", "message": "...", "details"? }
+#   (identiques aux conventions du backend du projet — voir ErrorResponse).
+#
+# Historique des versions du contrat :
+#   1.0.0 (Phase 1)  — surface initiale.
+#   1.1.0 (Phase 2A) — ADDITIF : BootstrapRequest.manifest (optionnel) — le
+#     projet se présente complètement dès l'appairage via son manifeste
+#     officiel (schéma ProjectManifest, identique aux deux specs).
+#     Compatible 1.0.x.
+#   1.2.0 (Phase 3A) — ADDITIF, SUPERVISION EN LECTURE SEULE :
+#     Heartbeat.runtime (uptime, charge, composants), Heartbeat.engines,
+#     ProjectManifest.engines / .network / .descriptor. Tous OPTIONNELS :
+#     un projet qui ne les publie pas reste pleinement conforme.
+#     Compatible 1.0.x et 1.1.x.
+#   1.3.0 (Phase 4) — ADDITIF, DÉCOUVERTE DESCENDANTE :
+#     BootstrapResponse.company (CompanyProfile), .integratedApis
+#     (IntegratedApiConfig[]) et .syncCursor. Le projet repart de l'appairage
+#     en sachant qui il représente et avec quels accès, sans attendre un
+#     premier pull. Tous OPTIONNELS : un Panel qui ne les sert pas reste
+#     conforme, un projet qui les ignore aussi.
+#     Compatible 1.0.x, 1.1.x et 1.2.x.
+#   1.4.0 — RIEN DE NOUVEAU SUR CETTE SURFACE. La version accompagne l'ajout
+#     de PingResponse.projectKey / .projectName côté ProjectBridge : les deux
+#     contrats partagent un même numéro pour qu'un seul en-tête suffise à
+#     décrire ce que parle un pont.
+#     Compatible 1.0.x, 1.1.x, 1.2.x et 1.3.x.
+#   1.8.0 — ADDITIF, DÉCLARATION D'USAGE DES MODÈLES D'E-MAIL :
+#     nouvel entityType `PROJECT_EMAIL_TEMPLATE_USAGE`, poussé par le projet.
+#     Le projet ANNONCE les templateCode qu'il consomme ; le Panel provisionne
+#     les instances manquantes et retire de la vue active celles qui ne sont
+#     plus déclarées — sans jamais supprimer un contenu. Rétrocompatible : un
+#     Panel antérieur refuse cette entité proprement et tout le reste continue.
+#   1.5.0 (L3) — ADDITIF, PASSERELLE DE CAPACITÉS :
+#     POST /bridge/v1/capabilities/{code}/invoke. Le projet demande une
+#     INTENTION MÉTIER ; le Panel résout le fournisseur, l'environnement, le
+#     droit et les identifiants, puis exécute. Le projet ne choisit ni
+#     fournisseur, ni monde, ni credential, et ne reçoit JAMAIS de secret.
+#     Catalogue d'erreurs PROPRE (CAPABILITY_*, cf. CapabilityErrorResponse) :
+#     les refus de cette surface décrivent une décision de la passerelle, pas
+#     un état du pont — les confondre avec BRIDGE_* obligerait un client à
+#     deviner lequel des deux il lit.
+#     Compatible 1.0.x à 1.4.x : un projet qui ignore cet endpoint reste
+#     pleinement conforme, un Panel qui ne le sert pas aussi.
+#   1.10.0 — ADDITIF, TROIS AJOUTS :
+#     · nouvel entityType `CLIENT_COMPANY` — l'identité JURIDIQUE du client
+#       d'un projet (raison sociale, SIREN, adresses, signataire contractuel),
+#       poussée par le Panel vers UN projet nommé (`audience`). Distincte de
+#       `DEV_COMPANY`, qui porte l'identité du PRESTATAIRE et se diffuse à tout
+#       le parc : les confondre ferait afficher les mentions légales de
+#       l'agence sur le site d'un client. Sens PANEL -> PROJET exclusivement ;
+#     · `Contract.pricing.*.amountExcludingTax` / `.taxAmount` / `.taxRate` —
+#       la ventilation HT/TVA que le projet calcule déjà. Sans elle, l'émetteur
+#       des factures ne connaît que le TTC et ne peut produire qu'un document
+#       muet sur la taxe. Elle est TRANSPORTÉE et non déduite : déduire un HT
+#       depuis un TTC introduit un arrondi que le contrat a déjà tranché ;
+#     · `Heartbeat.bridgeStats.consumption` — ce que le pont CONSOMME. Les
+#       champs existants décrivent la file SORTANTE ; un projet dont le tirage
+#       est mort a une file sortante vide et un battement parfait. Sans ce
+#       bloc, « rien à recevoir » et « plus rien n'arrive » sont indiscernables.
+#     Tous OPTIONNELS. Les schémas d'entrée étant `.strict()` des deux côtés,
+#     l'ORDRE DE DÉPLOIEMENT est imposé : le Panel accepte AVANT que le projet
+#     n'émette, et le projet ne publie qu'à un Panel qui a annoncé savoir lire.
+#     Compatible 1.0.x à 1.9.x.
+#   1.12.0 — CE QUE LE PROJET A RENONCE A APPLIQUER. UN CHANGEMENT, ADDITIF :
+#     · `Heartbeat.bridgeStats.consumption.parkedChanges` et `.lastParkedAt` —
+#       le nombre d'ecritures que le projet a GAREES en lettre morte apres avoir
+#       epuise ses tentatives d'application, et la date de la derniere.
+#       Une ecriture garee est passee SOUS le curseur : le calcul de retard du
+#       Panel ne la verra jamais. Sans ce compte, renoncer proprement
+#       redeviendrait perdre en silence.
+#     Optionnels, comme tout le bloc. Compatible 1.0.x a 1.11.x.
+#   1.11.0 — L'AUTORITÉ DES MODÈLES D'E-MAIL, RENDUE EXPLICITE. QUATRE CHANGEMENTS :
+#     · CINQ ROUTES DE LECTURE sur /bridge/v1/email-templates — la projection
+#       des modèles réellement affectés au projet appelant, telle que le Panel
+#       les résoudrait à l'envoi. Le projet ne détient plus aucune copie de
+#       contenu : il consulte.
+#     · LES VERBES D'ÉCRITURE DE CETTE SURFACE SONT RETIRÉS (PUT /{code},
+#       POST /import, POST /{code}/versions/{v}/restore). Ils n'avaient aucun
+#       appelant, et ils contredisaient l'autorité unique du Panel : une porte
+#       que personne n'emprunte mais que l'architecture interdit se retire, sans
+#       quoi le premier lot pressé la trouve.
+#     · `EMAIL_TEMPLATE` EST RETIRÉ des entityType. Il y figurait depuis
+#       l'origine sans qu'aucun émetteur ne le produise ni qu'aucun projecteur
+#       ne l'applique : une entité déclarée que rien ne synchronisait, laissant
+#       croire que le CONTENU des modèles voyage. Il ne voyage pas.
+#     · nouvel entityType `PLATFORM_INCIDENT`, poussé par le PROJET — un
+#       incident technique durable. L'alerte correspondante partait du projet
+#       avec un modèle de portée PANEL : elle ne pouvait structurellement pas
+#       aboutir, et échouait en silence. Le projet rapporte désormais les FAITS ;
+#       le control plane décide de l'alerte, de ses destinataires et de son
+#       contenu.
+#     · `EmailTemplateUsage.contractFingerprints` — OPTIONNEL. L'empreinte du
+#       contrat de variables que le projet sait servir, telle que le Panel la lui
+#       a servie. Elle rend un écart de vocabulaire détectable AVANT le premier
+#       envoi raté.
+#     Compatible 1.0.x à 1.10.x en MAJEURE. Le retrait d'`EMAIL_TEMPLATE` et des
+#     verbes d'écriture ne casse aucun client : aucun ne les utilisait.
+# =============================================================================
+openapi: 3.0.3
+info:
+  title: PanelBridge API — contrat exposé par le Panel
+  description: >
+    API consommée exclusivement par le PanelBridge d'un projet.
+    Sens des appels : PROJET -> PANEL (HTTPS sortant du projet).
+    Le Panel ne connaît jamais Mongo ; le projet ne connaît du Panel que
+    cette surface.
+  version: 1.15.0
+servers:
+  - url: https://panel.example.com
+    description: >
+      URL du Panel, connue du SEUL PanelBridge (saisie à l'appairage,
+      pré-remplie par la duplication). Aucun autre composant du projet
+      ne doit la connaître.
+
+tags:
+  - name: discovery
+    description: Découverte et vivacité (sans authentification).
+  - name: pairing
+    description: Appairage (bootstrap) et désappairage.
+  - name: heartbeat
+    description: Signal de vie périodique du projet.
+  - name: sync
+    description: >
+      Synchronisation des données de catégorie 2 (00_ECOSYSTEME §5.2) :
+      push des écritures locales du projet, pull de rattrapage des écritures
+      faites côté Panel. Règles : dernier écrit gagne, identités UUID,
+      tombstones, anti-écho, idempotence (11_DONNEES_CENTRALISEES §1.1).
+  - name: capabilities
+    description: >
+      Passerelle de capacités (contrat 1.5.0). Le projet demande une INTENTION
+      MÉTIER — « vérifie que je peux écrire », « envoie cette notification » —
+      et n'apprend jamais quel fournisseur l'exécute. Il ne choisit ni le
+      fournisseur, ni l'environnement, ni le jeu d'identifiants : tout est
+      déduit de son jeton d'appairage et de l'instance de Panel qui répond.
+
+paths:
+  /bridge/v1/ping:
+    get:
+      operationId: ping
+      tags: [discovery]
+      summary: Vivacité du Panel (découverte, sans authentification).
+      description: >
+        Utilisé par le PanelBridge pour distinguer « Panel injoignable »
+        (état DEGRADED) de « credentials refusés ». Ne divulgue rien.
+      parameters:
+        - $ref: '#/components/parameters/ContractVersion'
+      responses:
+        '200':
+          description: Le Panel est vivant.
+          headers:
+            X-Bridge-Contract-Version:
+              $ref: '#/components/headers/ContractVersionHeader'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PingResponse'
+
+  /bridge/v1/pairings:
+    post:
+      operationId: bootstrapPairing
+      tags: [pairing]
+      summary: Bootstrap — appairage initial d'un projet.
+      description: >
+        Premier échange projet -> Panel. Le projet se présente avec un
+        code d'appairage obtenu hors-bande (affiché par le Panel à la création
+        du projet dans son registre). En retour, le Panel délivre le
+        bridgeToken : credential PROPRE À CE PROJET, révocable
+        individuellement, stocké chiffré côté projet (AES-256-GCM,
+        INTEGRATED_API_ENCRYPTION_KEY). L'appairage est rejouable :
+        un désappairage propre ramène à l'état UNCONFIGURED.
+      parameters:
+        - $ref: '#/components/parameters/ContractVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BootstrapRequest'
+      responses:
+        '201':
+          description: Projet appairé ; credentials délivrés.
+          headers:
+            X-Bridge-Contract-Version:
+              $ref: '#/components/headers/ContractVersionHeader'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BootstrapResponseEnvelope'
+        '400':
+          $ref: '#/components/responses/InvalidPayload'
+        '401':
+          description: Code d'appairage invalide ou expiré.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                code: BRIDGE_PAIRING_CODE_INVALID
+                message: Code d'appairage invalide ou expiré.
+        '409':
+          description: >
+            Projet déjà appairé (BRIDGE_ALREADY_PAIRED) ou version majeure du
+            contrat non supportée (BRIDGE_CONTRACT_VERSION_UNSUPPORTED).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /bridge/v1/pairings/current:
+    delete:
+      operationId: unpair
+      tags: [pairing]
+      summary: Désappairage — le projet se débranche volontairement.
+      description: >
+        Révoque les credentials du projet côté Panel. IDEMPOTENT : désappairer
+        un projet déjà désappairé répond 200. Après cet appel, le projet purge
+        son outbox et efface son bridgeToken (04_STANDALONE §4.1) ; toute
+        requête ultérieure avec l'ancien token répond 401.
+      security:
+        - bridgeToken: []
+      parameters:
+        - $ref: '#/components/parameters/ContractVersion'
+      responses:
+        '200':
+          description: Désappairé (ou l'était déjà).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnpairResponseEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /bridge/v1/heartbeats:
+    post:
+      operationId: heartbeat
+      tags: [heartbeat]
+      summary: Signal de vie périodique du projet.
+      description: >
+        Léger, best-effort, jamais bloquant côté projet. Alimente la
+        supervision du Panel (projet vivant, version déployée, dérive).
+        Un heartbeat manqué ne déclenche RIEN côté projet : il fait seulement
+        passer son PanelBridge CONNECTED -> DEGRADED après un seuil.
+      security:
+        - bridgeToken: []
+      parameters:
+        - $ref: '#/components/parameters/ContractVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Heartbeat'
+      responses:
+        '200':
+          description: Heartbeat enregistré.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HeartbeatAckEnvelope'
+        '400':
+          $ref: '#/components/responses/InvalidPayload'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/ContractVersionUnsupported'
+
+  /bridge/v1/sync/push:
+    post:
+      operationId: pushChanges
+      tags: [sync]
+      summary: Push — le projet livre ses écritures locales (vidage d'outbox).
+      description: >
+        Livre un lot ordonné de SyncChange émis par le PROJET (emitter=PROJECT).
+        IDEMPOTENT par writeId : relivrer un lot déjà traité répond DUPLICATE
+        pour chaque écriture, sans effet. Le Panel répond un accusé PAR
+        écriture — jamais un échec global silencieux.
+      security:
+        - bridgeToken: []
+      parameters:
+        - $ref: '#/components/parameters/ContractVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SyncPushRequest'
+      responses:
+        '200':
+          description: Accusés de réception, un par écriture.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncPushResponseEnvelope'
+        '400':
+          $ref: '#/components/responses/InvalidPayload'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/ContractVersionUnsupported'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /bridge/v1/sync/pull:
+    get:
+      operationId: pullChanges
+      tags: [sync]
+      summary: Pull — rattrapage des écritures faites côté Panel.
+      description: >
+        Renvoie, dans l'ordre, les SyncChange émis côté Panel (emitter=PANEL)
+        depuis le curseur fourni — en EXCLUANT les écritures dont ce projet est
+        l'émetteur d'origine (anti-écho, 11_DONNEES_CENTRALISEES §1.1 règle 4).
+        Le curseur est OPAQUE : le projet le stocke tel quel et le renvoie.
+        Chemin de robustesse : un projet resté éteint se resynchronise
+        entièrement par ce seul endpoint.
+      security:
+        - bridgeToken: []
+      parameters:
+        - $ref: '#/components/parameters/ContractVersion'
+        - name: cursor
+          in: query
+          required: false
+          description: Curseur opaque de la dernière page consommée (absent = depuis le début).
+          schema: { type: string }
+        - name: limit
+          in: query
+          required: false
+          description: Taille de page maximale souhaitée.
+          schema: { type: integer, minimum: 1, maximum: 500, default: 100 }
+      responses:
+        '200':
+          description: Page d'écritures à appliquer localement.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncPullResponseEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/ContractVersionUnsupported'
+
+  /bridge/v1/capabilities/{code}/invoke:
+    post:
+      operationId: invokeCapability
+      tags: [capabilities]
+      summary: Invoque une capacité métier — le Panel exécute chez le fournisseur.
+      description: >
+        Le projet nomme une CAPACITÉ (verbe métier) et fournit son entrée.
+        Le Panel, dans cet ordre : authentifie l'instance par son bridgeToken,
+        en déduit le projectId, résout l'environnement depuis SON runtime,
+        vérifie l'octroi de la capacité à ce projet, applique la politique
+        d'ouverture commerciale, valide l'entrée contre un schéma STRICT,
+        charge le jeu d'identifiants de son coffre, puis exécute.
+
+        CE QUE LE PROJET NE PEUT PAS FAIRE : choisir un fournisseur, choisir
+        TEST ou PROD, désigner un jeu d'identifiants, appeler une URL de
+        fournisseur, ou faire autorité sur son propre projectId. Un `projectId`
+        présent dans le corps et DIVERGENT du projet authentifié est refusé
+        (CAPABILITY_PROJECT_SCOPE_MISMATCH) ; identique, il est ignoré.
+
+        AUCUN SECRET NE TRAVERSE : ni en entrée, ni en sortie, ni dans un
+        message d'erreur. La réponse est un CONSTAT métier, pas la réponse du
+        fournisseur.
+
+        ISSUE INDÉTERMINÉE : un 504 CAPABILITY_TIMEOUT signifie que le
+        fournisseur n'a pas répondu — l'action a PEUT-ÊTRE eu lieu. Le projet
+        ne doit pas rejouer sans arbitrage pour une capacité dont
+        l'idempotence est UNKNOWN_ON_TIMEOUT.
+      security:
+        - bridgeToken: []
+      parameters:
+        - $ref: '#/components/parameters/ContractVersion'
+        - name: code
+          in: path
+          required: true
+          description: >
+            Code de la capacité (registre code-first du Panel), par exemple
+            `email.sender.verify`. Un code inconnu répond 404, jamais un 200
+            silencieux.
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CapabilityInvocationRequest'
+      responses:
+        '200':
+          description: Capacité exécutée ; constat métier rendu.
+          headers:
+            X-Bridge-Contract-Version:
+              $ref: '#/components/headers/ContractVersionHeader'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CapabilityInvocationEnvelope'
+        '400':
+          description: Entrée non conforme au contrat de la capacité (CAPABILITY_INPUT_INVALID).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CapabilityErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: >
+            Capacité non accordée à ce projet (CAPABILITY_NOT_GRANTED), ou
+            demande désignant un autre projet (CAPABILITY_PROJECT_SCOPE_MISMATCH).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CapabilityErrorResponse'
+        '404':
+          description: Capacité inconnue du registre (CAPABILITY_UNKNOWN).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CapabilityErrorResponse'
+        '409':
+          description: >
+            Version majeure du contrat non supportée
+            (BRIDGE_CONTRACT_VERSION_UNSUPPORTED), ou la passerelle refuse
+            d'exécuter : capacité déclarée mais pas encore servie
+            (CAPABILITY_NOT_AVAILABLE), écriture réelle refusée avant
+            l'ouverture commerciale (CAPABILITY_BLOCKED_PREOPENING),
+            identifiants absents ou non validés (CAPABILITY_CREDENTIALS_MISSING),
+            environnement incohérent (CAPABILITY_ENVIRONMENT_MISMATCH).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CapabilityErrorResponse'
+        '502':
+          description: Le fournisseur a refusé ou est indisponible (CAPABILITY_PROVIDER_UNAVAILABLE).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CapabilityErrorResponse'
+        '504':
+          description: >
+            Le fournisseur n'a pas répondu (CAPABILITY_TIMEOUT). L'issue est
+            INDÉTERMINÉE : ne pas rejouer une écriture sans arbitrage.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CapabilityErrorResponse'
+
+  /bridge/v1/webhooks/{provider}/verification-secret:
+    get:
+      operationId: fetchWebhookVerificationSecret
+      tags: [webhooks]
+      summary: Récupère le secret de VÉRIFICATION du webhook de ce projet.
+      description: >
+        LE SEUL CANAL PAR LEQUEL UN SECRET DESCEND VERS UN PROJET, et il ne
+        transporte que celui-là.
+
+        Un secret de vérification (`whsec_…`) ne permet AUCUN appel sortant : il
+        sert uniquement à constater qu'un message reçu vient bien du
+        fournisseur. C'est cette impuissance, et elle seule, qui autorise sa
+        traversée — une clé d'API ne franchira jamais le pont.
+
+        Le Panel refuse d'écrire ici toute charge qui ne serait pas exactement
+        un champ, portant un rôle déclaré « vérification seule » au registre des
+        fournisseurs, et dont la valeur a la forme d'un secret de signature. Ce
+        n'est donc pas une exception à la règle « aucun secret ne traverse » :
+        c'est une porte dont on connaît la forme exacte, à côté d'un mur resté
+        intact.
+
+        Le projet ne nomme pas le projet dont il veut le secret : celui qui fait
+        autorité est déduit du bridgeToken. Il ne peut demander que le sien.
+
+        Prérequis : l'endpoint doit avoir été provisionné par le Panel
+        (capacité `webhook.endpoint.ensure`). Sinon 404 — jamais un secret vide.
+
+        Compatible 1.0.x à 1.5.x : un projet qui ignore cet endpoint reste
+        pleinement conforme, un Panel qui ne le sert pas aussi.
+      security:
+        - bridgeToken: []
+      parameters:
+        - $ref: '#/components/parameters/ContractVersion'
+        - name: provider
+          in: path
+          required: true
+          description: >
+            Code du fournisseur, par exemple `STRIPE`. Liste FERMÉE côté Panel :
+            seuls les fournisseurs dont les événements vont directement au
+            projet sont livrables. Tout autre répond 404.
+          schema: { type: string }
+      responses:
+        '200':
+          description: >
+            Secret de vérification courant. UN SEUL champ, jamais davantage.
+          headers:
+            X-Bridge-Contract-Version:
+              $ref: '#/components/headers/ContractVersionHeader'
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [webhookSecret]
+                properties:
+                  webhookSecret:
+                    type: string
+                    description: >
+                      Secret de signature (`whsec_…`). À ranger chiffré, à ne
+                      jamais journaliser, à n'utiliser que pour vérifier une
+                      signature entrante.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: >
+            Aucun secret enregistré pour ce projet
+            (PANEL_WEBHOOK_VERIFICATION_SECRET_MISSING), ou fournisseur non
+            livrable (PANEL_WEBHOOK_VERIFICATION_UNAVAILABLE).
+        '409':
+          description: Version majeure du contrat non supportée.
+
+  /bridge/v1/federation/introspect:
+    post:
+      operationId: introspectFederatedPrincipal
+      tags: [federation]
+      summary: L'identite developpeur federee est-elle ENCORE valable ?
+      description: >
+        LE SEUL MOYEN DE COUPER UNE SESSION FEDEREE SANS TOUCHER A LA BASE DU
+        PROJET.
+
+        Une assertion federee vit trois minutes ; la session projet qu'elle
+        ouvre vit plus longtemps. Entre les deux, le compte peut etre desactive,
+        son acces au projet retire, l'appairage revoque. Sans ce verbe, la seule
+        facon de fermer l'acces serait d'editer la base du projet a la main —
+        exactement ce que la federation existe pour eviter.
+
+        Le Panel verifie que le compte existe, qu'il est actif, que son role
+        ouvre l'acces developpeur, que son contrat d'acces couvre CE projet, et
+        — si `tokenVersion` est fourni — que la session batie sur cette version
+        tient encore.
+
+        LA REPONSE NE DIT JAMAIS POURQUOI ELLE REFUSE. « inconnu »,
+        « desactive » et « sans acces ici » sont indistinguables : un projet
+        compromis pourrait sinon enumerer les employes de l'agence en essayant
+        des identifiants. La reaction du projet est de toute facon la meme dans
+        les trois cas — fermer la session.
+
+        Le projet ne nomme pas le projet pour lequel il demande : celui qui fait
+        autorite est deduit du bridgeToken. Il ne peut demander que pour lui.
+
+        POST bien qu'il s'agisse d'une lecture : la requete porte un identifiant
+        d'utilisateur et une version de session, qui n'ont rien a faire dans les
+        journaux d'acces des intermediaires.
+
+        Compatible 1.0.x a 1.5.x : un projet qui ignore cet endpoint reste
+        pleinement conforme, un Panel qui ne le sert pas aussi.
+      security:
+        - bridgeToken: []
+      parameters:
+        - $ref: '#/components/parameters/ContractVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [panelUserId]
+              properties:
+                panelUserId:
+                  type: string
+                  description: Identifiant du compte Panel, tel que l'assertion le portait.
+                tokenVersion:
+                  type: integer
+                  nullable: true
+                  minimum: 0
+                  description: >
+                    Version de session sur laquelle la session projet a ete
+                    batie. Absente, la reponse porte sur l'etat courant du
+                    compte ; presente, elle dit aussi si la session tient encore.
+      responses:
+        '200':
+          description: >
+            Verdict. `principal` n'est present QUE lorsque la reponse est oui.
+          headers:
+            X-Bridge-Contract-Version:
+              $ref: '#/components/headers/ContractVersionHeader'
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [active]
+                properties:
+                  active: { type: boolean }
+                  principal:
+                    type: object
+                    additionalProperties: false
+                    required: [panelUserId, role, enabled]
+                    properties:
+                      panelUserId: { type: string }
+                      displayName: { type: string }
+                      email: { type: string }
+                      role: { type: string }
+                      enabled: { type: boolean }
+                      tokenVersion: { type: integer }
+        '400':
+          description: Entree non conforme (BRIDGE_INVALID_PAYLOAD).
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          description: Version majeure du contrat non supportee.
+
+  /bridge/v1/email-templates:
+    get:
+      operationId: listProjectEmailTemplates
+      tags: [email-templates]
+      summary: Les modeles d'e-mail affectes a CE projet — LECTURE SEULE
+      description: >
+        LA PROJECTION AUTORITATIVE, telle que le Panel la resoudrait a l'envoi.
+
+        Le projet ne detient plus aucune copie de contenu. Cette surface est
+        donc la SEULE facon pour lui de savoir quel sujet, quel contenu et
+        quelles variables la plateforme expedierait en son nom.
+
+        Elle emprunte exactement la meme resolution que l'envoi : un modele non
+        configure pour la portee du projet rend `usable: false` et sa raison,
+        jamais un contenu de repli. Servir un defaut ici ferait croire a un
+        modele pret alors que le premier envoi echouerait.
+
+        AUCUN VERBE D'ECRITURE n'existe sur cette surface, et c'est la propriete
+        centrale du contrat 1.11.0 : le Panel est la seule autorite d'edition.
+
+        Disponible depuis 1.11.0.
+      security:
+        - bridgeToken: []
+      parameters:
+        - $ref: '#/components/parameters/ContractVersion'
+      responses:
+        '200':
+          description: La projection des modeles du projet.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        templateId: { type: string }
+                        name: { type: string }
+                        description: { type: string }
+                        subject:
+                          type: string
+                          description: Le sujet REELLEMENT expedie pour ce projet.
+                        enabled: { type: boolean }
+                        configured:
+                          type: boolean
+                          description: Une instance existe-t-elle pour cette portee ?
+                        usable:
+                          type: boolean
+                          description: L'envoi aboutirait-il en l'etat ?
+                        unusableReason: { type: string, nullable: true }
+                        unusableMessage: { type: string }
+                        version: { type: integer }
+                        source:
+                          type: string
+                          enum: [PANEL, PROJECT, REGISTRY_DEFAULT]
+                          nullable: true
+                        ownedBy:
+                          type: string
+                          enum: [PANEL, PROJECT]
+                        variableCount: { type: integer }
+                        variableContractFingerprint:
+                          type: string
+                          description: >
+                            L'empreinte du contrat de variables. Le projet la
+                            renvoie dans sa declaration d'usage : c'est elle qui
+                            rend un ecart de vocabulaire detectable AVANT le
+                            premier envoi rate.
+
+  /bridge/v1/email-templates/{code}:
+    get:
+      operationId: getProjectEmailTemplate
+      tags: [email-templates]
+      summary: Le detail d'un modele affecte au projet — LECTURE SEULE
+      description: >
+        Meme resolution que l'envoi. Porte le contenu reellement expedie, le
+        contrat de variables et son empreinte.
+
+        Disponible depuis 1.11.0.
+      security:
+        - bridgeToken: []
+      parameters:
+        - $ref: '#/components/parameters/ContractVersion'
+        - name: code
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Le modele resolu pour ce projet.
+
+  /bridge/v1/email-templates/{code}/preview:
+    post:
+      operationId: previewProjectEmailTemplate
+      tags: [email-templates]
+      summary: Un apercu rendu par le PANEL, avec SES variables d'exemple
+      description: >
+        POST parce qu'il declenche un rendu, pas parce qu'il ecrit.
+
+        LE CORPS EST IGNORE, et c'est delibere : il acceptait autrefois un
+        brouillon (sujet + HTML) pour previsualiser une saisie en cours. Cette
+        saisie n'existe plus, et un corps tolere serait la premiere marche vers
+        un contenu pousse par le projet.
+
+        Disponible depuis 1.11.0.
+      security:
+        - bridgeToken: []
+      parameters:
+        - $ref: '#/components/parameters/ContractVersion'
+        - name: code
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Le rendu, ou la raison pour laquelle il n'y en a pas.
+
+  /bridge/v1/email-templates/{code}/readiness:
+    get:
+      operationId: getProjectEmailTemplateReadiness
+      tags: [email-templates]
+      summary: Cet e-mail partirait-il, et sinon pourquoi ?
+      description: >
+        Diagnostic calcule sur le MEME chemin que l'envoi : declaration d'usage,
+        portee autorisee, instance configuree, interrupteur, expediteur,
+        fournisseur. Un diagnostic qui n'emprunte pas le chemin reel n'est pas
+        un diagnostic — il repondait « pret » pour des modeles dont le premier
+        envoi echouait.
+
+        Disponible depuis 1.11.0.
+      security:
+        - bridgeToken: []
+      parameters:
+        - $ref: '#/components/parameters/ContractVersion'
+        - name: code
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Le verdict et ses blocages.
+
+  /bridge/v1/email-templates/{code}/test-send:
+    post:
+      operationId: sendProjectEmailTemplateTest
+      tags: [email-templates]
+      summary: Envoyer un e-mail de test, execute par le PANEL
+      description: >
+        L'envoi emprunte exactement la chaine d'un e-mail metier : modele du
+        Panel, variables d'exemple du Panel, expediteur du Panel, transport
+        Brevo. Le projet ne fournit que l'adresse de reception.
+
+        Disponible depuis 1.11.0.
+      security:
+        - bridgeToken: []
+      parameters:
+        - $ref: '#/components/parameters/ContractVersion'
+        - name: code
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [recipientEmail]
+              properties:
+                recipientEmail: { type: string, format: email }
+      responses:
+        '200':
+          description: L'envoi a ete accepte par le fournisseur.
+
+components:
+  securitySchemes:
+    bridgeToken:
+      type: http
+      scheme: bearer
+      bearerFormat: opaque
+      description: >
+        bridgeToken délivré au bootstrap — propre à UN projet, révocable
+        individuellement, jamais journalisé en clair (discipline de masquage
+        du projet : maskSensitiveText / createRedactor).
+
+  parameters:
+    ContractVersion:
+      name: X-Bridge-Contract-Version
+      in: header
+      required: true
+      description: >
+        Version sémantique du contrat parlée par l'appelant (ex. « 1.0.0 »).
+        Majeure différente -> 409 BRIDGE_CONTRACT_VERSION_UNSUPPORTED.
+      schema:
+        type: string
+        pattern: '^\d+\.\d+\.\d+$'
+        example: 1.0.0
+
+  headers:
+    ContractVersionHeader:
+      description: Version du contrat parlée par le serveur.
+      schema:
+        type: string
+        example: 1.0.0
+
+  responses:
+    Unauthorized:
+      description: bridgeToken absent, invalide ou révoqué.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            code: BRIDGE_UNAUTHORIZED
+            message: Credentials de pont invalides ou révoqués.
+    InvalidPayload:
+      description: Corps de requête non conforme au contrat (DTO invalide).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            code: BRIDGE_INVALID_PAYLOAD
+            message: Payload non conforme au contrat.
+    ContractVersionUnsupported:
+      description: Version majeure du contrat non supportée.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            code: BRIDGE_CONTRACT_VERSION_UNSUPPORTED
+            message: Version majeure du contrat non supportée.
+    RateLimited:
+      description: Trop de requêtes ; le PanelBridge réessaie avec backoff.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            code: BRIDGE_RATE_LIMITED
+            message: Trop de requêtes, réessayez plus tard.
+
+  schemas:
+    # ------------------------------------------------------------ enveloppes
+    ErrorResponse:
+      type: object
+      description: >
+        Enveloppe d'erreur commune. `code` appartient au catalogue fermé
+        BRIDGE_* ci-dessous — les clients routent sur `code`, jamais sur le
+        libellé français de `message`.
+      required: [success, code, message]
+      properties:
+        success: { type: boolean, enum: [false] }
+        code:
+          type: string
+          description: Code stable du catalogue d'erreurs du contrat.
+          enum:
+            - BRIDGE_UNAUTHORIZED
+            - BRIDGE_ENVIRONMENT_MISMATCH
+            - BRIDGE_PAIRING_CODE_INVALID
+            - BRIDGE_ALREADY_PAIRED
+            - BRIDGE_NOT_PAIRED
+            - BRIDGE_CONTRACT_VERSION_UNSUPPORTED
+            - BRIDGE_INVALID_PAYLOAD
+            - BRIDGE_OPERATION_UNKNOWN
+            - BRIDGE_OPERATION_FAILED
+            - BRIDGE_RATE_LIMITED
+            - BRIDGE_INTERNAL
+        message: { type: string }
+        details: { description: Contexte facultatif (objet ou tableau)., nullable: true }
+
+    CapabilityErrorResponse:
+      type: object
+      description: >
+        Refus de la PASSERELLE DE CAPACITÉS (contrat 1.5.0). Catalogue distinct
+        de BRIDGE_* : ces codes décrivent une décision prise sur une invocation
+        — droit, ouverture commerciale, entrée, identifiants, fournisseur — et
+        non un état du pont lui-même. Aucun message de fournisseur n'y est
+        jamais relayé.
+      required: [success, code, message]
+      properties:
+        success: { type: boolean, enum: [false] }
+        code:
+          type: string
+          description: Code stable du catalogue de la passerelle.
+          enum:
+            - CAPABILITY_UNKNOWN
+            - CAPABILITY_NOT_AVAILABLE
+            - CAPABILITY_NOT_GRANTED
+            - CAPABILITY_BLOCKED_PREOPENING
+            - CAPABILITY_PROVIDER_UNAVAILABLE
+            - CAPABILITY_TIMEOUT
+            - CAPABILITY_INPUT_INVALID
+            - CAPABILITY_ENVIRONMENT_MISMATCH
+            - CAPABILITY_CREDENTIALS_MISSING
+            - CAPABILITY_PROJECT_SCOPE_MISMATCH
+        message: { type: string }
+        details:
+          description: >
+            Contexte SANS SECRET : chemins d'entrée fautifs, nature de l'effet
+            refusé, motif d'indisponibilité d'un jeu d'identifiants, statut HTTP
+            du fournisseur. Jamais une valeur saisie, jamais une clé.
+          nullable: true
+
+    CapabilityInvocationRequest:
+      type: object
+      description: >
+        Entrée MÉTIER de la capacité. Sa forme exacte est fixée par le registre
+        code-first du Panel et validée en mode STRICT : toute clé inconnue est
+        refusée. Ce refus est délibéré — un champ toléré parce qu'inerte
+        finirait par être branché.
+
+        Champs INTERDITS quel que soit le contrat de la capacité : `provider`,
+        `environment`, `mode`, `apiKey`, `credentials`, `baseUrl`. Le projet ne
+        choisit ni le monde, ni le fournisseur, ni la clé.
+      properties:
+        operationId:
+          type: string
+          minLength: 8
+          maxLength: 64
+          description: >
+            Clé d'idempotence choisie par le PROJET : lui seul sait que deux
+            clics sont la même intention. Rendue telle quelle dans la réponse
+            pour qu'il rapproche son journal du nôtre.
+      additionalProperties: true
+
+    CapabilityInvocationEnvelope:
+      type: object
+      required: [success, data]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data:
+          $ref: '#/components/schemas/CapabilityInvocationResult'
+
+    CapabilityInvocationResult:
+      type: object
+      required: [capability, provider, environment, outcome, result]
+      properties:
+        capability: { type: string, description: Code invoqué. }
+        provider:
+          type: string
+          description: >
+            Fournisseur qui a exécuté. Rendu pour le DIAGNOSTIC — un opérateur
+            doit pouvoir dire où regarder quand ça échoue. Le projet ne doit
+            RIEN en déduire : c'est la capacité qui est son contrat, pas le
+            fournisseur du jour.
+        environment:
+          type: string
+          enum: [TEST, PROD]
+          description: Monde réellement utilisé. Constaté, jamais choisi par le projet.
+        outcome:
+          type: string
+          enum: [SUCCEEDED]
+          description: >
+            Une réponse 200 vaut SUCCEEDED. Les autres issues (FAILED, UNKNOWN,
+            BLOCKED) voyagent en erreur, avec leur code.
+        operationId: { type: string, nullable: true }
+        requestId:
+          type: string
+          description: Corrélation avec le journal du Panel — à citer au support.
+        durationMs: { type: integer }
+        result:
+          type: object
+          description: >
+            CONSTAT MÉTIER de la capacité, validé par son schéma de sortie
+            (strict) avant d'être rendu. Ce n'est jamais la réponse brute du
+            fournisseur.
+          additionalProperties: true
+
+    PingResponse:
+      type: object
+      required: [success, data]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data:
+          type: object
+          required: [status, service, time]
+          properties:
+            status: { type: string, enum: [ok] }
+            service: { type: string, enum: [panel-bridge-api] }
+            time: { type: string, format: date-time }
+
+    # -------------------------------------------------------------- pairing
+    BootstrapRequest:
+      type: object
+      description: Le projet se présente. Aucun secret du projet n'est transmis.
+      required: [contractVersion, projectKey, projectName, environment, softwareVersion, pairingCode]
+      properties:
+        contractVersion:
+          type: string
+          pattern: '^\d+\.\d+\.\d+$'
+          description: Version du contrat parlée par le PanelBridge.
+        projectKey:
+          type: string
+          minLength: 3
+          maxLength: 120
+          description: Identifiant stable et lisible du projet (ex. « sb-auto-06 »).
+        projectName:
+          type: string
+          description: Nom d'affichage (ex. « SB Auto 06 »).
+        environment:
+          type: string
+          enum: [TEST, PROD]
+          description: ENV applicatif du backend qui s'appaire (informatif).
+        softwareVersion:
+          type: string
+          description: Version déployée du projet (manifeste /api/version).
+        publicBackendUrl:
+          type: string
+          format: uri
+          nullable: true
+          description: >
+            URL publique du backend si connue — permet au Panel d'appeler le
+            ProjectBridge (ProjectBridge.openapi.yaml). Peut être null (projet
+            en local) : le Panel fonctionnera alors en pull-only.
+        pairingCode:
+          type: string
+          description: Code d'appairage à usage unique, obtenu hors-bande.
+        manifest:
+          allOf:
+            - $ref: '#/components/schemas/ProjectManifest'
+          description: >
+            OPTIONNEL (contrat ≥ 1.1.0) : le manifeste officiel du projet,
+            joint dès l'appairage pour que le Panel n'ait RIEN à déduire.
+            Le Panel peut aussi le (re)lire à tout moment via
+            GET /api/project-bridge/v1/manifest (ProjectBridge.openapi.yaml).
+
+    # ProjectManifest : IDENTIQUE des deux côtés (servi par GET /manifest du
+    # ProjectBridge). Toute évolution s'applique aux DEUX fichiers — verrouillé
+    # par bridge-conformity.test.js.
+    ProjectManifest:
+      type: object
+      description: >
+        Manifeste officiel du projet — le Panel ne déduit JAMAIS ces
+        informations. `manifestVersion` versionne le FORMAT du manifeste,
+        indépendamment de la version du contrat.
+      required: [manifestVersion, project, bridge, contracts, sync, modules, features]
+      properties:
+        manifestVersion:
+          type: string
+          pattern: '^\d+\.\d+\.\d+$'
+          example: 1.0.0
+        project:
+          type: object
+          required: [key, name, environment, softwareVersion]
+          properties:
+            key: { type: string, minLength: 3, maxLength: 120 }
+            name: { type: string }
+            environment: { type: string, enum: [TEST, PROD] }
+            softwareVersion: { type: string, description: SHA git court du build. }
+        bridge:
+          type: object
+          required: [contractVersion, projectBridgeBasePath]
+          properties:
+            contractVersion:
+              type: string
+              pattern: '^\d+\.\d+\.\d+$'
+            projectBridgeBasePath:
+              type: string
+              example: /api/project-bridge/v1
+        contracts:
+          type: object
+          required: [panelBridge, projectBridge]
+          properties:
+            panelBridge: { type: string, pattern: '^\d+\.\d+\.\d+$' }
+            projectBridge: { type: string, pattern: '^\d+\.\d+\.\d+$' }
+        sync:
+          type: object
+          required: [supportedEntityTypes, operations]
+          properties:
+            supportedEntityTypes:
+              type: array
+              items:
+                type: string
+                enum:
+                  - DIAGNOSTIC
+                  - CONTRACT
+                  - INVOICE
+                  - PAYMENT
+                  - CONTRACT_DOCUMENT
+                  - DEV_COMPANY
+                  - TEAM_MEMBER
+                  - INTEGRATED_API_CONFIG
+                  - INTEGRATED_API_MODE
+                  - EVENT
+                  - MEETING
+                  - PROJECT_PRESENTATION
+                  - PROJECT_SITE_STATUS
+                  - PROJECT_EMAIL_TEMPLATE_USAGE
+            - PLATFORM_INCIDENT
+                  - PLATFORM_INCIDENT
+                  - EMAIL_DELIVERY_EVENT
+                  - SIGNATURE_EVENT
+                  - PAYMENT_REQUEST
+                  - PAYMENT_DEFAULT_CAUSE
+                  - PAYMENT_DEFAULT_INCIDENT
+                  - CLIENT_COMPANY
+            operations:
+              type: array
+              items: { type: string }
+        modules:
+          type: array
+          items:
+            type: object
+            required: [id, title, status]
+            properties:
+              id: { type: string }
+              title: { type: string }
+              status: { type: string, enum: [ACTIVE, OPTIONAL] }
+        features:
+          type: array
+          items:
+            type: object
+            required: [id, status]
+            properties:
+              id: { type: string }
+              status: { type: string, enum: [AVAILABLE, RESERVED] }
+        engines:
+          type: object
+          description: >
+            OPTIONNEL (contrat >= 1.2.0) : versions des moteurs standards
+            embarques par ce projet.
+          properties:
+            deployment: { type: string, pattern: '^\d+\.\d+\.\d+$' }
+            duplication: { type: string, pattern: '^\d+\.\d+\.\d+$' }
+        network:
+          type: object
+          description: >
+            OPTIONNEL (contrat >= 1.2.0) : identite reseau publique du projet,
+            telle que LUI la connait. Le Panel l'affiche, ne la modifie jamais.
+            Depuis 1.4.x, les cles `website`, `manager` et `backend` sont
+            NORMALISEES : le Panel n'a plus a deviner laquelle designe le site
+            du client. `primaryDomain` est le domaine du SITE quand il est
+            connu, celui de l'API a defaut.
+          properties:
+            primaryDomain: { type: string, nullable: true }
+            urls:
+              type: object
+              description: >
+                Cles conventionnelles : website (site public), manager
+                (administration), backend (API). Toute autre cle reste
+                autorisee et simplement ignoree par le Panel.
+              additionalProperties: { type: string }
+        presentation:
+          type: object
+          description: >
+            OPTIONNEL (contrat >= 1.4.x) : identite COMMERCIALE du projet, telle
+            que le client la reconnait. Sans elle, le Panel affiche le nom
+            technique du projet et l'URL de son API comme s'il s'agissait du
+            client et de son site. Tous les champs sont facultatifs : un projet
+            qui n'en publie aucun reste pleinement conforme. Les URL de medias
+            sont TOUJOURS absolues et joignables (voir
+            docs/panelXvitrine/MEDIAS_PUBLICS.md) : le Panel ne copie aucun
+            fichier et ne stocke aucun media.
+          properties:
+            companyName: { type: string, description: 'Nom commercial de l''entreprise cliente.' }
+            tagline: { type: string, description: 'Slogan ou phrase de presentation.' }
+            logoUrl: { type: string, format: uri, description: 'HERITE. URL absolue derivee du descripteur.' }
+            faviconUrl: { type: string, format: uri, description: 'HERITE. URL absolue derivee du descripteur.' }
+            logo:
+              allOf: [{ $ref: '#/components/schemas/MediaDescriptor' }]
+              description: 'ADDITIF (>= 1.4.x) : descripteur CANONIQUE du logo.'
+            favicon:
+              allOf: [{ $ref: '#/components/schemas/MediaDescriptor' }]
+              description: 'ADDITIF (>= 1.4.x) : descripteur CANONIQUE de l''icone.'
+            contacts:
+              type: object
+              description: >
+                Uniquement les moyens de contact ACTIVES et renseignes. Les
+                reseaux sociaux et metadonnees du catalogue ne sont pas
+                transportes.
+              properties:
+                email: { type: string }
+                phone: { type: string }
+                website: { type: string }
+        descriptor:
+          type: object
+          description: >
+            OPTIONNEL (contrat >= 1.2.0) : carte de visite du projet pour la
+            supervision (type de produit, description courte, layout).
+          properties:
+            name: { type: string, description: 'OPTIONNEL (>= 1.4.x) : nom lisible du projet.' }
+            type: { type: string, description: 'Ex. vitrine, panel, api.' }
+            description: { type: string }
+            layout: { type: string, description: 'Topologie declaree par le profil du moteur.' }
+
+    BootstrapResponseEnvelope:
+      type: object
+      required: [success, data]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data:
+          $ref: '#/components/schemas/BootstrapResponse'
+
+    BootstrapResponse:
+      type: object
+      required: [projectId, bridgeToken, panel]
+      properties:
+        projectId:
+          type: string
+          format: uuid
+          description: Identité du projet dans le registre du Panel.
+        bridgeToken:
+          type: string
+          description: >
+            Credential du projet — stocké chiffré côté projet, jamais affiché.
+            Sert aux deux sens : Authorization Bearer du PanelBridge, ET clé de
+            vérification des requêtes entrantes du Panel sur le ProjectBridge
+            (09_AUTHENTIFICATION_PANEL_MANAGER §4 : un seul secret d'appairage).
+        panel:
+          type: object
+          required: [name, contractVersion]
+          properties:
+            name: { type: string, description: Nom d'affichage du Panel. }
+            contractVersion: { type: string, description: Version du contrat parlée par le Panel. }
+        # --------------------------------------------------------- >= 1.3.0
+        # DÉCOUVERTE DESCENDANTE. Le projet repart de l'appairage en sachant
+        # qui il représente et avec quels accès — sans attendre un premier
+        # pull. OPTIONNELS : un Panel qui ne les sert pas reste conforme, et
+        # un projet qui les ignore aussi.
+        company:
+          allOf:
+            - $ref: '#/components/schemas/CompanyProfile'
+          nullable: true
+          description: >
+            Configuration PUBLIÉE de l'entreprise que le Panel représente.
+            `null` si aucune configuration n'a encore été publiée — saisir
+            n'est pas publier.
+        integratedApis:
+          type: array
+          description: >
+            APIs intégrées auxquelles CE projet est autorisé, dans le mode
+            correspondant à SON environnement. Un projet en TEST ne reçoit
+            jamais d'identifiants PROD. Liste vide si aucune autorisation.
+          items:
+            $ref: '#/components/schemas/IntegratedApiConfig'
+        syncCursor:
+          type: string
+          nullable: true
+          description: >
+            Curseur de synchronisation à utiliser pour le premier
+            GET /bridge/v1/sync/pull. Il positionne le projet APRÈS les
+            écritures déjà livrées dans cette réponse, ce qui évite de
+            réappliquer la configuration au premier pull.
+
+    # ------------------------------------------------------ entreprise >=1.3.0
+    CompanyProfile:
+      type: object
+      description: >
+        Identité publique de l'entreprise propriétaire du projet. Tout ce qui
+        y figure est destiné à être affiché par un site vitrine : aucun secret
+        n'y transite.
+      required: [companyId, slug, environment, identity]
+      properties:
+        companyId: { type: string, format: uuid }
+        slug: { type: string, description: Identifiant lisible et stable. }
+        environment: { type: string, enum: [TEST, PROD] }
+        version:
+          type: integer
+          description: >
+            Numéro de version de la configuration publiée. Monotone. Permet au
+            projet de savoir s'il est à jour, et au Panel de constater un retard.
+        identity:
+          type: object
+          required: [name]
+          properties:
+            name: { type: string }
+            legalName: { type: string, nullable: true }
+            tagline: { type: string, nullable: true }
+            description: { type: string, nullable: true }
+        branding:
+          type: object
+          properties:
+            logoUrl: { type: string, nullable: true }
+            logoDarkUrl: { type: string, nullable: true }
+            faviconUrl: { type: string, nullable: true }
+            primaryColor: { type: string, nullable: true }
+            secondaryColor: { type: string, nullable: true }
+            accentColor: { type: string, nullable: true }
+            fontFamily: { type: string, nullable: true }
+        domains:
+          type: object
+          properties:
+            primaryDomain: { type: string, nullable: true }
+            websiteUrl: { type: string, nullable: true }
+            wildcardBases: { type: array, items: { type: string } }
+        contacts:
+          type: object
+          properties:
+            email: { type: string, nullable: true }
+            phone: { type: string, nullable: true }
+            supportEmail: { type: string, nullable: true }
+            address:
+              type: object
+              properties:
+                line1: { type: string, nullable: true }
+                line2: { type: string, nullable: true }
+                postalCode: { type: string, nullable: true }
+                city: { type: string, nullable: true }
+                country: { type: string, nullable: true }
+        legal:
+          type: object
+          properties:
+            legalForm: { type: string, nullable: true }
+            siret: { type: string, nullable: true }
+            vatNumber: { type: string, nullable: true }
+            rcs: { type: string, nullable: true }
+            shareCapital: { type: string, nullable: true }
+            legalRepresentative: { type: string, nullable: true }
+            hostingProvider: { type: string, nullable: true }
+            privacyPolicyUrl: { type: string, nullable: true }
+            termsUrl: { type: string, nullable: true }
+        settings:
+          type: object
+          properties:
+            locale: { type: string }
+            timezone: { type: string }
+            currency: { type: string }
+
+    IntegratedApiConfig:
+      type: object
+      description: >
+        Accès à un service tiers, délivré par le Panel à un projet AUTORISÉ.
+        Le champ `credentials` porte des valeurs en clair : cette charge utile
+        ne transite que sur HTTPS, vers un projet nommément autorisé, et n'est
+        jamais journalisée en clair de part ni d'autre.
+      required: [apiId, key, provider, mode, credentials]
+      properties:
+        apiId: { type: string, format: uuid }
+        key: { type: string, description: Identifiant stable et lisible de l'API. }
+        label: { type: string }
+        provider: { type: string, description: 'Fournisseur (STRIPE, BREVO, ...).' }
+        category: { type: string }
+        enabled: { type: boolean }
+        mode:
+          type: string
+          enum: [TEST, PROD]
+          description: >
+            Mode EFFECTIVEMENT servi, déduit de l'environnement du projet.
+            Le projet doit refuser une charge utile dont le mode ne correspond
+            pas au sien.
+        settings:
+          type: object
+          additionalProperties: true
+          description: Paramètres non secrets (URL de base, région, compte...).
+        credentials:
+          type: object
+          additionalProperties: { type: string }
+          description: >
+            Identifiants, restreints aux clés accordées à ce projet. Un projet
+            peut recevoir une clé publique sans la clé secrète.
+        updatedAt: { type: string, format: date-time }
+
+    UnpairResponseEnvelope:
+      type: object
+      required: [success, data]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data:
+          type: object
+          required: [unpaired]
+          properties:
+            unpaired: { type: boolean, enum: [true] }
+
+    # ------------------------------------------------------------ heartbeat
+    Heartbeat:
+      type: object
+      required: [sentAt, softwareVersion, environment, health]
+      properties:
+        sentAt: { type: string, format: date-time }
+        softwareVersion: { type: string }
+        environment: { type: string, enum: [TEST, PROD] }
+        health:
+          type: object
+          required: [status]
+          properties:
+            status: { type: string, enum: [OK, DEGRADED] }
+            details: { type: string, nullable: true }
+        bridgeStats:
+          type: object
+          description: >
+            Observabilité du pont lui-même. rejectedCount et oldestRejection
+            sont ADDITIFS (contrat >= 1.4.x) et OPTIONNELS : ils portent le fait
+            que « connecté » ne disait pas. Une instance dont toutes les
+            écritures métier sont REFUSÉES bat parfaitement ; sans ces champs,
+            la fiche du Panel restait verte devant une donnée figée. Le silence
+            d'un projet antérieur ne vaut donc PAS « aucun refus », mais « ne
+            sait pas le dire ». Aucune charge utile, aucun secret : un compte,
+            un code, une date.
+          properties:
+            outboxSize:
+              type: integer
+              minimum: 0
+              description: >
+                Écritures en attente de DÉPART (PENDING/SENDING). Les refusées
+                n'y figurent pas : elles attendent une réparation, pas un envoi.
+            lastSyncAt: { type: string, format: date-time, nullable: true }
+            rejectedCount:
+              type: integer
+              minimum: 0
+              description: Écritures REFUSÉES par le Panel et non encore réparées.
+            consumption:
+              type: object
+              description: >
+                ADDITIF (>= 1.10.0), OPTIONNEL. Ce que le pont CONSOMME, par
+                opposition à tout ce qui précède, qui décrit la file SORTANTE.
+                Un projet dont le TIRAGE est mort a une file sortante vide, un
+                battement régulier et aucune erreur : sans ce bloc, « rien à
+                recevoir » et « plus rien n'arrive » sont indiscernables. Le
+                signal maître est lastCursorAdvanceAt — un curseur qui n'avance
+                plus est un tirage mort, qu'il y ait eu des erreurs ou non.
+                Aucune charge utile, aucun secret : des compteurs, des dates, et
+                un curseur opaque que le Panel a lui-même émis.
+              properties:
+                cursor:
+                  type: string
+                  nullable: true
+                  description: >
+                    Curseur de consommation DURABLE. null chez un projet
+                    antérieur à 1.10.0 : il repart alors de zéro à chaque
+                    redémarrage.
+                lastCursorAdvanceAt: { type: string, format: date-time, nullable: true }
+                lastSuccessfulApplyAt: { type: string, format: date-time, nullable: true }
+                consecutivePullFailures: { type: integer, minimum: 0 }
+                consecutiveUnreadableChanges: { type: integer, minimum: 0 }
+                parkedChanges: { type: integer, minimum: 0 }
+                lastParkedAt: { type: string, format: date-time, nullable: true }
+                appliedTotal: { type: integer, minimum: 0 }
+                state:
+                  type: string
+                  nullable: true
+                  description: >
+                    Auto-diagnostic du pont, tel qu'il se voit. CORROBORATIF :
+                    le Panel décide de la dégradation, il ne délègue pas son
+                    verdict au patient.
+            oldestRejection:
+              type: object
+              description: Le refus le plus ancien encore ouvert.
+              required: [entityType]
+              properties:
+                entityType: { type: string }
+                failureClass:
+                  type: string
+                  nullable: true
+                  enum: [TRANSIENT, COMPATIBILITY, SECURITY, BUSINESS, IDEMPOTENT]
+                code: { type: string, nullable: true }
+                since: { type: string, format: date-time, nullable: true }
+                rejections: { type: integer, minimum: 0 }
+        runtime:
+          type: object
+          description: >
+            OPTIONNEL (contrat >= 1.2.0) : observabilite passive du projet, pour
+            la supervision en LECTURE SEULE du Panel. Aucun de ces champs n'est
+            requis ; un projet qui ne les publie pas reste pleinement conforme.
+          properties:
+            uptimeSeconds:
+              type: integer
+              minimum: 0
+              description: Duree depuis le dernier demarrage du backend.
+            startedAt: { type: string, format: date-time, nullable: true }
+            load:
+              type: object
+              description: Charge instantanee, telle que le projet la mesure.
+              properties:
+                cpuPercent: { type: number, minimum: 0 }
+                memoryUsedMb: { type: number, minimum: 0 }
+                memoryTotalMb: { type: number, minimum: 0 }
+            components:
+              type: object
+              description: >
+                Etat des composants internes tels que le projet les constate.
+                Le Panel ne les DEDUIT jamais : il les recoit ou les ignore.
+              additionalProperties:
+                type: string
+                enum: [OK, WARNING, ERROR, UNKNOWN]
+            network:
+              type: object
+              description: >
+                ADDITIF (contrat >= 1.9.0) : les adresses PUBLIQUES que ce projet
+                sert REELLEMENT, telles que sa configuration reseau appliquee les
+                declare. Ferme le defaut suivant : le Panel posait
+                runtime.publicBackendUrl au bootstrap et ne la relisait jamais,
+                si bien qu'un projet redeploye sur un autre domaine gardait
+                indefiniment l'adresse du jour de son appairage — corrigible
+                seulement par un REAPPAIRAGE, c'est-a-dire en detruisant une
+                relation de confiance pour rafraichir une donnee d'exploitation.
+                L'invariant pose ici : l'appairage est une relation d'IDENTITE,
+                l'URL publique est un ETAT COURANT ; le second n'est jamais fige
+                par le premier. PROJECT_PRESENTATION.network reste l'autorite
+                ARBITREE (LWW, anti-echo, file durable) et n'est pas remplacee :
+                elle ne part qu'au CHANGEMENT, quand ce canal-ci REPETE. Tous les
+                champs sont optionnels ; un projet anterieur n'en publie aucun et
+                reste pleinement conforme. Un champ non configure est OMIS — le
+                Panel conserve alors ce qu'il savait plutot que de l'effacer.
+              properties:
+                publicBackendUrl:
+                  type: string
+                  format: uri
+                  nullable: true
+                  description: L'API publique — celle que le Panel doit appeler.
+                publicSiteUrl:
+                  type: string
+                  format: uri
+                  nullable: true
+                  description: Le site public — celui que le client consulte.
+                managerUrl:
+                  type: string
+                  format: uri
+                  nullable: true
+                  description: L'espace de gestion du client.
+                declaredAt:
+                  type: string
+                  format: date-time
+                  nullable: true
+                  description: >
+                    L'horloge du PROJET — informative. Le Panel horodate sur la
+                    RECEPTION : une horloge de projet en derive ne doit pas
+                    pouvoir figer une adresse.
+        engines:
+          type: object
+          description: >
+            OPTIONNEL (contrat >= 1.2.0) : versions des moteurs standards
+            embarques par le projet. Permet au Panel de detecter une derive de
+            version sans jamais lire le code du projet.
+          properties:
+            deployment: { type: string, pattern: '^\d+\.\d+\.\d+$' }
+            duplication: { type: string, pattern: '^\d+\.\d+\.\d+$' }
+
+    HeartbeatAckEnvelope:
+      type: object
+      required: [success, data]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data:
+          type: object
+          required: [acknowledged, panelTime]
+          properties:
+            acknowledged: { type: boolean, enum: [true] }
+            panelTime: { type: string, format: date-time }
+
+    # ----------------------------------------------------------------- sync
+    SyncChange:
+      type: object
+      description: >
+        UNE écriture sur une donnée synchronisée (catégorie 2). Implémente les
+        règles minimales de 11_DONNEES_CENTRALISEES §1.1 : writeId = clé
+        d'idempotence ET identifiant d'origine (anti-écho) ; modifiedAt =
+        horodatage LWW posé par l'émetteur ; deleted=true = tombstone
+        (payload alors null).
+      required: [writeId, entityType, entityId, deleted, modifiedAt, emitter]
+      properties:
+        writeId:
+          type: string
+          format: uuid
+          description: Identifiant unique de CETTE écriture (idempotence + anti-écho).
+        entityType:
+          type: string
+          description: >
+            Type de donnée synchronisée. En Phase 1, seul DIAGNOSTIC est
+            appliqué (échange de test sans effet métier) ; les autres valeurs
+            sont RÉSERVÉES pour les lots de synchronisation de la Phase 3+.
+          enum:
+            - DIAGNOSTIC
+            - CONTRACT
+            - INVOICE
+            - PAYMENT
+            - CONTRACT_DOCUMENT
+            - DEV_COMPANY
+            - TEAM_MEMBER
+            - INTEGRATED_API_CONFIG
+            - INTEGRATED_API_MODE
+            - EVENT
+            - MEETING
+            - PROJECT_PRESENTATION
+            - PROJECT_SITE_STATUS
+            - PROJECT_EMAIL_TEMPLATE_USAGE
+            - PLATFORM_INCIDENT
+            - EMAIL_DELIVERY_EVENT
+            - SIGNATURE_EVENT
+            - PAYMENT_REQUEST
+            - PAYMENT_DEFAULT_CAUSE
+            - PAYMENT_DEFAULT_INCIDENT
+            - CLIENT_COMPANY
+            - LEGAL_DOCUMENT
+        entityId:
+          type: string
+          format: uuid
+          description: Identifiant stable de la donnée, généré par le côté créateur.
+        deleted:
+          type: boolean
+          description: true = tombstone (suppression) ; payload doit être null.
+        payload:
+          nullable: true
+          description: >
+            Contenu du document, dont le schéma dépend de entityType. null si
+            deleted=true. Aucun secret en clair.
+
+            PROJECT_SITE_STATUS : voir ProjectSiteStatusPayload. Agrégat
+            DISTINCT de CONTRACT — une suspension technique n'est pas un fait
+            contractuel, et les confondre rendrait la cause illisible.
+
+            PROJECT_PRESENTATION : voir ProjectPresentationPayload. Ce schéma
+            est FERMÉ côté Panel — une clé inconnue fait REFUSER l'écriture
+            (ENTITY_PAYLOAD_INVALID). C'est volontaire : la fermeture est ce
+            qui empêche un champ sensible de traverser le pont par mégarde.
+            C'est aussi ce qui a coûté cher tant que le schéma n'était pas
+            documenté : le descripteur de média était émis par tout projet
+            disposant d'un logo, refusé par le Panel, et la présentation de ces
+            instances n'arrivait jamais. Un payload qui circule doit être écrit
+            ICI, dans le contrat, sans quoi les deux côtés divergent en silence.
+        modifiedAt:
+          type: string
+          format: date-time
+          description: Horodatage LWW posé par l'émetteur au moment de l'écriture.
+        emitter:
+          type: string
+          enum: [PANEL, PROJECT]
+          description: Côté qui a produit l'écriture d'ORIGINE.
+
+    MediaDescriptor:
+      type: object
+      description: >
+        DESCRIPTEUR MEDIA CANONIQUE. Il dit tout ce qu'une URL seule ne disait
+        pas : qui detient le media (authority), s'il a change (sha256,
+        version), son type et ses dimensions. Les deux sens du pont
+        l'utilisent : le Panel en publie vers les projets, un projet en publie
+        vers le Panel. authority est DECLAREE par l'emetteur et jamais deduite
+        d'un hote ni d'une cle d'objet — c'est elle qui decide contre quelle
+        origine l'adresse se resout. url est TOUJOURS absolue : un media est
+        affiche depuis une autre origine que celle qui l'a produit.
+      required: [url]
+      properties:
+        authority:
+          type: string
+          nullable: true
+          enum: [PANEL, PROJECT]
+          description: 'PANEL = reste sur le Panel. PROJECT = suit la destination active du projet.'
+        mediaId: { type: string, nullable: true, description: 'null pour une URL externe non geree.' }
+        url: { type: string, format: uri }
+        mime: { type: string, nullable: true }
+        size: { type: integer, minimum: 0, nullable: true }
+        width: { type: integer, minimum: 1, nullable: true }
+        height: { type: integer, minimum: 1, nullable: true }
+        sha256: { type: string, nullable: true, description: 'Empreinte du CONTENU.' }
+        version: { type: integer, minimum: 0, nullable: true }
+        updatedAt: { type: string, format: date-time, nullable: true }
+        role: { type: string, nullable: true }
+        publicationState:
+          type: string
+          nullable: true
+          enum: [LOCAL_ONLY, PUBLISHED]
+          description: 'Servi par une destination ACTIVE — releve, jamais deduit.'
+        external: { type: boolean, description: 'URL externe dont on n''a aucune metadonnee.' }
+
+    ProjectPresentationPayload:
+      type: object
+      additionalProperties: false
+      description: >
+        Payload de l'entityType PROJECT_PRESENTATION — l'identite COMMERCIALE
+        d'une instance, poussee par le PROJET a chaque enregistrement.
+
+        Schema FERME : toute cle inconnue fait REFUSER l'ecriture. Tous les
+        champs sont optionnels — l'absence se distingue d'une valeur vide, et
+        un projet qui ne publie rien reste conforme.
+
+        DOCTRINE MEDIA : logo et favicon sont la source CANONIQUE. logoUrl et
+        faviconUrl sont leur projection HERITEE, conservees pour un Panel
+        antérieur ; elles ne portent aucune information que le descripteur n'ait
+        deja. Un emetteur ne publie une URL que si elle est ABSOLUE et
+        joignable — sinon il omet le champ, plutot que de transporter une
+        adresse que le destinataire ne saura pas afficher.
+      properties:
+        companyName: { type: string, minLength: 1 }
+        tagline: { type: string, minLength: 1 }
+        logoUrl: { type: string, format: uri, description: 'HERITE. Derive de logo.url.' }
+        faviconUrl: { type: string, format: uri, description: 'HERITE. Derive de favicon.url.' }
+        logo:
+          allOf: [{ $ref: '#/components/schemas/MediaDescriptor' }]
+          nullable: true
+          description: 'CANONIQUE. null publie la SUPPRESSION du media.'
+        favicon:
+          allOf: [{ $ref: '#/components/schemas/MediaDescriptor' }]
+          nullable: true
+          description: 'CANONIQUE. null publie la SUPPRESSION du media.'
+        contacts:
+          type: object
+          additionalProperties: false
+          description: 'Uniquement les moyens de contact ACTIVES et renseignes.'
+          properties:
+            email: { type: string, minLength: 1 }
+            phone: { type: string, minLength: 1 }
+            website: { type: string, minLength: 1 }
+        project:
+          type: object
+          additionalProperties: false
+          description: 'Le projet tel qu''il se nomme et se decrit.'
+          properties:
+            name: { type: string, minLength: 1 }
+            description: { type: string, minLength: 1 }
+        network:
+          type: object
+          additionalProperties: false
+          description: >
+            Adresses publiques annoncees par le projet. C'est le SEUL canal qui
+            suit un changement de domaine : le battement n'en transporte aucune
+            et le manifeste n'est relu que sur action d'un operateur.
+          properties:
+            website: { type: string, minLength: 1 }
+            manager: { type: string, minLength: 1 }
+            backend: { type: string, minLength: 1 }
+
+    ProjectSiteStatusPayload:
+      type: object
+      additionalProperties: false
+      description: >
+        Payload de l'entityType PROJECT_SITE_STATUS — « ce site est-il
+        accessible, et sinon pourquoi ? ». Pousse par le PROJET, qui est seul a
+        connaitre ses contrats vivants et ses suspensions techniques.
+
+        AGREGAT DISTINCT DE CONTRACT, et il doit le rester. L'accessibilite a
+        DEUX causes independantes : une suspension TECHNIQUE (maintenance,
+        decidee par un operateur) et une cause CONTRACTUELLE (aucun contrat
+        vivant alors que la protection est active). Les ranger sous le contrat
+        ferait afficher « probleme de contrat » devant une maintenance, et
+        rendrait la fiche incapable de dire pourquoi un site est coupe.
+
+        LE VERDICT ET SA CAUSE VOYAGENT ENSEMBLE : `accessible` resume,
+        `suspensionSource` explique. Publier le seul resume forcerait le
+        destinataire a deviner la cause. `NONE` est une reponse a part entiere.
+
+        Le destinataire ne RECALCULE jamais : ni le verdict, ni la cause.
+      required: [accessible, status, suspensionSource, contractProtectionEnabled, technicalSuspension]
+      properties:
+        accessible:
+          type: boolean
+          description: Le verdict, tel que le projet le rend.
+        status:
+          type: string
+          enum: [ACTIVE, SUSPENDED]
+        suspensionSource:
+          type: string
+          enum: [NONE, TECHNICAL, CONTRACT]
+          description: La cause, nommee par sa source. NONE = rien ne suspend ce site.
+        reason:
+          type: string
+          minLength: 1
+          description: Motif LISIBLE, tel que le projet le formule. Jamais reconstruit.
+        suspendedAt:
+          type: string
+          format: date-time
+          nullable: true
+        contractProtectionEnabled:
+          type: boolean
+          description: >
+            Le REGLAGE, pas une consequence : il reste vrai meme quand il ne
+            produit aucun effet (site protege dont le contrat est honore).
+        technicalSuspension:
+          type: boolean
+          description: La cause technique, publiee a part — elle prime sur tout le reste.
+
+    SyncPushRequest:
+      type: object
+      required: [changes]
+      properties:
+        changes:
+          type: array
+          minItems: 1
+          maxItems: 500
+          items:
+            $ref: '#/components/schemas/SyncChange'
+
+    SyncAck:
+      type: object
+      description: Accusé de réception d'UNE écriture.
+      required: [writeId, status]
+      properties:
+        writeId: { type: string, format: uuid }
+        status:
+          type: string
+          enum: [APPLIED, DUPLICATE, IGNORED, REJECTED]
+          description: >
+            APPLIED = appliquée ; DUPLICATE = writeId déjà vu (idempotence) ;
+            IGNORED = perdante LWW ou anti-écho ; REJECTED = invalide
+            (code/message précisent pourquoi).
+        code: { type: string, nullable: true }
+        message: { type: string, nullable: true }
+
+    SyncPushResponseEnvelope:
+      type: object
+      required: [success, data]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data:
+          type: object
+          required: [results]
+          properties:
+            results:
+              type: array
+              items:
+                $ref: '#/components/schemas/SyncAck'
+
+    SyncPullResponseEnvelope:
+      type: object
+      required: [success, data]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data:
+          type: object
+          required: [changes, cursor, hasMore]
+          properties:
+            changes:
+              type: array
+              items:
+                $ref: '#/components/schemas/SyncChange'
+            cursor:
+              type: string
+              description: Curseur opaque à renvoyer au prochain pull.
+            hasMore:
+              type: boolean

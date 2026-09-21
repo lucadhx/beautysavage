@@ -12,7 +12,9 @@
     "panel"
   ],
   "compatibleProjects": [
-    "beautysavage"
+    "vitrine",
+    "manager",
+    "panel"
   ],
   "description": "Moteur de déploiement standard de l'écosystème L.Y Solution. Cœur générique : préflight, build d'artefact, releases, Nginx piloté par le profil, HTTPS, PM2, health checks, rollback, sauvegardes, rapports, retrait d'une destination, registre des ports. Tout ce qui est propre à un projet vit dans config/project.profile.js — jamais dans le cœur.",
   "layout": {

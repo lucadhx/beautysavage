@@ -1,0 +1,117 @@
+/*
+  ÉCRAN DE CHARGEMENT — deux anneaux en perspective, l'un décalé sur l'autre.
+
+  Le dessin vient d'un extrait fourni en `styled-components`. Il n'est pas
+  recopié tel quel, pour deux raisons déjà tranchées dans ce dépôt (voir
+  `AppointmentCTA.css`, même arbitrage) :
+
+  1. `styled-components` n'est pas une dépendance de cette vitrine, et n'allait
+     pas le devenir pour un composant. Les règles vivent donc dans ce fichier,
+     que seul `Loader.tsx` importe.
+
+  2. LES COULEURS. L'extrait peint `#91ff00` et `#FF3D00` — un vert acide et un
+     orange qui n'appartiennent à personne ici. Ce site est noir et rouge, et
+     sa palette est réglable depuis le Manager : un vert citron codé en dur y
+     serait faux le jour même, et faux pour tout autre client ensuite. Les deux
+     anneaux prennent donc l'ACCENT et le TEXTE du thème — deux valeurs
+     franchement distinctes quelle que soit la palette, ce que le double anneau
+     exige pour se lire.
+
+  La géométrie, elle, est celle de l'extrait, au degré près : 48 px, boîte
+  inclinée à 45°, perspective à 1000 px, un anneau basculé sur X et l'autre sur
+  Y de 70°, et 0,4 s de décalage entre leurs deux orbites.
+*/
+
+/*
+  ══ `display` ET `position` NE SONT PAS DÉCORATIFS ICI ══════════════════════
+
+  Sans eux, la figure se posait 24 px EN BAS À DROITE du centre de l'écran.
+
+  Un `<span>` est `display: inline`, et un élément en ligne non remplacé IGNORE
+  `width` et `height` : la boîte mesurait 0 × 0. La valeur CALCULÉE restait
+  48 px — donc le `width: inherit` des deux orbites héritait bien 48 px, et
+  elles s'affichaient à la bonne taille. Mais n'étant pas positionnée, la boîte
+  ne leur servait pas de référence : leur `top: 0 / left: 0` les accrochait au
+  conteneur `relative` du composant, réduit lui aussi à un point par le span
+  vide qu'il contenait. Les anneaux partaient donc du centre exact de la
+  fenêtre et s'étendaient vers le bas et la droite, au lieu de l'entourer.
+
+  `display: block` rend la boîte de 48 px réelle — c'est elle que le centrage
+  flex place alors. `position: relative` en fait le référent des deux orbites,
+  qui la remplissent au lieu de la déborder.
+
+  Effet de bord VOULU : `transform` et `perspective` ne s'appliquent pas à un
+  élément en ligne. Ils prennent effet maintenant, et la figure retrouve la
+  géométrie que ce fichier décrit depuis le début — boîte inclinée à 45°,
+  anneaux vus en perspective.
+*/
+.v-loader {
+  display: block;
+  position: relative;
+  transform: rotateZ(45deg);
+  perspective: 1000px;
+  border-radius: 50%;
+  width: 48px;
+  height: 48px;
+  /* La couleur du point qui orbite : `currentcolor` la lit dans `box-shadow`. */
+  color: var(--v-accent);
+}
+
+.v-loader::before,
+.v-loader::after {
+  content: '';
+  display: block;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: inherit;
+  height: inherit;
+  border-radius: 50%;
+  transform: rotateX(70deg);
+  animation: v-loader-spin 1s linear infinite;
+}
+
+.v-loader::after {
+  color: var(--v-foreground);
+  transform: rotateY(70deg);
+  /*
+    LE DÉCALAGE EST CE QUI REND LE MOUVEMENT LISIBLE : sans lui, les deux
+    points seraient au même angle au même instant et l'on ne verrait qu'un
+    seul objet tourner.
+  */
+  animation-delay: 0.4s;
+}
+
+/*
+  L'ORBITE. Le point n'est pas un élément : c'est une OMBRE PORTÉE dont le
+  décalage tourne par huitièmes. C'est ce qui permet à deux anneaux de partager
+  la même boîte de 48 px sans se gêner — il n'y a rien à positionner.
+*/
+@keyframes v-loader-spin {
+  0%,
+  100% { box-shadow: 0.2em 0 0 0 currentcolor; }
+  12%  { box-shadow: 0.2em 0.2em 0 0 currentcolor; }
+  25%  { box-shadow: 0 0.2em 0 0 currentcolor; }
+  37%  { box-shadow: -0.2em 0.2em 0 0 currentcolor; }
+  50%  { box-shadow: -0.2em 0 0 0 currentcolor; }
+  62%  { box-shadow: -0.2em -0.2em 0 0 currentcolor; }
+  75%  { box-shadow: 0 -0.2em 0 0 currentcolor; }
+  87%  { box-shadow: 0.2em -0.2em 0 0 currentcolor; }
+}
+
+/*
+  MOUVEMENT RÉDUIT — l'animation s'arrête, les deux points RESTENT.
+
+  Les figer à `0%` laisserait deux points superposés au même endroit : à l'œil,
+  un défaut d'affichage. On arrête donc les orbites à des instants différents,
+  de sorte que la figure garde sa forme — un objet à l'arrêt, pas un objet
+  cassé.
+*/
+@media (prefers-reduced-motion: reduce) {
+  .v-loader::before,
+  .v-loader::after {
+    animation: none;
+  }
+  .v-loader::before { box-shadow: 0.2em 0 0 0 currentcolor; }
+  .v-loader::after { box-shadow: -0.2em 0 0 0 currentcolor; }
+}

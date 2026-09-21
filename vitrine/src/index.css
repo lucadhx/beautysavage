@@ -1,0 +1,234 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* --- Palette de BASE (4 couleurs, pilotées par l'API). Défaut : sombre noir/bleu/blanc --- */
+  --v-background: #ffffff;
+  --v-foreground: #111111;
+  --v-primary: #111111;
+  --v-accent: #c7a98a;
+  --v-menu-background: #050505;
+  --v-menu-foreground: #ffffff;
+  --v-radius: 0.85rem;
+
+  /* --- Couleurs DÉRIVÉES (calculées à partir des 4 bases, jamais éditées) --- */
+  --v-primary-foreground: #ffffff;
+  --v-accent-foreground: #ffffff;
+  --v-secondary: color-mix(in srgb, var(--v-primary) 55%, var(--v-background));
+  --v-secondary-foreground: var(--v-foreground);
+  --v-muted: color-mix(in srgb, var(--v-foreground) 7%, var(--v-background));
+  --v-muted-foreground: color-mix(in srgb, var(--v-foreground) 55%, var(--v-background));
+  --v-border: color-mix(in srgb, var(--v-foreground) 14%, var(--v-background));
+  /* Surface : le fond de la page, d'un cran. Le mélange se fait vers le
+     TEXTE, jamais vers le blanc ou le noir : sur un fond sombre il éclaircit
+     (un noir un peu plus gris), sur un fond clair il assombrit (un blanc un
+     peu moins blanc). Un seul calcul couvre donc les deux ADN. Sert aux
+     grandes zones qui doivent se distinguer du corps de page sans changer de
+     couleur — le pied de page en premier. */
+  --v-surface: color-mix(in srgb, var(--v-foreground) 6%, var(--v-background));
+}
+
+* {
+  border-color: var(--v-border);
+}
+
+/* Pas de `scroll-behavior: smooth` global : il s'appliquait AUSSI au retour en
+   haut déclenché à chaque changement de route. Sur mobile, l'animation ne
+   s'interrompt pas toujours quand le doigt reprend la main — le visiteur
+   balayait vers le bas et la page le ramenait en haut. Les deux endroits qui
+   veulent vraiment un défilement doux (ancre `#avis`, flèches de carrousel) le
+   demandent explicitement avec `behavior: 'smooth'`. */
+
+/* --- Débordement horizontal : ceinture de sécurité -------------------------
+   Les révélations au scroll partent décalées latéralement (`x: ±48`) et le
+   restent tant que la section n'est pas entrée dans le champ. Sur mobile, ces
+   blocs pleine largeur dépassaient donc à droite : le document devenait plus
+   large que l'écran, le navigateur autorisait le balayage horizontal et
+   verrouillait sur cet axe le moindre geste un peu oblique. D'où la page qui
+   « refuse » de descendre et qu'il faut balayer plusieurs fois.
+
+   `clip` et non `hidden` : `hidden` ferait du conteneur une zone défilante
+   (l'axe vertical passant implicitement à `auto`), soit exactement le scroll
+   imbriqué qu'on cherche à éviter. `clip` rogne sans rien rendre défilant. */
+.v-clip-x {
+  overflow-x: clip;
+}
+
+/*
+  LA GOUTTIÈRE DE DÉFILEMENT EST RÉSERVÉE EN PERMANENCE.
+
+  Pendant le chargement, la page n'a AUCUN contenu en flux (`App` ne rend que
+  l'écran de chargement, en `position: fixed`) : pas de barre de défilement.
+  À la seconde où le site se monte dessous, la barre — 10 px, déclarée plus
+  bas — apparaît, la largeur utile perd 10 px, et TOUT ce qui est centré sur la
+  fenêtre se décale de 5 px vers la gauche. L'écran de chargement étant encore
+  là en train de s'effacer, on voyait la figure sauter à gauche juste avant le
+  fondu.
+
+  `stable` réserve la gouttière dès le premier rendu : elle est déjà là pendant
+  le chargement, et l'arrivée du contenu ne déplace plus rien. Le même saut
+  disparaît au passage entre une page courte et une page longue.
+*/
+html {
+  scrollbar-gutter: stable;
+}
+
+body {
+  margin: 0;
+  background: var(--v-background);
+  color: var(--v-foreground);
+  font-family: var(--font-body, 'Inter', system-ui, sans-serif);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--font-heading, 'Poppins', 'Inter', system-ui, sans-serif);
+}
+
+.text-gradient {
+  background: linear-gradient(90deg, var(--v-accent), var(--v-primary));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* --- Champs de formulaire (vitrine) ---------------------------------------
+   Sans fond explicite, le texte (`--v-foreground`, quasi-blanc) s'affiche sur
+   le fond par défaut du navigateur : illisible. On pose ici un fond de champ
+   dérivé des tokens, un placeholder discret et un anneau de focus à l'accent.
+   Le style inline des champs ne gère plus que la couleur de bordure (états
+   d'erreur) — il l'emporte sur cette règle, ce qui est voulu. */
+.v-field {
+  background: color-mix(in srgb, var(--v-foreground) 4%, var(--v-background));
+  color: var(--v-foreground);
+  border: 1px solid var(--v-border);
+}
+.v-field::placeholder {
+  color: var(--v-muted-foreground);
+  opacity: 1;
+}
+.v-field:hover {
+  border-color: color-mix(in srgb, var(--v-foreground) 24%, var(--v-background));
+}
+.v-field:focus {
+  border-color: var(--v-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--v-accent) 22%, transparent);
+}
+/* Les <option> d'un <select> héritent parfois d'un fond transparent illisible :
+   on force un fond opaque pour le menu déroulant natif. */
+.v-field option {
+  background: var(--v-background);
+  color: var(--v-foreground);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--v-foreground) 20%, transparent);
+  border-radius: 999px;
+}
+
+/* ------------------------- Texte riche des pages ---------------------------
+   Le HTML des pages éditoriales est écrit par le client depuis le Manager et
+   assaini par le serveur : il ne porte AUCUNE classe et AUCUN style. C'est ici,
+   et seulement ici, qu'il prend l'apparence du site.
+
+   Pourquoi pas un plugin de typographie : il imposerait sa propre échelle et
+   ses propres couleurs, qu'il faudrait ensuite déjouer jeton par jeton. Quinze
+   règles écrites contre `--v-*` suivent le thème sans rien à déjouer. */
+.v-prose {
+  font-size: 1rem;
+  line-height: 1.75;
+  color: color-mix(in srgb, var(--v-foreground) 82%, var(--v-background));
+}
+.v-prose > :first-child {
+  margin-top: 0;
+}
+.v-prose > :last-child {
+  margin-bottom: 0;
+}
+.v-prose p {
+  margin: 0 0 1.1em;
+}
+.v-prose h2 {
+  font-family: var(--font-heading, 'Poppins', system-ui, sans-serif);
+  font-size: 1.75rem;
+  font-weight: 800;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  margin: 2rem 0 0.75rem;
+  color: var(--v-foreground);
+}
+.v-prose h3 {
+  font-family: var(--font-heading, 'Poppins', system-ui, sans-serif);
+  font-size: 1.3rem;
+  font-weight: 700;
+  line-height: 1.3;
+  margin: 1.6rem 0 0.6rem;
+  color: var(--v-foreground);
+}
+.v-prose h4 {
+  font-family: var(--font-heading, 'Poppins', system-ui, sans-serif);
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin: 1.4rem 0 0.5rem;
+  color: var(--v-foreground);
+}
+.v-prose ul,
+.v-prose ol {
+  margin: 0 0 1.1em;
+  padding-left: 1.4em;
+}
+.v-prose ul {
+  list-style: disc;
+}
+.v-prose ol {
+  list-style: decimal;
+}
+.v-prose li {
+  margin: 0.35em 0;
+}
+.v-prose li::marker {
+  color: var(--v-accent);
+}
+.v-prose blockquote {
+  margin: 1.5em 0;
+  padding-left: 1.1em;
+  border-left: 3px solid var(--v-accent);
+  font-style: italic;
+  color: var(--v-muted-foreground);
+}
+.v-prose strong,
+.v-prose b {
+  font-weight: 700;
+  color: var(--v-foreground);
+}
+.v-prose em,
+.v-prose i {
+  font-style: italic;
+}
+.v-prose u {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.v-prose mark {
+  background: color-mix(in srgb, var(--v-accent) 25%, transparent);
+  color: var(--v-foreground);
+  padding: 0 0.2em;
+  border-radius: 0.2em;
+}
+.v-prose a {
+  color: var(--v-accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  transition: opacity 0.2s;
+}
+.v-prose a:hover {
+  opacity: 0.75;
+}

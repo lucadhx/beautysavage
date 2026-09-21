@@ -1,1 +1,0 @@
-export { IntegratedApiManagementPage } from './IntegratedApiManagementPage';

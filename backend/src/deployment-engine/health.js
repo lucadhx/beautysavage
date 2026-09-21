@@ -345,6 +345,184 @@ export async function checkModuleMimeType(transport, host, { maxModules = 3 } = 
   return { ok: modules.every((m) => m.ok), probed: true, host, modules };
 }
 
+/**
+ * LE PLAN DU SITE ET LE FICHIER ROBOTS — vérifiés SUR L'HÔTE PUBLIC, en ligne.
+ *
+ * ══ L'INCIDENT QUI A PRODUIT CE CONTRÔLE ════════════════════════════════════
+ *
+ * Google Search Console a refusé le plan du site d'une vitrine déployée :
+ *
+ *     « Le sitemap peut être lu, mais contient des erreurs.
+ *       Le sitemap est un fichier HTML. »
+ *
+ * Le plan existait dans le code, la route répondait, les tests passaient. Mais
+ * à l'adresse `/sitemap.xml` — la seule qu'on soumette à un moteur — nginx ne
+ * trouvait pas de fichier et appliquait le repli d'application à page unique :
+ * il rendait `index.html` en `text/html`, avec un code 200.
+ *
+ * Aucun test de code ne pouvait le voir : le défaut n'existe QU'UNE FOIS
+ * ASSEMBLÉ, entre une configuration de serveur et une route d'application.
+ *
+ * ══ POURQUOI IL BLOQUE LE DÉPLOIEMENT ══════════════════════════════════════
+ *
+ * Un plan de site cassé ne se remarque pas. Le site fonctionne, les pages
+ * s'affichent, rien n'est en erreur — la seule trace est un message dans une
+ * console que personne n'ouvre avant des semaines. C'est exactement le genre
+ * de défaut qu'il faut refuser à la porte plutôt que découvrir en production.
+ *
+ * ══ CE QU'IL VÉRIFIE, ET CE QU'IL NE VÉRIFIE PAS ═══════════════════════════
+ *
+ * Il vérifie la FORME — code, type de contenu, racine XML — et pas le contenu :
+ * quelles adresses figurent au plan est une décision du projet, pas du moteur
+ * de déploiement. Un projet sans plan du tout n'est pas en faute : c'est un
+ * plan qui MENT sur sa nature qui l'est.
+ */
+export async function checkSeoEndpoints(transport, host, { retries = 5, delayMs = 3000 } = {}) {
+  const uneFois = async (chemin) => {
+    const res = await sonde(
+      transport,
+      'health.seo',
+      `curl -sS -m 10 -o /tmp/ly-seo-probe -w '%{http_code} %{content_type}' 'https://${host}${chemin}' || echo '000 __ERR__'; echo; head -c 200 /tmp/ly-seo-probe 2>/dev/null || true`,
+      { timeoutMs: TIMEOUTS.HEALTH },
+    );
+    const lignes = (res.stdout || '').split('\n');
+    const [statut, ...reste] = (lignes[0] || '').trim().split(/\s+/);
+    return {
+      path: chemin,
+      url: `https://${host}${chemin}`,
+      status: Number(statut) || 0,
+      contentType: reste.join(' ') || null,
+      head: lignes.slice(1).join('\n'),
+    };
+  };
+
+  /**
+   * ══ ON RÉESSAIE TANT QUE LE SERVICE DÉMARRE ═══════════════════════════════
+   *
+   * ── LE DÉFAUT QUE CECI FERME ──────────────────────────────────────────────
+   *
+   * Une première version ne sondait qu'une fois. Sur un déploiement réel, le
+   * backend venait d'être relancé et son garde de disponibilité répondait :
+   *
+   *     HTTP 503 · {"success":false,"message":"Le service démarre…"}
+   *
+   * Le contrôle n'a rien refusé — un code autre que 200 était traité comme
+   * « aucun plan publié », cas légitime — et le rapport a imprimé « ✓ plan du
+   * site et fichier robots conformes ». Il certifiait une réponse qu'il
+   * n'avait jamais lue.
+   *
+   * Un contrôle qui rassure sans avoir vérifié est pire qu'un contrôle absent :
+   * il fait croire que la question a été posée.
+   *
+   * ── LA DISTINCTION QUI MANQUAIT ───────────────────────────────────────────
+   *
+   * « Ce projet ne publie pas de plan » (404) et « le service n'a pas pu
+   * répondre » (5xx, connexion perdue) ne sont pas la même chose. La première
+   * est une décision de projet, la seconde est un échec de mesure. On réessaie
+   * donc sur la seconde, et si elle persiste, on refuse.
+   */
+  const sonder = async (chemin) => {
+    let derniere = null;
+    for (let essai = 0; essai <= retries; essai += 1) {
+      // eslint-disable-next-line no-await-in-loop
+      derniere = await uneFois(chemin);
+      derniere.attempts = essai + 1;
+      const transitoire = derniere.status === 0 || derniere.status >= 500;
+      if (!transitoire) return derniere;
+      // eslint-disable-next-line no-await-in-loop
+      if (essai < retries) await sleep(delayMs);
+    }
+    return derniere;
+  };
+
+  const sitemap = await sonder('/sitemap.xml');
+  const robots = await sonder('/robots.txt');
+
+  /**
+   * UN PLAN ABSENT EST TOLÉRÉ, UN PLAN EN HTML NE L'EST PAS.
+   *
+   * Tous les projets du parc n'exposent pas de plan du site. En refuser le
+   * déploiement les bloquerait tous pour une exigence qu'ils n'ont pas prise.
+   * En revanche, dès qu'une adresse RÉPOND 200, elle doit répondre du XML :
+   * c'est précisément l'état intermédiaire — 200 porteur de HTML — qui trompe
+   * les moteurs et qu'aucun projet ne doit pouvoir mettre en ligne.
+   */
+  const sitemapHtml = sitemap.status === 200
+    && (/text\/html/i.test(sitemap.contentType || '') || /<!doctype html|<html/i.test(sitemap.head || ''));
+  const sitemapXml = sitemap.status === 200
+    && /xml/i.test(sitemap.contentType || '')
+    && /<\?xml|<urlset|<sitemapindex/i.test(sitemap.head || '');
+
+  const robotsHtml = robots.status === 200
+    && (/text\/html/i.test(robots.contentType || '') || /<!doctype html|<html/i.test(robots.head || ''));
+
+  const problemes = [];
+  if (sitemapHtml) problemes.push('/sitemap.xml répond 200 avec du HTML : un moteur de recherche le refusera.');
+  if (sitemap.status === 200 && !sitemapXml && !sitemapHtml) {
+    problemes.push(`/sitemap.xml répond 200 mais n'est pas du XML (type « ${sitemap.contentType} »).`);
+  }
+  if (robotsHtml) problemes.push('/robots.txt répond 200 avec du HTML au lieu de texte brut.');
+
+  /**
+   * UNE RÉPONSE QU'ON N'A PAS PU LIRE N'EST PAS UNE RÉPONSE CONFORME.
+   *
+   * Après les réessais, un 5xx ou une connexion perdue signifie que le service
+   * ne sert pas ces adresses — pas qu'il a choisi de ne pas les publier. Le
+   * dire est le minimum ; le taire ferait imprimer « conforme » sur une mesure
+   * qui n'a pas eu lieu.
+   */
+  for (const p of [sitemap, robots]) {
+    if (p.status === 0) {
+      problemes.push(`${p.path} : aucune réponse après ${p.attempts} tentative(s) — l'hôte est injoignable.`);
+    } else if (p.status >= 500) {
+      problemes.push(`${p.path} répond ${p.status} après ${p.attempts} tentative(s) : le service ne sert pas cette adresse.`);
+    }
+  }
+
+  /**
+   * CE QUE LE CONTRÔLE A CONSTATÉ, EN TOUTES LETTRES.
+   *
+   * « conformes » ne doit se lire que lorsqu'un plan a RÉELLEMENT été servi et
+   * validé. Un projet qui n'en publie pas est en règle, et son rapport doit le
+   * dire autrement — sans quoi la même phrase couvrirait deux réalités.
+   */
+  const verdict = problemes.length > 0
+    ? 'contrôle en échec'
+    : sitemapXml
+      ? 'plan du site et fichier robots conformes'
+      : `aucun plan du site publié (HTTP ${sitemap.status}) — toléré ; fichier robots conforme`;
+
+  /**
+   * ══ LE DÉBUT DU CORPS EST CONSERVÉ, ET C'EST DÉLIBÉRÉ ═══════════════════
+   *
+   * Une version antérieure le jetait (`head: undefined`) : le contrôle rendait
+   * un verdict sans jamais montrer CE QU'IL AVAIT LU. En cas de refus, il
+   * fallait rouvrir un terminal et refaire la requête à la main pour savoir si
+   * l'on avait reçu une page d'accueil, une page d'erreur ou autre chose.
+   *
+   * Les 200 premiers octets tiennent dans un rapport, ne peuvent pas contenir
+   * de secret (ce sont deux documents publics par nature), et transforment le
+   * verdict en PREUVE : le rapport de déploiement montre la réponse.
+   */
+  return {
+    ok: problemes.length === 0,
+    probed: true,
+    host,
+    sitemap: { ...sitemap, isXml: sitemapXml, isHtml: sitemapHtml },
+    robots: { ...robots, isHtml: robotsHtml },
+    problems: problemes,
+    verdict,
+    /**
+     * Une ligne par sonde, prête à lire. Le rapport n'a ainsi rien à
+     * recomposer, et le journal du déploiement dit la même chose que lui.
+     */
+    lines: [sitemap, robots].map((p) => {
+      const corps = String(p.head ?? '').replace(/\s+/g, ' ').trim().slice(0, 120);
+      return `${p.url} → HTTP ${p.status} · ${p.contentType || 'type inconnu'}${corps ? ` · « ${corps} »` : ''}`;
+    }),
+  };
+}
+
 function sleep(ms) {
   return new Promise((r) => {
     const t = setTimeout(r, ms);
@@ -355,4 +533,5 @@ function sleep(ms) {
 export default {
   checkLocalHealth, checkPublicHealth, collectBackendDiagnostics,
   checkPublicMedia, checkApiHealth, checkWebsiteArtifact, checkModuleMimeType,
+  checkSeoEndpoints,
 };

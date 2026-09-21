@@ -1,9 +1,0 @@
-node_modules/
-dist/
-*.tsbuildinfo
-.vite/
-coverage/
-*.local
-.env
-.env.*
-!.env.example

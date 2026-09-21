@@ -1,17 +1,13 @@
 {
   "name": "beautysavage",
   "private": true,
-  "version": "1.0.0",
-  "description": "BeautySavage — vitrine e-commerce, espace client et manager d'institut.",
+  "description": "BeautySavage — point d’entrée UNIQUE du développement. `npm run dev` lance backend (6100) + manager (6101) + vitrine (6102) via scripts/dev-canonical.mjs.",
   "scripts": {
-    "install": "npm install --prefix backend && npm install --prefix backend/frontend-react",
-    "dev": "npm run dev --prefix backend",
-    "build": "npm run build --prefix backend",
-    "start": "npm run start --prefix backend",
-    "seed": "npm run seed:all --prefix backend",
-    "pair:panel": "npm run panel:pair --prefix backend",
-    "deploy:preflight": "node deploy/deploy.mjs --preflight",
-    "deploy": "node deploy/deploy.mjs --execute",
-    "test": "npm test --prefix backend && npm run react:test --prefix backend"
+    "dev": "node scripts/dev-canonical.mjs",
+    "backend": "npm run dev:app --prefix backend",
+    "manager": "npm run dev --prefix manager -- --port 6101 --host",
+    "vitrine": "npm run dev --prefix vitrine -- --port 6102 --host",
+    "test": "npm test --prefix backend && npm test --prefix manager && npm test --prefix vitrine",
+    "build": "npm run build --prefix vitrine && npm run build --prefix manager"
   }
 }

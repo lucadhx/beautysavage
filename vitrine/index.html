@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="L.Y Solution conçoit des présences digitales sur mesure : identité, direction artistique, architecture publique et espace privé. Pas de modèle, pas de catalogue — une conception unique par entreprise."
+    />
+    <title>BeautySavage — Une présence digitale qui n’appartient qu’à vous</title>
+    <!--
+      ICÔNE VIDE, REMPLACÉE AU DÉMARRAGE — et il faut qu'elle soit là.
+
+      Sans aucun `<link rel="icon">`, le navigateur réclame `/favicon.ico` dès
+      la première ligne de HTML, bien avant que React n'ait lu le bootstrap. Il
+      reçoit alors la page elle-même (le serveur d'une application à page unique
+      répond `index.html` à tout), retient ce résultat, et n'écoute plus
+      toujours le lien ajouté ensuite. L'onglet restait donc sans icône.
+
+      `data:,` est une icône VIDE et valide : elle coûte zéro requête, occupe la
+      place, et `SiteDataContext` lui donne son adresse réelle dès que la fiche
+      entreprise est là.
+    -->
+    <link rel="icon" href="data:," />
+    <meta name="theme-color" content="#08080a" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!--
+      MANROPE EST PRÉCHARGÉE AVEC INTER, et ce n'est pas un oubli.
+
+      Le thème du projet met les titres en Manrope ; `lib/theme.ts` la charge à
+      l'exécution, une fois le bootstrap revenu. Entre le premier pixel et cette
+      réponse, les titres se peignent donc dans la police de secours puis
+      basculent — un ressaut visible sur toute la page d'accueil, et d'autant
+      plus visible ici que les titres y sont énormes.
+
+      Inter reste listée : elle est le DÉFAUT du catalogue pour le corps de
+      texte, et un thème que l'administrateur ramènerait à cette valeur doit
+      rester aussi net qu'aujourd'hui. Les graisses demandées sont celles que le
+      site emploie réellement — 200 à 800 pour Manrope, dont les très fines que
+      la mise en page utilise en grand corps.
+    -->
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@200;300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <!-- OpenGraph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="BeautySavage" />
+    <meta property="og:title" content="BeautySavage — Une présence digitale qui n’appartient qu’à vous" />
+    <meta
+      property="og:description"
+      content="Une maison de conception digitale. Nous ne choisissons pas un design : nous créons le vôtre."
+    />
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="BeautySavage — Une présence digitale qui n’appartient qu’à vous" />
+    <meta
+      name="twitter:description"
+      content="Une maison de conception digitale. Nous ne choisissons pas un design : nous créons le vôtre."
+    />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

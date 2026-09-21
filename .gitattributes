@@ -1,0 +1,6 @@
+# Normalize line endings — avoid CRLF churn across platforms.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.webp binary
+*.ico binary

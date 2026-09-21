@@ -92,7 +92,7 @@ export const API_SUBDOMAIN = 'api';
  * l'application déployée (CORS dynamiques, liens d'e-mails, retours Stripe).
  */
 export const RUNTIME_NETWORK_URLS = Object.freeze({
-  vitrineUrl: Object.freeze({ app: 'vitrine' }),
+  websiteUrl: Object.freeze({ app: 'vitrine' }),
   managerUrl: Object.freeze({ app: 'manager' }),
   backendUrl: Object.freeze({ api: true }),
 });
@@ -119,17 +119,16 @@ export const DEFAULT_REMOTE_ROOT = '/var/www';
 export const REQUIRED_REMOTE_ENV = Object.freeze([
   'ENV',
   'MONGODB_URI',
-  'MONGODB_DB_NAME',
   '__DB_FOR_ENV__',
-  'SESSION_SECRET',
-  'CREDENTIAL_VAULT_KEY',
+  'JWT_SECRET',
+  'INTEGRATED_API_ENCRYPTION_KEY',
 ]);
 
 /**
  * Sonde publique servant au contrôle FONCTIONNEL des médias après déploiement :
  * la ressource qui expose les URLs de médias du site.
  */
-export const PUBLIC_MEDIA_PROBE_PATH = null;
+export const PUBLIC_MEDIA_PROBE_PATH = '/api/public/bootstrap';
 
 /** Préfixe des processus PM2 : `<slug>-<host>`. */
 export function serviceName(host) {

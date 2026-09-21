@@ -1,0 +1,30 @@
+# L.Y Solution — https://ly-solution.com
+#
+# Tout est indexable : ce site n'a ni espace membre, ni panier, ni page de
+# résultats. Les seules adresses à ne pas indexer portent déjà `noindex` dans
+# leur en-tête (la page 404), et une règle ici ferait double emploi avec une
+# règle plus précise.
+User-agent: *
+Allow: /
+
+# LE PLAN DU SITE EST À LA RACINE, et l'adresse est ABSOLUE.
+#
+# ── DEUX CORRECTIONS SUCCESSIVES, ET LA SECONDE EST CELLE QUI COMPTE ────────
+#
+# La ligne a d'abord valu « Sitemap: /sitemap.xml » : chemin RELATIF, que la
+# spécification n'autorise pas, et surtout adresse qui n'existait pas.
+#
+# Elle a ensuite pointé sur « /api/public/sitemap.xml ». Cette adresse-là
+# fonctionnait, mais elle ne réglait qu'une moitié du problème : personne ne
+# soumet cela à un moteur de recherche. Google Search Console a donc reçu
+# « /sitemap.xml », l'adresse que tout le monde essaie, où le serveur d'une
+# application à page unique répondait `index.html` en 200 — d'où son verdict :
+# « Le sitemap est un fichier HTML. »
+#
+# Un 200 qui ment est pire qu'un 404 : le moteur ne réessaie pas.
+#
+# `/sitemap.xml` a désormais son propre bloc nginx, qui le sert depuis le
+# backend. Le plan reste DÉRIVÉ des chapitres et des pages réellement publiés
+# (voir `backend/src/controllers/public.controller.js`) : un fichier statique
+# aurait vieilli au premier contenu créé depuis le Manager.
+Sitemap: https://ly-solution.com/sitemap.xml

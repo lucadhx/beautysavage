@@ -1,0 +1,303 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Manager theme defaults (overridden at runtime from the API). */
+  --m-background: #ffffff;
+  --m-foreground: #0a0a0a;
+  --m-primary: #111111;
+  --m-primary-foreground: #ffffff;
+  --m-accent: #111111;
+  --m-accent-foreground: #ffffff;
+  --m-muted: #f4f4f5;
+  --m-muted-foreground: #71717a;
+  --m-border: #e4e4e7;
+  --m-sidebar: #0a0a0a;
+  --m-sidebar-foreground: #fafafa;
+  --m-card: #ffffff;
+  --m-radius: 0.5rem;
+
+  /* Toggle éteint — volontairement INDÉPENDANT du thème.
+     Un interrupteur OFF doit rester lisible (contraste AA vs --m-card) quelle
+     que soit la palette choisie par le DEV : le dériver de --m-muted le faisait
+     disparaître sur les thèmes clairs. */
+  --m-toggle-off: #d4d4d8;
+  --m-toggle-off-hover: #a1a1aa;
+  --m-toggle-off-border: #9ca3af;
+
+  /*
+    HAUTEUR DU VIEWPORT — une seule source, un seul repli.
+
+    `100vh` ment sur mobile : il vaut la hauteur du viewport LARGE (barre
+    d'adresse rétractée), pas celle qu'on voit à l'ouverture. Un layout en
+    `100vh` posé dans un `#root` en `height: 100%` (viewport courant) dépasse
+    donc son parent de la hauteur de la barre d'adresse — le document se met à
+    défiler par-dessus le défilement interne, et l'en-tête part avec lui.
+
+    `100dvh` suit le viewport réellement visible ; le repli `100vh` couvre les
+    navigateurs qui l'ignorent (Safari < 15.4). On passe par une variable pour
+    que le repli soit écrit UNE fois : partout ailleurs on lit la variable.
+  */
+  --m-viewport-h: 100vh;
+}
+
+@supports (height: 100dvh) {
+  :root {
+    --m-viewport-h: 100dvh;
+  }
+}
+
+* {
+  border-color: var(--m-border);
+}
+
+/*
+  ARCHITECTURE DE DÉFILEMENT — UN SEUL PROPRIÉTAIRE : LE DOCUMENT.
+
+  Le manager ne verrouille plus la page à la hauteur de l'écran. `html`, `body`
+  et `#root` gardent leur hauteur naturelle ; c'est le document qui défile, donc
+  le geste tactile tombe toujours sur le même conteneur, la barre d'adresse
+  mobile se rétracte comme sur n'importe quel site, et `position: sticky`
+  fonctionne sans ancêtre défilant à contourner.
+
+  Les seuls défilements imbriqués tolérés sont LOCAUX et fonctionnels : la
+  navigation de la barre latérale, le corps d'une modale, un tableau large. Ils
+  portent tous `overscroll-behavior: contain` pour ne pas voler le geste au
+  document quand ils arrivent en butée.
+*/
+html {
+  /* Ancre les `scroll-margin` sous l'en-tête collant (voir AppLayout). */
+  scroll-padding-top: 4rem;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  min-height: var(--m-viewport-h);
+  background: var(--m-background);
+  color: var(--m-foreground);
+  font-family: 'Inter', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+#root {
+  min-height: var(--m-viewport-h);
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--m-muted-foreground) 30%, transparent);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--m-muted-foreground) 50%, transparent);
+}
+
+/* --------------------------- Micro-interactions ---------------------------- */
+
+/* Attire l'œil sur « Enregistrer » quand du travail est en attente, sans
+   clignoter : une respiration lente sur un halo, jamais sur la géométrie
+   (un bouton qui change de taille est une cible mouvante).
+
+   Le halo vit sur un ::after, PAS sur le `box-shadow` de l'élément : une
+   animation de `box-shadow` remplacerait celui de l'élément, et le bouton
+   `dirty` — le seul qui doit ressortir — perdrait l'élévation (`shadow-lg`)
+   que gardent tous les autres états. */
+@keyframes m-pulse-ring {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--m-primary) 45%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 6px color-mix(in srgb, var(--m-primary) 0%, transparent);
+  }
+}
+.m-pulse {
+  position: relative;
+}
+.m-pulse::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  animation: m-pulse-ring 2.4s ease-out infinite;
+}
+
+/* Validation : le ✓ se pose, il ne rebondit pas. */
+@keyframes m-pop-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.7);
+  }
+  60% {
+    transform: scale(1.06);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.m-pop {
+  animation: m-pop-in 0.28s cubic-bezier(0.34, 1.4, 0.64, 1) both;
+}
+
+/* Entrée du FAB et des widgets flottants. */
+@keyframes m-rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.m-rise {
+  animation: m-rise-in 0.22s ease-out both;
+}
+
+/* ---------------------------- prefers-reduced-motion -----------------------
+   Les composants framer-motion gèrent déjà `useReducedMotion()`, mais les
+   transitions Tailwind/CSS (toggle, boutons, FAB) ne passent pas par lui.
+   Ce garde-fou global les couvre toutes. Les états restent tous atteints — un
+   toggle ON reste coloré, le ✓ reste affiché — mais l'interpolation est
+   supprimée : on saute à l'état final au lieu d'y glisser. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .m-pulse::after {
+    animation: none !important;
+  }
+}
+
+/* ------------------------- Éditeur de texte riche --------------------------
+   Le champ `contentEditable` rend du HTML NU : sans ces règles, un `<h2>`
+   saisi dans l'éditeur s'y affiche à la taille d'un paragraphe (Tailwind
+   « preflight » remet titres et listes à plat), et l'auteur ne voit donc PAS
+   ce qu'il compose. Les valeurs sont volontairement proches de celles de la
+   vitrine : l'éditeur doit ressembler au rendu, sans prétendre l'imiter au
+   pixel — il n'a ni la largeur de colonne, ni la police du site. */
+.m-editor h2 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1.3;
+  margin: 1rem 0 0.5rem;
+}
+.m-editor h3 {
+  font-size: 1.05rem;
+  font-weight: 600;
+  line-height: 1.35;
+  margin: 0.85rem 0 0.4rem;
+}
+.m-editor h2:first-child,
+.m-editor h3:first-child {
+  margin-top: 0;
+}
+.m-editor p {
+  margin: 0 0 0.6rem;
+}
+.m-editor p:last-child {
+  margin-bottom: 0;
+}
+.m-editor ul,
+.m-editor ol {
+  margin: 0 0 0.6rem;
+  padding-left: 1.35rem;
+}
+.m-editor ul {
+  list-style: disc;
+}
+.m-editor ol {
+  list-style: decimal;
+}
+.m-editor li {
+  margin: 0.15rem 0;
+}
+.m-editor blockquote {
+  margin: 0.75rem 0;
+  padding-left: 0.9rem;
+  border-left: 3px solid var(--m-primary);
+  color: var(--m-muted-foreground);
+  font-style: italic;
+}
+.m-editor a {
+  color: var(--m-primary);
+  text-decoration: underline;
+}
+.m-editor strong,
+.m-editor b {
+  font-weight: 700;
+}
+.m-editor em,
+.m-editor i {
+  font-style: italic;
+}
+.m-editor u {
+  text-decoration: underline;
+}
+
+@layer base {
+  :root {
+    --chart-1: oklch(0.32 0 none);
+    --chart-2: oklch(0.41 0 none);
+    --chart-3: oklch(0.54 0 none);
+    --chart-4: oklch(0.71 0 none);
+    --chart-5: oklch(0.89 0 none);
+    --chart-background: oklch(1 0 0);
+    --chart-foreground: oklch(0.145 0.004 285);
+    --chart-foreground-muted: oklch(0.55 0.014 260);
+    --chart-line-primary: var(--chart-1);
+    --chart-line-secondary: var(--chart-2);
+    --chart-crosshair: oklch(0.4 0.1828 274.34);
+    --chart-grid: oklch(0.9 0 0);
+    --chart-brush-border: var(--chart-grid);
+    --chart-tooltip-background: oklch(0.21 0.006 285 / 0.8);
+    --chart-tooltip-foreground: oklch(0.985 0 0);
+    --chart-tooltip-muted: oklch(0.65 0.01 260);
+    --chart-marker-background: oklch(0.97 0.005 260);
+    --chart-marker-border: oklch(0.85 0.01 260);
+    --chart-marker-foreground: oklch(0.3 0.01 260);
+    --chart-label: oklch(0.45 0.01 260);
+    --chart-scale-01: oklch(0.98 0.003 106);
+    --chart-scale-02: oklch(0.92 0.008 106);
+    --chart-scale-03: oklch(0.82 0.015 106);
+    --chart-scale-04: oklch(0.68 0.02 106);
+    --chart-scale-05: oklch(0.55 0.025 106);
+    --chart-scale-pattern-color: oklch(0.96 0.005 106);
+  }
+  .dark {
+    --chart-1: oklch(1 0 none);
+    --chart-2: oklch(0.73 0 none);
+    --chart-3: oklch(0.51 0 none);
+    --chart-4: oklch(0.39 0 none);
+    --chart-5: oklch(0.32 0 none);
+    --chart-background: oklch(0.145 0 0);
+    --chart-foreground: oklch(0.45 0 0);
+    --chart-foreground-muted: oklch(0.65 0.01 260);
+    --chart-crosshair: oklch(0.45 0 0);
+    --chart-grid: oklch(0.25 0 0);
+    --chart-brush-border: var(--chart-grid);
+    --chart-marker-background: oklch(0.25 0.01 260);
+    --chart-marker-border: oklch(0.4 0.01 260);
+    --chart-marker-foreground: oklch(0.9 0 0);
+    --chart-label: oklch(0.75 0.01 260);
+    --chart-scale-01: oklch(0.28 0.03 270);
+    --chart-scale-02: oklch(0.38 0.04 270);
+    --chart-scale-03: oklch(0.48 0.05 270);
+    --chart-scale-04: oklch(0.58 0.06 270);
+    --chart-scale-05: oklch(0.68 0.07 270);
+    --chart-scale-pattern-color: oklch(0.145 0 0);
+  }
+}
