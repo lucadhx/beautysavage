@@ -77,12 +77,13 @@ const JOURS = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dim
 const JOURS_COURTS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
 
 /** Adresses privées : jamais indexées, et fermées dans le robots.txt. */
-const PRIVATE_PREFIXES = ['/panier', '/paiement', '/espace-client', '/connexion-client', '/inscription-client'];
+const PRIVATE_PREFIXES = ['/panier', '/paiement', '/espace-client', '/connexion-client', '/inscription-client', '/verification-email'];
 const PRIVATE_TITLES = {
   '/panier': 'Panier',
   '/paiement/succes': 'Paiement confirmé',
   '/connexion-client': 'Connexion à votre espace',
   '/inscription-client': 'Créer votre espace client',
+  '/verification-email': 'Vérifiez votre e-mail',
   '/espace-client': 'Votre espace client',
   '/espace-client/formations': 'Vos formations',
   '/espace-client/mot-de-passe': 'Mot de passe',
