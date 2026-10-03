@@ -265,7 +265,11 @@ export interface Company {
   _id: string;
   name: string;
   tagline: string;
+  /** Accroche au-dessus du titre de la bannière d'accueil. */
+  heroKicker?: string;
   homeIntro: string;
+  /** Organisme de formation : numéro de déclaration d'activité (NDA). */
+  trainingDeclaration?: { number: string; region: string };
   satisfiedClients: number;
   /**
    * LES CHIFFRES CLÉS DE L'ACCUEIL — trois au maximum, saisis au Manager.
@@ -1158,7 +1162,7 @@ export type PaymentStatus =
   | 'REFUNDED';
 
 /** Type métier d'une facture / d'un paiement. */
-export type PaymentType = 'LAUNCH_FEE' | 'SUBSCRIPTION';
+export type PaymentType = 'LAUNCH_FEE' | 'SUBSCRIPTION' | 'COMMISSION';
 
 /**
  * Résultat d'une réconciliation (sync). `changes` liste les écarts corrigés —
@@ -1314,6 +1318,8 @@ export interface Contract {
    * de `0`, qui signifie « aucune clémence, échéance au premier refus ».
    */
   paymentGraceDays: number | null;
+  /** Étape « Commission » du contrat (null : jamais configurée). */
+  commission?: ContractCommission | null;
   /**
    * LA SIGNATURE — nommée par ce qu'elle est, plus par qui l'exécute.
    *
@@ -2359,7 +2365,7 @@ export type ContactReason = 'INFORMATION' | 'QUOTE' | 'WEBSITE_ISSUE' | 'SERVICE
 export type ContactState = 'UNREAD' | 'READ' | 'RESOLVED';
 
 /** `NONE` = aucune notification déclenchée (l'émission a échoué : voir §fenêtre de perte). */
-export type ContactNotificationStatus = 'NONE' | 'PENDING' | 'SENT' | 'PARTIAL' | 'FAILED' | 'SKIPPED';
+export type ContactNotificationStatus = 'NONE' | 'PENDING' | 'SENT' | 'DELIVERED' | 'BOUNCED' | 'PARTIAL' | 'FAILED' | 'SKIPPED';
 
 export interface ContactNotificationCounts {
   sent: number;
@@ -2641,4 +2647,16 @@ export interface VersionInfo {
   builtAt: string | null;
   isDirty: boolean;
   source: 'manifest' | 'git' | 'unavailable';
+}
+
+/** La commission prélevée sur les ventes de l'institut (étape « Commission » du contrat). */
+export interface ContractCommission {
+  enabled: boolean;
+  ratePercent: number;
+  productKinds: string[];
+  basis: 'HT' | 'TTC';
+  salesVatRate: number;
+  /** Plafond total des commissions (HT, centimes) ; null = sans plafond. */
+  capCents?: number | null;
+  configuredAt: string | null;
 }

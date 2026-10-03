@@ -8,7 +8,8 @@ import { ArrowLeft, CheckCircle2, XCircle, AlertTriangle, GitCommitHorizontal, H
 import { api } from '@/lib/api';
 import type { DeploymentRunSummary } from '@/types';
 import { formatDateTime } from '@/lib/utils';
-import { Button, Spinner } from '@/components/ui/primitives';
+import { Button } from '@/components/ui/primitives';
+import { Skeleton } from '@/components/ui/Skeleton';
 import { Reveal, Panel } from './ui';
 import { formatDuration } from './friendly';
 import { messageUtilisateur } from '@/lib/erreurs';
@@ -62,9 +63,17 @@ export function HistoryTimeline({ onBack, onViewReport }: { onBack: () => void; 
       </div>
 
       {loading ? (
-        <div className="flex justify-center py-10">
-          <Spinner className="h-6 w-6" />
-        </div>
+        <ol className="space-y-3" aria-busy="true" aria-label="Chargement de l’historique…">
+          {Array.from({ length: 4 }, (_, i) => (
+            <li key={i} className="flex items-start gap-3">
+              <Skeleton className="h-10 w-10 shrink-0 rounded-full" />
+              <div className="grid flex-1 gap-2 rounded-2xl border border-border/70 p-4">
+                <Skeleton className="h-4 w-2/5" />
+                <Skeleton className="h-3 w-3/5" />
+              </div>
+            </li>
+          ))}
+        </ol>
       ) : runs.length === 0 ? (
         <Reveal>
           <Panel className="text-center">

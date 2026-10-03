@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { Navigate, Routes, Route, useLocation } from 'react-router-dom';
-import { AnimatePresence } from 'framer-motion';
+import { LeaveGuard } from '@/components/LeaveGuard';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { RequireAuth, RequireDev } from '@/components/RouteGuards';
 import SignatureReturnPage from '@/pages/SignatureReturnPage';
@@ -38,6 +38,11 @@ const CompanyPage = lazyPage(() => import('@/pages/CompanyPage'));
 */
 const HomeContentPage = lazyPage(() => import('@/pages/HomeContentPage'));
 const CommerceFormationsPage = lazyPage(() => import('@/pages/commerce/CommerceFormationsPage'));
+const FeaturedTrainingsPage = lazyPage(() => import('@/pages/commerce/FeaturedTrainingsPage'));
+const FeaturedServicesPage = lazyPage(() => import('@/pages/commerce/FeaturedServicesPage'));
+const SeoPage = lazyPage(() => import('@/pages/SeoPage'));
+const CommerceCollectionsPage = lazyPage(() => import('@/pages/commerce/CommerceCollectionsPage'));
+const CommerceCollectionEditPage = lazyPage(() => import('@/pages/commerce/CommerceCollectionEditPage'));
 const CommerceFormationEditPage = lazyPage(() => import('@/pages/commerce/CommerceFormationEditPage'));
 const CommercePrestationsPage = lazyPage(() => import('@/pages/commerce/CommercePrestationsPage'));
 const CommercePrestationEditPage = lazyPage(() => import('@/pages/commerce/CommercePrestationEditPage'));
@@ -89,9 +94,20 @@ function RouteFallback() {
 export function App() {
   const location = useLocation();
   return (
-    <AnimatePresence mode="wait">
+    <>
+    <LeaveGuard />
+    {/*
+      LA MISE EN PAGE RESTE EN PLACE D'UNE PAGE À L'AUTRE.
+
+      `Routes` portait `key={location.pathname}` sous un `Suspense` global : à
+      chaque navigation, TOUT était démonté — barre latérale comprise — et un
+      loader occupait l'écran le temps que le morceau de code arrive. Le
+      `Suspense` des pages vit désormais DANS `AppLayout`, autour du contenu
+      seul, avec un contenu fantôme ; celui-ci ne couvre plus que les écrans
+      hors mise en page (connexion, activation…).
+    */}
       <React.Suspense fallback={<RouteFallback />}>
-        <Routes location={location} key={location.pathname}>
+        <Routes location={location}>
           <Route path="/login" element={<LoginPage />} />
         <Route path="/mot-de-passe-oublie" element={<ForgotPasswordPage />} />
         <Route path="/reinitialiser-mot-de-passe" element={<ResetPasswordPage />} />
@@ -135,16 +151,21 @@ export function App() {
             <Route path="accueil" element={<HomeContentPage />} />
             <Route path="commerce" element={<Navigate to="/commerce/formations" replace />} />
             <Route path="commerce/formations" element={<CommerceFormationsPage />} />
+            <Route path="commerce/formations/mise-en-avant" element={<FeaturedTrainingsPage />} />
+            <Route path="commerce/prestations/mise-en-avant" element={<FeaturedServicesPage />} />
             <Route path="commerce/formations/:id" element={<CommerceFormationEditPage />} />
             <Route path="commerce/prestations" element={<CommercePrestationsPage />} />
             <Route path="commerce/prestations/:id" element={<CommercePrestationEditPage />} />
+            <Route path="commerce/collections" element={<CommerceCollectionsPage />} />
+            <Route path="commerce/collections/:id" element={<CommerceCollectionEditPage />} />
             <Route path="commerce/calendrier" element={<CommerceCalendarPage />} />
             <Route path="commerce/vente" element={<Navigate to="/commerce/ventes" replace />} />
             <Route path="commerce/cartes-cadeaux" element={<CommerceCartesCadeauxPage />} />
             <Route path="commerce/validation-formations" element={<CommerceValidationFormationsPage />} />
             <Route path="commerce/validation-formations/:submissionId" element={<CommerceValidationFormationsPage />} />
             <Route path="commerce/avis" element={<CommerceAvisPage />} />
-            <Route path="commerce/mails" element={<DevEmailTemplatesPage />} />
+            {/* Ancienne adresse admin : les modèles d'e-mail sont désormais une page DEV. */}
+            <Route path="commerce/mails" element={<Navigate to="/dev/templates-email" replace />} />
             <Route path="commerce/remboursements" element={<CommerceRemboursementsPage />} />
             <Route path="commerce/commissions" element={<CommerceCommissionsPage />} />
             <Route path="commerce/cles-api" element={<RequireDev><CommerceApiKeysPage /></RequireDev>} />
@@ -160,6 +181,7 @@ export function App() {
             <Route path="contacts" element={<ContactsPage />} />
             <Route path="theme" element={<ThemePage />} />
             <Route path="statut" element={<StatusPage />} />
+            <Route path="referencement" element={<SeoPage />} />
             {/*
               MON ENTREPRISE — l’identité JURIDIQUE du client, en lecture seule.
               Distincte de « /entreprise », qui porte la fiche COMMERCIALE du
@@ -293,6 +315,6 @@ export function App() {
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </React.Suspense>
-    </AnimatePresence>
+    </>
   );
 }

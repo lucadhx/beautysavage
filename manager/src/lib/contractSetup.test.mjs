@@ -23,6 +23,9 @@ function contract(over = {}) {
     document: { hasOriginal: false, pageCount: 0 },
     signatureConfiguration: { zones: [], locked: false },
     pricing: { launchFee: { enabled: false }, subscription: { enabled: false } },
+    // La commission est réglée par défaut dans ces fiches : les sections qui
+    // n'en parlent pas gardent leur sujet. Elle a sa propre section plus bas.
+    commission: { enabled: true, ratePercent: 10, productKinds: ['DISTANCE_TRAINING'], basis: 'TTC', salesVatRate: 20, configuredAt: '2026-01-01T00:00:00.000Z' },
     ...over,
   };
 }
@@ -43,7 +46,7 @@ section('Étape 1 — nommer');
   check('nom = référence seule = nommé', isNamed(contract({ name: 'CTR-2026-0001' })));
 
   const s = deriveContractSetup(contract());
-  check('6 étapes (le réglage de signature en fait partie)', s.steps.length === 6);
+  check('7 étapes (signature et commission en font partie)', s.steps.length === 7);
   check('nommer = étape courante', statusOf(s, 'NAME') === 'current');
   check('index courant = 0', s.currentIndex === 0);
   check('document verrouillé tant que non nommé', statusOf(s, 'DOCUMENT') === 'locked');
@@ -224,17 +227,35 @@ section('Ordre automatique — l’étape ouverte est la bonne');
     complet.steps.slice(0, -1).every((x) => x.status === 'done'));
 
   // L'ordre lui-même, du début à la fin.
-  check('l’ordre est document → signature → zones → tarification → validation',
-    cles(complet).join('>') === 'NAME>DOCUMENT>SIGNATURE>ZONES>PRICING>VALIDATE');
-  check('…et sans signature : document → signature → tarification → validation',
-    cles(sans).join('>') === 'NAME>DOCUMENT>SIGNATURE>PRICING>VALIDATE');
+  check('l’ordre est document → signature → zones → tarification → commission → validation',
+    cles(complet).join('>') === 'NAME>DOCUMENT>SIGNATURE>ZONES>PRICING>COMMISSION>VALIDATE');
+  check('…et sans signature : document → signature → tarification → commission → validation',
+    cles(sans).join('>') === 'NAME>DOCUMENT>SIGNATURE>PRICING>COMMISSION>VALIDATE');
+}
+
+// --- Commission -------------------------------------------------------------
+section('Étape — commission');
+{
+  const pret = {
+    name: 'X', document: { hasOriginal: true, pageCount: 1 },
+    signatureConfiguration: { version: 1, versionCount: 1, locked: false, signers: [], zones: [zone('DEVELOPER'), zone('CLIENT')] },
+    pricing: { launchFee: { enabled: true, amountExcludingTax: 50000 }, subscription: { enabled: false, amountExcludingTax: 0 } },
+  };
+  const nonReglee = deriveContractSetup(contract({ ...pret, commission: null }));
+  check('commission non réglée → étape courante', statusOf(nonReglee, 'COMMISSION') === 'current');
+  check('…elle empêche la validation', !nonReglee.readyToValidate);
+  check('…le résumé dit « À définir »', byKey(nonReglee, 'COMMISSION').hint === 'À définir');
+  const reglee = deriveContractSetup(contract({ ...pret, commission: { enabled: true, ratePercent: 12.5, productKinds: ['SERVICE', 'IN_PERSON_TRAINING'], basis: 'HT', salesVatRate: 20, configuredAt: '2026-10-01' } }));
+  check('commission réglée → faite', statusOf(reglee, 'COMMISSION') === 'done');
+  check('…résumé : taux, base, types', byKey(reglee, 'COMMISSION').hint === '12.5 % HT · 2 type(s) assujetti(s)');
+  check('…la validation s’ouvre', reglee.readyToValidate && statusOf(reglee, 'VALIDATE') === 'current');
 }
 
 // --- Robustesse -------------------------------------------------------------
 section('Robustesse');
 {
   const s = deriveContractSetup({ reference: 'CTR-1', name: '' });
-  check('payload minimal toléré', s.steps.length === 6 && s.currentIndex === 0);
+  check('payload minimal toléré', s.steps.length === 7 && s.currentIndex === 0);
 }
 
 console.log(`\n${pass} réussis, ${fail} échoués`);

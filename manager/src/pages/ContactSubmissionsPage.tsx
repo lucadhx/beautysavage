@@ -6,6 +6,7 @@ import {
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Button, Card, CardContent, Badge, Input, Spinner, EmptyState } from '@/components/ui/primitives';
 import { BrandLoader } from '@/components/ui/BrandLoader';
+import { Skeleton } from '@/components/ui/Skeleton';
 import { useResource, useAction } from '@/hooks/useResource';
 import { useAuth } from '@/context/AuthContext';
 import { api } from '@/lib/api';
@@ -209,7 +210,7 @@ function SubmissionDetail({ submissionId, onBack, onChanged }: {
     } catch { /* */ }
   };
 
-  if (loading || !submission) return <BrandLoader />;
+  if (loading || !submission) return <BrandLoader variant="form" />;
 
   const resolved = submission.state === 'RESOLVED';
 
@@ -439,8 +440,10 @@ export default function ContactSubmissionsPage() {
         </div>
       </div>
 
-      {loading && pages.length === 0 ? (
-        <BrandLoader />
+      {/* La première page arrive dans `data` puis est recopiée dans `pages` par un
+          effet : entre les deux, `pages` est encore vide — pas d'état vide pour autant. */}
+      {pages.length === 0 && (loading || (page?.items.length ?? 0) > 0) ? (
+        <BrandLoader variant="list" />
       ) : pages.length === 0 ? (
         <EmptyState
           icon={Inbox}
@@ -538,7 +541,9 @@ function ContactDiagnosticsPanel() {
               <Button size="sm" variant="ghost" onClick={() => reload()}>Rafraîchir</Button>
             </div>
             {loading ? (
-              <div className="py-4"><Spinner /></div>
+              <div className="grid gap-2 rounded-md border border-border p-2" aria-busy="true">
+                {Array.from({ length: 3 }, (_, i) => <Skeleton key={i} className="h-4 w-full" />)}
+              </div>
             ) : decisions.length === 0 ? (
               <p className="rounded-md bg-muted/40 p-2 text-xs text-muted-foreground">
                 Aucune tentative récente (le journal est vidé au redémarrage du serveur).

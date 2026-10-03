@@ -108,7 +108,7 @@ export default function HomeContentPage() {
     return maj;
   });
 
-  if (loading || !draft) return <BrandLoader />;
+  if (loading || !draft) return <BrandLoader variant="form" />;
 
   /** Remplace une SECTION du document, sans toucher aux autres. */
   const majSection = <K extends keyof HomeContent>(cle: K, patch: Partial<HomeContent[K]>) =>

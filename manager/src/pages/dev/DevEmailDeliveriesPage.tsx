@@ -125,7 +125,7 @@ export default function DevEmailDeliveriesPage() {
       </p>
 
       {loading ? (
-        <BrandLoader />
+        <BrandLoader variant="list" />
       ) : rows.length === 0 ? (
         <EmptyState
           icon={Mail}
@@ -195,7 +195,7 @@ function DeliveryDetailModal({ deliveryId, onClose }: { deliveryId: string; onCl
   return (
     <Modal open onClose={onClose} title="Détail de la livraison" className="max-w-3xl">
       {loading || !d ? (
-        <div className="py-8"><BrandLoader /></div>
+        <div className="py-8"><BrandLoader variant="list" /></div>
       ) : (
         <div className="space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-2">

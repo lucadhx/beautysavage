@@ -1,8 +1,9 @@
+import * as React from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { toast } from 'sonner';
-import { Check, KeyRound, Mail, Save, ShieldCheck, UserCog } from 'lucide-react';
+import { KeyRound, Mail, ShieldCheck, UserCog } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import { isPanelPrincipal } from '@/types';
@@ -10,6 +11,8 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { RoleBadge } from '@/components/RoleBadge';
 import { Card, CardContent, CardHeader, CardTitle, Input, Field, Button } from '@/components/ui/primitives';
 import { messageUtilisateur } from '@/lib/erreurs';
+import { useFloatingSave } from '@/hooks/useFloatingSave';
+import { FloatingSaveWidget } from '@/components/ui/FloatingSaveWidget';
 
 const passwordSchema = z
   .object({
@@ -25,30 +28,43 @@ const passwordSchema = z
 type PasswordValues = z.infer<typeof passwordSchema>;
 
 const nameSchema = z.object({ name: z.string().trim().min(1, 'Le nom est requis').max(80, 'Nom trop long') });
-type NameValues = z.infer<typeof nameSchema>;
 
 export default function ProfilePage() {
   const { user, updateUser } = useAuth();
 
   const initial = (user?.name || user?.email || '?').charAt(0).toUpperCase();
 
-  const nameForm = useForm<NameValues>({
-    resolver: zodResolver(nameSchema),
-    values: { name: user?.name || '' },
-  });
+  /*
+    LE NOM SE SAUVE PAR LE BOUTON FLOTTANT, comme toute page d'édition du
+    Manager : il signale le travail en attente et protège la sortie
+    (« Quitter sans enregistrer ? »). Le mot de passe reste un geste
+    ponctuel, avec son propre bouton — ce n'est pas un brouillon.
+  */
+  const [name, setName] = React.useState<string | null>(null);
+  const [nameError, setNameError] = React.useState('');
+  React.useEffect(() => {
+    if (user && name === null) setName(user.name || '');
+  }, [user, name]);
 
   const passwordForm = useForm<PasswordValues>({ resolver: zodResolver(passwordSchema) });
 
-  const saveName = async ({ name }: NameValues) => {
+  const { state: nameState, save: saveName } = useFloatingSave<string>(name, async () => {
+    const parsed = nameSchema.safeParse({ name: name ?? '' });
+    if (!parsed.success) {
+      setNameError(parsed.error.issues[0]?.message || 'Nom invalide');
+      throw new Error('invalide');
+    }
+    setNameError('');
     try {
-      const updated = await api.updateProfile({ name });
+      const updated = await api.updateProfile({ name: parsed.data.name });
       updateUser(updated);
       toast.success('Profil mis à jour');
-      nameForm.reset({ name: updated.name });
+      return name ?? '';
     } catch (err) {
       toast.error(messageUtilisateur(err, 'Échec de la mise à jour'));
+      throw err;
     }
-  };
+  });
 
   const savePassword = async (values: PasswordValues) => {
     try {
@@ -125,9 +141,9 @@ export default function ProfilePage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <form onSubmit={nameForm.handleSubmit(saveName)} className="space-y-4">
-              <Field label="Nom affiché" error={nameForm.formState.errors.name?.message}>
-                <Input placeholder="Votre nom" {...nameForm.register('name')} />
+            <form onSubmit={(event) => { event.preventDefault(); void saveName(); }} className="space-y-4">
+              <Field label="Nom affiché" error={nameError || undefined}>
+                <Input placeholder="Votre nom" value={name ?? ''} onChange={(event) => setName(event.target.value)} />
               </Field>
               {/*
                 LE CHAMP EST ENVELOPPÉ : LE LIEN AU LIBELLÉ DOIT ÊTRE EXPLICITE.
@@ -150,14 +166,6 @@ export default function ProfilePage() {
                   <Input id="profil-email" value={user?.email || ''} disabled readOnly className="pl-9" />
                 </div>
               </Field>
-              <Button
-                type="submit"
-                loading={nameForm.formState.isSubmitting}
-                disabled={!nameForm.formState.isDirty}
-              >
-                {nameForm.formState.isDirty ? <Save className="h-4 w-4" /> : <Check className="h-4 w-4" />}
-                Enregistrer
-              </Button>
             </form>
           </CardContent>
         </Card>
@@ -191,6 +199,7 @@ export default function ProfilePage() {
         </Card>
       </div>
       )}
+      {!isPanelPrincipal(user) && <FloatingSaveWidget state={nameState} onSave={() => void saveName()} />}
     </div>
   );
 }

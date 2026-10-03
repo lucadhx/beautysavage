@@ -2,6 +2,7 @@ import * as React from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { api } from '@/lib/api';
 import { Dropdown } from '@/components/base/dropdown/dropdown';
+import { CardsSkeleton, Skeleton, TableSkeleton } from '@/components/ui/Skeleton';
 import {
   CommercePageFrame,
   Metric,
@@ -28,6 +29,7 @@ export default function CommerceClientsPage() {
   const [sales, setSales] = React.useState<CommerceSale[]>([]);
   const [search, setSearch] = React.useState('');
   const [error, setError] = React.useState('');
+  const [loaded, setLoaded] = React.useState(false);
   const { customerId } = useParams();
   const navigate = useNavigate();
 
@@ -37,7 +39,8 @@ export default function CommerceClientsPage() {
         setCustomers(customerList as CustomerWithVerification[]);
         setSales(saleList as CommerceSale[]);
       })
-      .catch((err) => setError(err instanceof Error ? err.message : 'Chargement impossible'));
+      .catch((err) => setError(err instanceof Error ? err.message : 'Chargement impossible'))
+      .finally(() => setLoaded(true));
   }, []);
 
   const buyers = new Set(sales.map(customerEmail).filter(Boolean));
@@ -60,9 +63,17 @@ export default function CommerceClientsPage() {
         actions={<button type="button" onClick={() => navigate('/commerce/clients')} className="rounded-md border px-3 py-2 text-sm font-semibold hover:bg-muted">Retour aux clients</button>}
       >
         {error && <p className="rounded-md border border-destructive/30 p-3 text-sm text-destructive">{error}</p>}
-        {!selected ? (
+        {!loaded ? (
+          <>
+            <CardsSkeleton count={4} className="md:grid-cols-4" />
+            <div className="grid gap-4 lg:grid-cols-[0.8fr_1.2fr]">
+              <div className="grid gap-3 rounded-xl border p-4">{[0, 1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-14 w-full" />)}</div>
+              <TableSkeleton rows={4} cols={5} />
+            </div>
+          </>
+        ) : !selected ? (
           <Panel title="Chargement">
-            <p className="text-sm text-muted-foreground">{customers.length === 0 ? 'Chargement de la cliente...' : 'Cliente introuvable.'}</p>
+            <p className="text-sm text-muted-foreground">Cliente introuvable.</p>
           </Panel>
         ) : (
           <>
@@ -98,11 +109,13 @@ export default function CommerceClientsPage() {
       description="Comptes clients de la vitrine, coordonnees, consentements et historique d'achat rattache."
     >
       {error && <p className="rounded-md border border-destructive/30 p-3 text-sm text-destructive">{error}</p>}
-      <div className="grid gap-4 md:grid-cols-3">
-        <Metric label="Comptes clients" value={customers.length} />
-        <Metric label="Clients acheteurs" value={buyers.size} />
-        <Metric label="Consentements marketing" value={newsletter} />
-      </div>
+      {!loaded ? <CardsSkeleton count={3} /> : (
+        <div className="grid gap-4 md:grid-cols-3">
+          <Metric label="Comptes clients" value={customers.length} />
+          <Metric label="Clients acheteurs" value={buyers.size} />
+          <Metric label="Consentements marketing" value={newsletter} />
+        </div>
+      )}
       <Panel title="Liste clients">
         <input
           value={search}
@@ -110,18 +123,18 @@ export default function CommerceClientsPage() {
           placeholder="Rechercher par nom, e-mail ou telephone"
           className="mb-4 w-full rounded-md border bg-background px-3 py-2 text-sm"
         />
-        {filtered.length === 0 ? (
+        {!loaded ? <TableSkeleton rows={6} cols={6} /> : filtered.length === 0 ? (
           <p className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">Aucun client ne correspond.</p>
         ) : (
-          <div className="max-w-full overflow-x-auto rounded-lg border">
+          <div className="m-table max-w-full overflow-x-auto rounded-lg border">
             <table className="min-w-[760px] w-full text-left text-sm">
               <thead className="bg-muted/40 text-xs uppercase tracking-wide text-muted-foreground">
                 <tr>
                   <th className="px-4 py-3">Client</th>
-                  <th className="px-4 py-3">Telephone</th>
-                  <th className="px-4 py-3">Inscription</th>
+                  <th className="m-hide px-4 py-3">Telephone</th>
+                  <th className="m-hide px-4 py-3">Inscription</th>
                   <th className="px-4 py-3">E-mail</th>
-                  <th className="px-4 py-3">Marketing</th>
+                  <th className="m-hide px-4 py-3">Marketing</th>
                   <th className="px-4 py-3">Action</th>
                 </tr>
               </thead>
@@ -130,12 +143,13 @@ export default function CommerceClientsPage() {
                   <tr key={customer._id} className="border-t">
                     <td className="px-4 py-3">
                       <div className="font-medium">{customerName(customer)}</div>
-                      <div className="text-xs text-muted-foreground">{customer.email}</div>
+                      <div className="break-all text-xs text-muted-foreground sm:break-normal">{customer.email}</div>
+                      {customer.phone && <div className="text-xs text-muted-foreground sm:hidden">{customer.phone}</div>}
                     </td>
-                    <td className="px-4 py-3">{customer.phone || 'Non renseigne'}</td>
-                    <td className="px-4 py-3">{dateShort(customer.createdAt)}</td>
+                    <td className="m-hide px-4 py-3">{customer.phone || 'Non renseigne'}</td>
+                    <td className="m-hide whitespace-nowrap px-4 py-3">{dateShort(customer.createdAt)}</td>
                     <td className="px-4 py-3"><StatusBadge>{customer.emailVerified ? 'VERIFIE' : 'A VERIFIER'}</StatusBadge></td>
-                    <td className="px-4 py-3">{customer.marketingConsent ? 'Oui' : 'Non'}</td>
+                    <td className="m-hide px-4 py-3">{customer.marketingConsent ? 'Oui' : 'Non'}</td>
                     <td className="px-4 py-3">
                       <Dropdown.Root>
                         <Dropdown.DotsButton aria-label={`Actions ${customer.email}`} />
@@ -174,17 +188,17 @@ function SalesMiniTable({ sales, onOpen }: { sales: CommerceSale[]; onOpen: (sal
     return <p className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">Aucune commande rattachee.</p>;
   }
   return (
-    <div className="max-w-full overflow-x-auto rounded-lg border">
+    <div className="m-table max-w-full overflow-x-auto rounded-lg border">
       <table className="min-w-[620px] w-full text-left text-sm">
         <thead className="bg-muted/40 text-xs uppercase tracking-wide text-muted-foreground">
-          <tr><th className="px-4 py-3">Commande</th><th className="px-4 py-3">Date</th><th className="px-4 py-3">Montant</th><th className="px-4 py-3">Paiement</th><th className="px-4 py-3">Action</th></tr>
+          <tr><th className="px-4 py-3">Commande</th><th className="m-hide px-4 py-3">Date</th><th className="px-4 py-3">Montant</th><th className="px-4 py-3">Paiement</th><th className="px-4 py-3">Action</th></tr>
         </thead>
         <tbody>
           {sales.map((sale) => (
             <tr key={sale._id} className="border-t">
-              <td className="px-4 py-3 font-medium">{sale.saleNumber}</td>
-              <td className="px-4 py-3">{dateShort(sale.createdAt)}</td>
-              <td className="px-4 py-3">{cents(sale.totalCents)}</td>
+              <td className="px-4 py-3 font-medium">{sale.saleNumber}<div className="text-xs font-normal text-muted-foreground sm:hidden">{dateShort(sale.createdAt)}</div></td>
+              <td className="m-hide whitespace-nowrap px-4 py-3">{dateShort(sale.createdAt)}</td>
+              <td className="whitespace-nowrap px-4 py-3">{cents(sale.totalCents)}</td>
               <td className="px-4 py-3"><StatusBadge>{sale.paymentStatus}</StatusBadge></td>
               <td className="px-4 py-3"><button type="button" onClick={() => onOpen(sale)} className="text-sm font-semibold underline">Voir</button></td>
             </tr>

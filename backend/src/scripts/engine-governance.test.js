@@ -240,7 +240,9 @@ section('Nginx : entièrement piloté par le profil');
   // laissé croire que tout partait au backend.
   check('le bloc /bridge/ précède le repli SPA',
     spa.indexOf('location /bridge/') < spa.indexOf('location / {'));
-  check('le repli SPA existe toujours', spa.includes('try_files $uri $uri/ /index.html'));
+  // Lot SEO : les pages passent par le rendu backend, et la coquille statique
+  // reste le repli (backend en échec ou arrêté) — le site ne tombe jamais.
+  check('le repli SPA existe toujours', spa.includes('try_files $uri $uri/ /index.html') || (spa.includes('try_files $uri @page_render') && spa.includes('try_files /index.html =404')));
 
   const http = renderNginxHttpOnly(target, { roots, backendPort: 5001 });
   check('phase HTTP : aucun certificat référencé', !http.includes('ssl_certificate'));

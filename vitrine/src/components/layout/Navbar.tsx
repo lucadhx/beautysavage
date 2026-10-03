@@ -144,7 +144,7 @@ export function Navbar() {
                 borderRadius: 'var(--v-radius)',
               }}
             >
-              Reserver
+              Réserver
             </Link>
           </nav>
 
@@ -267,7 +267,7 @@ function ProfileDropdown({
                   }}
                   className="flex w-full items-center gap-2 rounded-md px-3 py-2 font-semibold transition-colors hover:bg-white/10"
                 >
-                  <LogOut01 className="h-4 w-4" /> Deconnexion
+                  <LogOut01 className="h-4 w-4" /> Déconnexion
                 </button>
               </div>
             )}

@@ -57,7 +57,7 @@ export default function DevManagerThemePage() {
 
   if (loading || !data) {
     return (
-      <BrandLoader />
+      <BrandLoader variant="form" />
     );
   }
 

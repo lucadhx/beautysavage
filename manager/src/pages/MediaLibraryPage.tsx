@@ -3,7 +3,7 @@ import { Copy, Image, RefreshCw, Search, Trash2 } from 'lucide-react';
 import { api, deleteMediaFile, type MediaLibraryItem } from '@/lib/api';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Badge, Button, Card, CardContent, Field, Input } from '@/components/ui/primitives';
-import { BrandLoader } from '@/components/ui/BrandLoader';
+import { Skeleton } from '@/components/ui/Skeleton';
 import { ConfirmDialog } from '@/components/ui/dialog';
 import { resolvePreviewMediaUrl } from '@/lib/media';
 import { toast } from 'sonner';
@@ -77,7 +77,30 @@ export default function MediaLibraryPage() {
           </div>
 
           {loading ? (
-            <BrandLoader />
+            <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]" aria-busy="true">
+              <span role="status" className="sr-only">Chargement…</span>
+              <div className="grid min-w-0 content-start gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                {Array.from({ length: 8 }, (_, i) => (
+                  <div key={i} className="overflow-hidden rounded-lg border bg-card">
+                    <Skeleton className="aspect-video w-full rounded-none" />
+                    <div className="grid gap-1.5 p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <Skeleton className="h-4 w-16" />
+                        <Skeleton className="h-3 w-10" />
+                      </div>
+                      <Skeleton className="h-3 w-4/5" />
+                      <Skeleton className="h-2.5 w-1/3" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="grid min-w-0 content-start gap-4 rounded-lg border bg-muted/20 p-4">
+                <Skeleton className="aspect-video w-full" />
+                <Skeleton className="h-3.5 w-3/4" />
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
+              </div>
+            </div>
           ) : (
             <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
               <div className="min-w-0">

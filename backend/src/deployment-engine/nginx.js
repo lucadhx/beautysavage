@@ -154,7 +154,7 @@ function staticSiteLocations({ noindex = false, backendPort = null } = {}) {
   return `    location = /index.html { add_header Cache-Control "no-cache";${entete} }
     location = /version.json { add_header Cache-Control "no-cache"; }
     location = /build-manifest.json { add_header Cache-Control "no-cache"; }
-${noindex ? `\n${sitemapAbsent()}\n${robotsInterdit()}\n` : ''}${backendPort !== null ? `\n${sitemapLocation(backendPort)}\n` : ''}
+${noindex ? `\n${sitemapAbsent()}\n${robotsInterdit()}\n` : ''}${backendPort !== null ? `\n${sitemapLocation(backendPort)}\n${seoProtocolLocations(backendPort)}\n` : ''}
 ${moduleScriptLocation()}
 
     location /assets/ {
@@ -163,8 +163,71 @@ ${moduleScriptLocation()}
         try_files $uri =404;
     }
 
-    location / {
+${backendPort !== null ? seoHtmlLocations(backendPort) : `    location / {
         try_files $uri $uri/ /index.html;${entete}
+    }`}`;
+}
+
+/**
+ * ROBOTS.TXT ET LLMS.TXT DE LA VITRINE — produits par le backend.
+ *
+ * Le robots.txt statique de la vitrine venait du projet source : il annonçait
+ * le plan du site d'un AUTRE domaine. Le domaine, lui, vit en base
+ * (SystemConfiguration.network.websiteUrl) : le fichier ne peut donc être
+ * juste que s'il est produit à la demande. llms.txt suit la même logique : il
+ * résume l'entreprise et ses offres à partir des données du Manager.
+ */
+function seoProtocolLocations(backendPort) {
+  return ['robots.txt', 'llms.txt'].map((file) => `    location = /${file} {
+        proxy_pass http://127.0.0.1:${backendPort}/${file};
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;${file === 'robots.txt' ? `
+        proxy_intercept_errors on;
+        error_page 500 502 503 504 = @robots_static;` : ''}
+    }`).concat([`    location @robots_static {
+        default_type text/plain;
+        charset utf-8;
+        try_files /robots.txt =404;
+    }`]).join('\n');
+}
+
+/**
+ * LES PAGES DE LA VITRINE, RENDUES AVEC LEUR RÉFÉRENCEMENT.
+ *
+ * Une application à page unique livre la même coquille à toutes les adresses :
+ * un moteur qui n'exécute pas le JavaScript — les robots des assistants IA
+ * n'en exécutent aucun — ne voyait ni titre, ni description, ni contenu propre
+ * à la page. Le backend compose donc la page demandée : balises d'en-tête,
+ * données structurées et contenu lisible, tirés de la base à chaque requête.
+ *
+ * Les fichiers réels (images, favicon, manifestes) restent servis par nginx.
+ * Si le backend ne répond pas (5xx, arrêt), la coquille statique est servie :
+ * le site ne tombe jamais à cause du référencement.
+ */
+function seoHtmlLocations(backendPort) {
+  return `    location / {
+        try_files $uri @page_render;
+    }
+
+    location @page_render {
+        proxy_pass http://127.0.0.1:${backendPort};
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Seo-Render "1";
+        proxy_connect_timeout 3s;
+        proxy_read_timeout 10s;
+        proxy_intercept_errors on;
+        # 503 passe tel quel : c'est le site SUSPENDU, dit honnêtement aux moteurs.
+        error_page 500 502 504 = @page_static;
+    }
+
+    location @page_static {
+        add_header Cache-Control "no-cache";
+        try_files /index.html =404;
     }`;
 }
 

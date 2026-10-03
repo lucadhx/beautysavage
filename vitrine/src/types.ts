@@ -11,7 +11,10 @@ export interface MediaItem {
 export interface Company {
   name: string;
   tagline: string;
+  heroKicker?: string;
   homeIntro: string;
+  /** Organisme de formation : numéro de déclaration d'activité (NDA). */
+  trainingDeclaration?: { number: string; region: string };
   satisfiedClients: number;
   /**
    * LES CHIFFRES CLÉS DE L'ACCUEIL — trois au maximum, saisis au Manager.

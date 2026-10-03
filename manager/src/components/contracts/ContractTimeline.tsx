@@ -1,6 +1,7 @@
 import { CheckCircle2, Circle, XCircle, RefreshCw } from 'lucide-react';
 import { formatDateTime } from '@/lib/utils';
 import type { TimelineEvent } from '@/types';
+import { Skeleton } from '@/components/ui/Skeleton';
 
 /**
  * QUI a produit la ligne. `WEBHOOK` disait « Yousign » : le fournisseur a
@@ -20,6 +21,24 @@ function iconFor(action: string) {
   if (['DEV_SIGNED', 'ADMIN_SIGNED', 'FULLY_SIGNED', 'SIGNED_PDF_FETCHED', 'VALIDATED_LOCKED', 'ACTIVATED'].includes(action))
     return <CheckCircle2 className="h-4 w-4 text-emerald-500" />;
   return <Circle className="h-4 w-4 text-muted-foreground" />;
+}
+
+/** La forme de la timeline pendant son chargement — jamais « Aucun événement » avant la réponse. */
+export function ContractTimelineSkeleton({ rows = 3 }: { rows?: number }) {
+  return (
+    <ol className="relative space-y-4 border-l border-border pl-5" aria-busy="true" aria-label="Chargement…">
+      {Array.from({ length: rows }, (_, i) => (
+        <li key={i} className="relative grid gap-1.5">
+          <Skeleton className="absolute -left-[27px] top-0.5 h-5 w-5 rounded-full" />
+          <div className="flex items-baseline justify-between gap-2">
+            <Skeleton className="h-3.5 w-2/5" />
+            <Skeleton className="h-3 w-24" />
+          </div>
+          <Skeleton className="h-3 w-28" />
+        </li>
+      ))}
+    </ol>
+  );
 }
 
 /** Timeline verticale des événements d'un contrat (du plus ancien au plus récent). */

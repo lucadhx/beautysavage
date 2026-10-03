@@ -51,9 +51,20 @@ const companySchema = new mongoose.Schema(
      */
     name: { type: String, default: '' },
     tagline: { type: String, default: '' },
+    // Petite accroche au-dessus du titre de la bannière d'accueil (vide : texte par défaut).
+    heroKicker: { type: String, default: '' },
     // Texte d'introduction affiché sous la bannière d'accueil. Vide par défaut :
     // il s'écrit dans le Manager, il ne se sème pas.
     homeIntro: { type: String, default: '' },
+    /**
+     * ORGANISME DE FORMATION — numéro de déclaration d'activité (NDA), délivré
+     * par la préfecture de région. Affiché en badge sur l'accueil, avec la
+     * mention légale obligatoire (« ne vaut pas agrément de l'État »).
+     */
+    trainingDeclaration: {
+      number: { type: String, default: '', trim: true, maxlength: 20 },
+      region: { type: String, default: '', trim: true, maxlength: 80 },
+    },
     // Nombre de clients satisfaits affiché sur la vitrine ("X+ clients satisfaits").
     satisfiedClients: { type: Number, default: 0, min: 0 },
 

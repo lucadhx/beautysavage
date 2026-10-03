@@ -1,7 +1,9 @@
 import { Link } from 'react-router-dom';
-import { ArrowRight, Image as ImageIcon, PawPrint } from 'lucide-react';
+import { ArrowRight, Clock, Image as ImageIcon, PawPrint } from 'lucide-react';
+import { PromoBadge, PromoPrice } from '@/components/Promotion';
 import { type CommerceProduct } from '@/lib/api';
 import { resolvePreviewMediaUrl } from '@/lib/media';
+import { richTextToPlain } from '@/lib/richText';
 
 const formatter = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' });
 
@@ -10,10 +12,20 @@ export type ProductReviewSummary = {
   average: number;
 };
 
+/** « 1 h 45 », « 2 h », « 45 min » — la durée d'une prestation, lisible d'un coup d'œil. */
+export function durationText(minutes?: number) {
+  const total = Math.round(Number(minutes) || 0);
+  if (total <= 0) return '';
+  const h = Math.floor(total / 60);
+  const m = total % 60;
+  if (!h) return `${m} min`;
+  return m ? `${h} h ${String(m).padStart(2, '0')}` : `${h} h`;
+}
+
 function price(product: CommerceProduct) {
   if (product.kind === 'GIFT_CARD') {
     const amount = Number(product.price?.amountCents || 0);
-    return amount > 0 ? `A partir de ${formatter.format(amount / 100)}` : '';
+    return amount > 0 ? `À partir de ${formatter.format(amount / 100)}` : '';
   }
   return formatter.format(product.price.amountCents / 100);
 }
@@ -21,13 +33,13 @@ function price(product: CommerceProduct) {
 function kindLabel(kind: CommerceProduct['kind']) {
   if (kind === 'SERVICE') return 'Prestation';
   if (kind === 'DISTANCE_TRAINING') return 'Formation en ligne';
-  if (kind === 'IN_PERSON_TRAINING') return 'Formation presentiel';
+  if (kind === 'IN_PERSON_TRAINING') return 'Formation présentielle';
   if (kind === 'GIFT_CARD') return 'Carte cadeau';
   return 'Produit';
 }
 
 function cover(product: CommerceProduct) {
-  if (product.kind === 'GIFT_CARD') return '/gift-card-master.jpg';
+  if (product.kind === 'GIFT_CARD') return '/gift-card-master.jpg?v=2';
   return resolvePreviewMediaUrl(product.coverUrl || product.gallery?.[0] || '');
 }
 
@@ -66,7 +78,8 @@ export function CommerceProductCard({
       className="group flex h-full flex-col overflow-hidden rounded-lg border transition-transform hover:-translate-y-1"
       style={{ borderColor: 'var(--v-border)', background: 'var(--v-surface)' }}
     >
-      <div className="aspect-square w-full overflow-hidden" style={{ background: 'color-mix(in srgb, var(--v-foreground) 5%, var(--v-background))' }}>
+      <div className="relative aspect-square w-full overflow-hidden" style={{ background: 'color-mix(in srgb, var(--v-foreground) 5%, var(--v-background))' }}>
+        <PromoBadge product={item} />
         {image ? (
           <img
             src={image}
@@ -79,7 +92,7 @@ export function CommerceProductCard({
             <div className="flex h-16 w-16 items-center justify-center rounded-full border" style={{ borderColor: 'var(--v-border)', background: 'var(--v-background)' }}>
               <ImageIcon className="h-7 w-7" />
             </div>
-            <span className="text-xs font-semibold uppercase tracking-[0.14em]">Image a venir</span>
+            <span className="text-xs font-semibold uppercase tracking-[0.14em]">Image à venir</span>
           </div>
         )}
       </div>
@@ -108,10 +121,16 @@ export function CommerceProductCard({
         </div>
         <h3 className="mt-4 text-xl font-semibold tracking-normal">{item.title}</h3>
         <p className="mt-2 line-clamp-2 min-h-12 text-sm leading-6" style={{ color: 'var(--v-muted-foreground)' }}>
-          {item.subtitle || item.description}
+          {item.subtitle || richTextToPlain(item.description)}
         </p>
+        {item.kind === 'SERVICE' && durationText(item.durationMinutes) && (
+          <p className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold" data-testid="card-duration">
+            <Clock className="h-4 w-4" style={{ color: 'var(--v-accent)' }} aria-hidden />
+            <span>{durationText(item.durationMinutes)}</span>
+          </p>
+        )}
         <div className="mt-auto flex items-center justify-between gap-4 pt-6">
-          <strong>{price(item)}</strong>
+          {item.kind === 'GIFT_CARD' ? <strong>{price(item)}</strong> : <PromoPrice product={item} />}
           <span className="inline-flex items-center gap-2 text-sm font-semibold">
             Voir <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
           </span>

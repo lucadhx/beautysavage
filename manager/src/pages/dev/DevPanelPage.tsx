@@ -113,7 +113,7 @@ export default function DevPanelPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data]);
 
-  if (loading || !data) return <BrandLoader />;
+  if (loading || !data) return <BrandLoader variant="form" />;
 
   const pair = async () => {
     await run(() => api.pairWithPanel({ panelUrl: panelUrl.trim(), pairingCode: pairingCode.trim() }), {

@@ -246,7 +246,20 @@ section('Gestes tactiles — rien ne doit être absorbé');
     axes ; leur frame parente est en `touch-pan-y`, donc la page reste défilable
     partout ailleurs sur l'aperçu.
   */
-  const EXCEPTIONS_TACTILES = ['components/contracts/SignatureZoneEditor.tsx'];
+  /*
+    Les poignées de glisser-déposer (DragHandle, et celle de la liste des pages)
+    SONT les « poignées de manipulation directe » décrites plus haut : une cible
+    de 36 px, seule à porter `touch-none`, la ligne autour reste défilable. Sans
+    cela, le doigt qui saisit la poignée ferait défiler la page au lieu de
+    déplacer la ligne.
+  */
+  const EXCEPTIONS_TACTILES = [
+    'components/contracts/SignatureZoneEditor.tsx',
+    'components/ui/Sortable.tsx',
+    'pages/SitePagesPage.tsx',
+    // La plage verte de la frise horaire : poignée glissée à l'horizontale.
+    'components/ui/TimeRange.tsx',
+  ];
   const bloquants = partout(
     /\btouch-none\b/,
     (f) => !EXCEPTIONS_TACTILES.includes(f)

@@ -1,6 +1,7 @@
 import { LaunchFeeStatusBadge, SubscriptionStatusBadge } from '@/components/contracts/status';
 import { formatCents, formatDateTime } from '@/lib/utils';
 import type { Contract, PaymentDetail } from '@/types';
+import { Skeleton } from '@/components/ui/Skeleton';
 
 /**
  * État Stripe côté DEV — LECTURE SEULE, jamais un bouton.
@@ -10,7 +11,7 @@ import type { Contract, PaymentDetail } from '@/types';
  * vue sert au diagnostic (« où en est le paiement ? »), pas à agir — d'où sa
  * place dans la section repliée, à l'écart du parcours.
  */
-export function DevStripeDetails({ contract, payments }: { contract: Contract; payments: PaymentDetail[] }) {
+export function DevStripeDetails({ contract, payments, paymentsLoading = false }: { contract: Contract; payments: PaymentDetail[]; paymentsLoading?: boolean }) {
   const { launchFee, subscription } = contract.pricing;
   if (!launchFee.enabled && !subscription.enabled) return null;
 
@@ -29,7 +30,9 @@ export function DevStripeDetails({ contract, payments }: { contract: Contract; p
           <Row label="Montant TTC" value={formatCents(launchFee.amountIncludingTax)} />
           {fee.paidAt && <Row label="Payé le" value={formatDateTime(fee.paidAt)} />}
           {fee.lastError && <Row label="Dernière erreur" value={fee.lastError} tone="error" mono />}
-          {attempt ? (
+          {paymentsLoading && !attempt ? (
+            <Skeleton className="mt-2 h-16 w-full" />
+          ) : attempt ? (
             <div className="mt-2 space-y-1 rounded-md border border-border p-3 text-xs">
               <Row label="Mode Stripe" value={attempt.providerMode} />
               <Row label="Tentative n°" value={String(attempt.attempt)} />

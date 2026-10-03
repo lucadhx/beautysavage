@@ -309,49 +309,45 @@ export const getChapterBySlug = asyncHandler(async (req, res) => {
  * ailleurs. Sans URL publique configurée, on répond 404 plutôt qu'un plan
  * relatif — un sitemap sans adresse absolue n'est pas exploitable.
  */
+/*
+ * ── CE QUI A CHANGÉ (lot SEO/GEO) ─────────────────────────────────────────
+ *
+ * Le plan est désormais produit par `services/seo` à partir de la base, via
+ * `cfg.network?.websiteUrl` comme avant (jamais `req.headers.host`). Il liste
+ * enfin les OFFRES (prestations, formations, cartes cadeaux — avec leur date de
+ * modification et leur image), les pages de catalogue et les pages publiées
+ * (`SitePage.find({ published: true }` côté service). Il ne liste plus les
+ * chapitres : la vitrine n'a aucune route pour eux, chaque adresse aboutissait
+ * à la page 404. `/presenter-un-projet` disparaît aussi : c'est un doublon de
+ * `/contact`, qui porte désormais la canonique.
+ */
 export const sitemap = asyncHandler(async (req, res) => {
-  const cfg = await getSingleton(SystemConfiguration);
-  const base = String(cfg.network?.websiteUrl ?? '').replace(/\/+$/, '');
-  if (!/^https?:\/\//i.test(base)) throw ApiError.notFound('Plan du site indisponible');
-
-  const { listAvailableLegalDocuments } = await import(
-    '../services/panelConfiguration/legalDocument.service.js'
-  );
-  const [chapters, pages, legaux] = await Promise.all([
-    Chapter.find({ published: true }).select('slug updatedAt').sort({ navOrder: 1, order: 1 }).lean(),
-    SitePage.find({ published: true }).select('slug updatedAt').sort({ navOrder: 1, order: 1 }).lean(),
-    listAvailableLegalDocuments(),
-  ]);
-
-  /** Type de document légal → route française. Même table que la vitrine. */
-  const ROUTES_LEGALES = { LEGAL_NOTICE: '/mentions-legales', PRIVACY_POLICY: '/politique-de-confidentialite' };
-
-  const entrees = [
-    { loc: '/', priority: '1.0', changefreq: 'monthly' },
-    ...chapters.map((c) => ({ loc: `/${c.slug}`, lastmod: c.updatedAt, priority: '0.8', changefreq: 'monthly' })),
-    { loc: '/presenter-un-projet', priority: '0.9', changefreq: 'yearly' },
-    ...pages.map((p) => ({ loc: `/p/${p.slug}`, lastmod: p.updatedAt, priority: '0.5', changefreq: 'monthly' })),
-    ...(legaux ?? [])
-      .filter((d) => ROUTES_LEGALES[d.type])
-      .map((d) => ({ loc: ROUTES_LEGALES[d.type], priority: '0.2', changefreq: 'yearly' })),
-  ];
-
-  const xml = [
-    '<?xml version="1.0" encoding="UTF-8"?>',
-    '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
-    ...entrees.map((e) => [
-      '  <url>',
-      `    <loc>${base}${e.loc}</loc>`,
-      e.lastmod ? `    <lastmod>${new Date(e.lastmod).toISOString().slice(0, 10)}</lastmod>` : null,
-      `    <changefreq>${e.changefreq}</changefreq>`,
-      `    <priority>${e.priority}</priority>`,
-      '  </url>',
-    ].filter(Boolean).join('\n')),
-    '</urlset>',
-    '',
-  ].join('\n');
-
+  const { sitemapXml } = await import('../services/seo/seo.service.js');
+  const xml = await sitemapXml();
+  if (!xml) throw ApiError.notFound('Plan du site indisponible');
   res.type('application/xml').send(xml);
+});
+
+/** GET /robots.txt — directives produites depuis les données (voir services/seo). */
+export const robots = asyncHandler(async (req, res) => {
+  const { robotsTxt } = await import('../services/seo/seo.service.js');
+  res.type('text/plain; charset=utf-8').set('Cache-Control', 'public, max-age=300').send(await robotsTxt());
+});
+
+/** GET /llms.txt — résumé de l'entreprise et de ses offres pour les assistants IA. */
+export const llms = asyncHandler(async (req, res) => {
+  const { llmsTxt } = await import('../services/seo/seo.service.js');
+  res.type('text/plain; charset=utf-8').set('Cache-Control', 'public, max-age=300').send(await llmsTxt());
+});
+
+/**
+ * GET /public/seo?path=/catalogue/… — l'en-tête de page qu'applique la vitrine à
+ * chaque navigation : la MÊME résolution que le rendu serveur, sans le contenu.
+ */
+export const seo = asyncHandler(async (req, res) => {
+  const { publicSeo } = await import('../services/seo/seo.service.js');
+  const path = String(req.query.path || '/').slice(0, 300);
+  return ok(res, await publicSeo(path));
 });
 
 /** GET /public/network-configuration — section réseau publique (filtrée). */

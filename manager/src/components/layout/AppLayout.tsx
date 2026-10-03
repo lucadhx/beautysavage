@@ -1,12 +1,13 @@
 import * as React from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
-import { AnimatePresence, motion } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { Car, Menu } from 'lucide-react';
 import { Sidebar } from './Sidebar';
 import { SuspensionBanner } from './SuspensionBanner';
 import { useCompany } from '@/context/CompanyContext';
 import { resolvePreviewMediaUrl } from '@/lib/media';
 import { useScrollLock } from '@/lib/scrollLock';
+import { PageSkeleton } from '@/components/ui/Skeleton';
 
 /**
  * SQUELETTE DU MANAGER — LE DOCUMENT EST LE SEUL PROPRIÉTAIRE DU DÉFILEMENT.
@@ -92,29 +93,44 @@ export function AppLayout() {
         </div>
       </div>
 
-      {/* Tiroir mobile */}
-      <AnimatePresence>
-        {mobileOpen && (
-          <div className="fixed inset-0 z-40 md:hidden">
-            <motion.div
-              className="absolute inset-0 bg-black/50"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setMobileOpen(false)}
-            />
-            <motion.div
-              className="absolute left-0 top-0 h-full"
-              initial={{ x: '-100%' }}
-              animate={{ x: 0 }}
-              exit={{ x: '-100%' }}
-              transition={{ type: 'spring', duration: 0.4, bounce: 0.1 }}
-            >
-              <Sidebar onNavigate={() => setMobileOpen(false)} />
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+      {/*
+        TIROIR MOBILE — toujours monté, jamais un voile fantôme.
+
+        Il vivait dans un <AnimatePresence> : fermé, son voile plein écran
+        (`fixed inset-0`) restait dans la page tant que l'animation de sortie
+        n'était pas déclarée finie. Or elle calait quand on choisissait une
+        page dans le menu (la page change au même instant) : le voile restait
+        là, transparent (opacité 0), par-dessus tout le manager. Plus rien ne
+        répondait au doigt — ni les « … », ni les poignées de glisser, ni les
+        lignes — alors que tout marchait en ouvrant une page par son adresse.
+
+        Désormais l'état du tiroir est porté par une classe, pas par la fin
+        d'une animation : fermé, il est `pointer-events-none` IMMÉDIATEMENT,
+        et le panneau devient invisible (hors tabulation) une fois rentré.
+      */}
+      <div
+        className={`fixed inset-0 z-40 md:hidden ${mobileOpen ? '' : 'pointer-events-none'}`}
+        aria-hidden={!mobileOpen}
+        data-testid="mobile-drawer"
+        data-open={mobileOpen || undefined}
+      >
+        <motion.div
+          className="absolute inset-0 bg-black/50"
+          initial={false}
+          animate={{ opacity: mobileOpen ? 1 : 0 }}
+          transition={{ duration: 0.2 }}
+          onClick={() => setMobileOpen(false)}
+        />
+        <motion.div
+          className="absolute left-0 top-0 h-full"
+          initial={false}
+          animate={mobileOpen ? { x: 0, visibility: 'visible' } : { x: '-100%', transitionEnd: { visibility: 'hidden' } }}
+          style={{ visibility: 'hidden' }}
+          transition={{ type: 'spring', duration: 0.4, bounce: 0.1 }}
+        >
+          <Sidebar onNavigate={() => setMobileOpen(false)} />
+        </motion.div>
+      </div>
 
       {/*
         `min-w-0` : sans lui, un enfant large (tableau, ligne de code, URL non
@@ -157,8 +173,24 @@ export function AppLayout() {
         </header>
 
         <main className="flex-1">
-          <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-5 md:px-8">
-            <Outlet />
+          <div className="mx-auto w-full max-w-6xl px-3 py-6 sm:px-5 sm:py-8 md:px-8">
+            {/*
+              Seul le CONTENU change d'une page à l'autre : la barre latérale
+              reste. Pendant que le code de la page arrive, un contenu fantôme
+              occupe la place ; la page entre ensuite en fondu. La clé par
+              adresse remonte la page à chaque navigation (comme avant), sans
+              toucher à la mise en page.
+            */}
+            <React.Suspense fallback={<PageSkeleton />}>
+              <motion.div
+                key={pathname}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.18, ease: 'easeOut' }}
+              >
+                <Outlet />
+              </motion.div>
+            </React.Suspense>
           </div>
         </main>
       </div>

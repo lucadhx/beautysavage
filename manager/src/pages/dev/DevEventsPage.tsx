@@ -92,7 +92,7 @@ export default function DevEventsPage() {
       </Card>
 
       {loading ? (
-        <BrandLoader />
+        <BrandLoader variant="list" />
       ) : events.length === 0 ? (
         <EmptyState
           icon={Activity}
@@ -172,7 +172,7 @@ function EventDetailModal({
   return (
     <Modal open onClose={onClose} title="Détail de l'événement" className="max-w-3xl">
       {loading || !event ? (
-        <div className="py-8"><BrandLoader /></div>
+        <div className="py-8"><BrandLoader variant="list" /></div>
       ) : (
         <div className="space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-2">

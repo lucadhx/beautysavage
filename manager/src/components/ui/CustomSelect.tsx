@@ -73,7 +73,7 @@ export function CustomSelect<T extends string>({
             className="absolute left-0 right-0 z-40 overflow-hidden rounded-md border shadow-xl"
             style={{ background: 'var(--m-card)', color: 'var(--m-foreground)' }}
           >
-            <div role="listbox" className="max-h-72 overflow-auto p-1">
+            <div role="listbox" className="max-h-72 overflow-auto overscroll-contain p-1">
               {options.map((option) => {
                 const active = option.value === value;
                 return (

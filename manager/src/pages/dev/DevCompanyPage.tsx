@@ -59,7 +59,7 @@ export default function DevCompanyPage() {
     } catch { /* le toast dit ce qui bloque */ }
   };
 
-  if (loading) return <BrandLoader />;
+  if (loading) return <BrandLoader variant="form" />;
 
   const company = data?.company ?? null;
   const identity = company?.identity ?? null;

@@ -1,6 +1,10 @@
 import { asyncHandler } from './asyncHandler.js';
 import { ok } from './apiResponse.js';
 import { getSingleton } from './singleton.js';
+import { notifyPublicChange } from '../services/publicLive.service.js';
+
+/** Fiches uniques affichées par la vitrine : leur enregistrement est diffusé en direct. */
+const PUBLIC_MODELS = new Set(['Company', 'HomeContent', 'Theme', 'SeoSettings']);
 
 /**
  * Generate get/update controllers for a singleton model.
@@ -37,6 +41,8 @@ export function singletonFactory(Model, { transform, decorate } = {}) {
     void updatedAt;
 
     const doc = await saveWithRetry(Model, clean);
+    // Ce que la vitrine affiche a changé : les vitrines ouvertes se mettent à jour.
+    if (PUBLIC_MODELS.has(Model.modelName)) notifyPublicChange('site');
     return ok(res, doc);
   });
 

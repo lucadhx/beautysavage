@@ -36,7 +36,7 @@ export default function StatusPage() {
 
   if (!status) {
     return (
-      <BrandLoader />
+      <BrandLoader variant="form" />
     );
   }
 

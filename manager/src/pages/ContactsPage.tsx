@@ -23,7 +23,7 @@ export default function ContactsPage() {
 
   if (loading || !data) {
     return (
-      <BrandLoader />
+      <BrandLoader variant="form" />
     );
   }
 

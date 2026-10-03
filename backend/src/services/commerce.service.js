@@ -11,22 +11,34 @@ import { Customer } from '../models/Customer.model.js';
 import { InstituteIntegration } from '../models/InstituteIntegration.model.js';
 import { Review } from '../models/Review.model.js';
 import { RefundRequest } from '../models/RefundRequest.model.js';
-import { GiftCard, hashGiftSecret, maskGiftCode } from '../models/GiftCard.model.js';
+import { GiftCard, hashGiftSecret, maskGiftCode, encryptGiftCode, decryptGiftCode, normalizeGiftCode } from '../models/GiftCard.model.js';
 import { TrainingSubmission } from '../models/TrainingSubmission.model.js';
 import { ApiError } from '../utils/ApiError.js';
 import { config } from '../config/env.js';
 import { logger } from '../utils/logger.js';
 import { maskEmail } from '../utils/eventPayloadSafety.js';
 import { EVENT_ACTOR_TYPE } from '../utils/domainEventConstants.js';
-import { encryptSecret, lastFourOf, maskFromLastFour } from '../utils/integratedApiCrypto.js';
+import { decryptSecret, encryptSecret, lastFourOf, maskFromLastFour } from '../utils/integratedApiCrypto.js';
 import { signCustomerToken } from '../middlewares/customerAuth.middleware.js';
-import { assertNoOverlap } from './calendar.service.js';
+import { assertNoOverlap, cancelEvent, sessionBlocks } from './calendar.service.js';
+import { activeCommissionRule, applyCommissionCap, computeSaleCommission } from './commissionRules.js';
+import { activePromotion, effectivePriceCents } from './commercePromotion.js';
+import { paymentSplit, publicPaymentRule } from './commercePaymentRules.js';
+import { configuredSiteUrl } from '../utils/siteOrigin.js';
+import { view as commissionView } from './commissionPayment.service.js';
+import { emitAppointmentBooked } from './commerceCustomer.service.js';
 import { emitAndDispatch } from './events/domainEvent.service.js';
 import {
+  activeInstituteMode,
+  assertInstituteKeyMatchesMode,
   createInstituteCheckoutSession,
+  instituteStripeReady,
   provisionInstituteStripeWebhook,
   refundInstitutePayment,
   retrieveInstituteCheckoutSession,
+  expireInstituteCheckoutSession,
+  createInstituteCoupon,
+  retrieveInstituteInvoice,
 } from './instituteStripe.service.js';
 import {
   generateCreditNotePdf,
@@ -34,7 +46,22 @@ import {
   generateSaleInvoicePdf,
 } from './commerceDocuments.service.js';
 
+/**
+ * La FAQ telle que la vitrine peut l'afficher : une question ET une réponse,
+ * rien d'autre. Le Manager la saisissait déjà, mais la fiche publique ne la
+ * transportait pas — elle n'apparaissait donc nulle part.
+ */
+function publicFaq(rows) {
+  return (Array.isArray(rows) ? rows : [])
+    .map((row) => ({
+      question: String(row?.question || '').trim(),
+      answer: String(row?.answer || '').trim(),
+    }))
+    .filter((row) => row.question && row.answer);
+}
+
 function publicProduct(product) {
+  const promotion = activePromotion(product);
   return {
     id: String(product._id),
     slug: product.slug,
@@ -43,7 +70,11 @@ function publicProduct(product) {
     description: product.description,
     kind: product.kind,
     status: product.status,
-    price: product.price,
+    // Le prix À PAYER (promotion comprise) ; le prix d'origine, barré, quand une promotion court.
+    price: promotion ? { ...(product.price?.toObject?.() ?? product.price), amountCents: promotion.priceCents } : product.price,
+    compareAtPrice: promotion ? { amountCents: promotion.originalCents, currency: product.price?.currency || 'EUR' } : null,
+    paymentRule: publicPaymentRule(product),
+    promotion: promotion ? { percentOff: promotion.percentOff, discountCents: promotion.discountCents, type: promotion.type, value: promotion.value, startsAt: promotion.startsAt, endsAt: promotion.endsAt } : null,
     coverUrl: product.coverUrl,
     gallery: product.gallery || [],
     durationMinutes: product.durationMinutes || 0,
@@ -51,6 +82,8 @@ function publicProduct(product) {
     whatsappGroup: product.whatsappGroup || {},
     bookingRules: product.bookingRules || {},
     modules: product.modules || [],
+    faq: publicFaq(product.faq),
+    consentRequirements: lineConsentRequirements(product),
     options: (product.options || []).filter((option) => option.active),
     sessions: (product.sessions || [])
       .filter((session) => session.status === 'ACTIVE')
@@ -58,12 +91,21 @@ function publicProduct(product) {
         id: String(session._id),
         startsAt: session.startsAt,
         endsAt: session.endsAt,
+        // Les jours de la session (jour 1, jour 2…) avec leurs horaires.
+        days: sessionBlocks(session),
         capacity: session.capacity,
         remaining: Math.max(0, (session.capacity || 0) - (session.reservedCount || 0)),
       })),
     distanceDeliveryMode: product.distanceDeliveryMode,
     requiresLegalWaiver: product.requiresLegalWaiver,
     boostRank: product.boostRank,
+    homeFeatured: Boolean(product.homeFeatured),
+    homeFeaturedRank: product.homeFeaturedRank ?? null,
+    training: {
+      location: product.training?.location || '',
+      durationDays: product.training?.durationDays || null,
+      dayHours: Array.isArray(product.training?.dayHours) ? product.training.dayHours : [],
+    },
   };
 }
 
@@ -220,7 +262,7 @@ async function resolveStreamablePlayback(shortcode) {
   const attempts = [];
   const page = await fetchStreamableHtml(safeCode);
   attempts.push({ strategy: 'streamable-page', status: page.status, type: page.contentType, page: page.page });
-  if (!page.ok) throw ApiError.badRequest('Video Streamable introuvable ou non publique.');
+  if (!page.ok) throw ApiError.badRequest('Vidéo Streamable introuvable ou non publique.');
   const candidates = extractStreamableMp4Urls(page.html);
   for (const candidate of candidates) {
     const probe = await probeStreamableMp4(candidate, attempts);
@@ -238,7 +280,7 @@ async function resolveStreamablePlayback(shortcode) {
     }
   }
   logger.warn('[streamable-video] resolution failed', { shortcode: safeCode, attempts });
-  throw ApiError.badRequest('Impossible de recuperer la source MP4 Streamable pour cette video.');
+  throw ApiError.badRequest('Impossible de récupérer la source MP4 Streamable pour cette vidéo.');
 }
 
 export async function resolveStreamableVideo(payload = {}) {
@@ -611,7 +653,7 @@ async function resolveGoogleDriveMp4Download(fileId, options = {}) {
       error: attempt.error,
     })),
   });
-  throw ApiError.badRequest('Impossible de recuperer une source MP4 lisible depuis ce lien Google Drive. Le fichier doit etre public et lisible/telechargeable.');
+  throw ApiError.badRequest('Impossible de récupérer une source MP4 lisible depuis ce lien Google Drive. Le fichier doit être public et lisible/téléchargeable.');
 }
 
 export function googleDriveVideoStreamPath(fileId) {
@@ -742,23 +784,108 @@ function lineTotals(product, line) {
     .filter((option) => option.active && optionKeys.has(option.key))
     .reduce((sum, option) => sum + (option.priceCents || 0), 0);
   const giftCard = giftCardLinePayload(product, line);
-  const unitPriceCents = (giftCard?.amountCents ?? product.price.amountCents) + optionsTotalCents;
-  const totalCents = unitPriceCents * line.quantity;
-  return { optionKeys: [...optionKeys], optionsTotalCents, unitPriceCents, totalCents };
+  const unitPriceCents = (giftCard?.amountCents ?? effectivePriceCents(product)) + optionsTotalCents;
+  const fullTotalCents = unitPriceCents * line.quantity;
+  // Acompte ou prestation gratuite : seule la part « maintenant » est encaissée en ligne.
+  const split = paymentSplit(product, fullTotalCents);
+  return { optionKeys: [...optionKeys], optionsTotalCents, unitPriceCents, totalCents: split.payNowCents, fullTotalCents, balanceDueCents: split.balanceDueCents, paymentRule: split.rule };
 }
 
-function websiteBaseUrl() {
-  const fromCors = (process.env.CORS_ORIGINS || '').split(',')
-    .map((origin) => origin.trim().replace(/\/$/, ''))
-    .find((origin) => origin && !origin.includes('manager.') && !origin.includes('api.') && origin.includes('beautysavage'));
-  return fromCors || 'https://beautysavage.ly-solution.com';
+const KIND_LABEL_FR = {
+  SERVICE: 'Prestation',
+  IN_PERSON_TRAINING: 'Formation en présentiel',
+  DISTANCE_TRAINING: 'Formation en ligne',
+  GIFT_CARD: 'Carte cadeau',
+  PRODUCT: 'Produit',
+};
+
+function lineWhen(line) {
+  const fmt = (d) => new Intl.DateTimeFormat('fr-FR', { timeZone: 'Europe/Paris', weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }).format(new Date(d));
+  if (line.bookingSnapshot?.startsAt) return `le ${fmt(line.bookingSnapshot.startsAt)}`;
+  const session = line.sessionId ? (line.productSnapshot?.sessions || []).find((s) => String(s.id) === String(line.sessionId)) : null;
+  return session ? `session du ${fmt(session.startsAt)}` : '';
 }
+
+/**
+ * LES LIGNES DE LA PAGE STRIPE (et de la facture Stripe) — une par article,
+ * une par option payante. La somme vaut le total de la commande ; la part
+ * carte cadeau est déduite par une remise, jamais en retouchant un prix.
+ */
+export function stripeLineItems(sale) {
+  const items = [];
+  for (const line of sale.lines || []) {
+    const kind = KIND_LABEL_FR[line.productSnapshot?.kind] || 'Article';
+    const options = line.optionsSnapshot || [];
+    const freeOptions = options.filter((o) => !(o.priceCents > 0)).map((o) => o.label);
+    const description = [kind, lineWhen(line), freeOptions.length ? `inclus : ${freeOptions.join(', ')}` : '']
+      .filter(Boolean).join(' · ').slice(0, 500);
+    if ((line.balanceDueCents || 0) > 0) {
+      // Acompte : une seule ligne, le solde sur place est écrit dans la description.
+      const optionText = options.length ? ` · options : ${options.map((o) => o.label).join(', ')}` : '';
+      items.push({
+        quantity: 1,
+        price_data: {
+          currency: 'eur',
+          unit_amount: Number(line.totalCents || 0),
+          product_data: {
+            name: `Acompte — ${line.productSnapshot?.title || 'Prestation'}`.slice(0, 250),
+            description: [kind, lineWhen(line), `solde de ${(line.balanceDueCents / 100).toFixed(2).replace('.', ',')} € à régler sur place`].filter(Boolean).join(' · ').concat(optionText).slice(0, 500),
+          },
+        },
+      });
+      continue;
+    }
+    const base = Math.max(0, Number(line.unitPriceCents || 0) - Number(line.optionsTotalCents || 0));
+    items.push({
+      quantity: line.quantity || 1,
+      price_data: {
+        currency: 'eur',
+        unit_amount: base,
+        product_data: {
+          name: String(line.productSnapshot?.kind === 'GIFT_CARD' ? `Carte cadeau${line.giftCardSnapshot?.recipientName ? ` pour ${line.giftCardSnapshot.recipientName}` : ''}` : (line.productSnapshot?.title || 'Article')).slice(0, 250),
+          ...(description ? { description } : {}),
+        },
+      },
+    });
+    for (const option of options.filter((o) => o.priceCents > 0)) {
+      items.push({
+        quantity: line.quantity || 1,
+        price_data: {
+          currency: 'eur',
+          unit_amount: option.priceCents,
+          product_data: { name: `Option : ${option.label}`.slice(0, 250), description: `Pour ${line.productSnapshot?.title || 'l’article'}`.slice(0, 500) },
+        },
+      });
+    }
+  }
+  // Une ligne à 0 € n'apporte rien au total et certains moyens de paiement la refusent.
+  const payable = items.filter((i) => i.price_data.unit_amount > 0);
+  items.length = 0;
+  items.push(...payable);
+  // Filet : un écart d'arrondi éventuel ne doit jamais faire facturer un autre montant que la commande.
+  const sum = items.reduce((s, i) => s + i.price_data.unit_amount * i.quantity, 0);
+  if (sum !== sale.totalCents) {
+    return [{ quantity: 1, price_data: { currency: 'eur', unit_amount: sale.totalCents, product_data: { name: `Commande ${sale.saleNumber}` } } }];
+  }
+  return items;
+}
+
 
 async function hydrateCart(cart) {
-  const productIds = cart.lines.map((line) => line.productId);
+  const hydrated = await hydrateLines(cart.lines);
+  return { id: String(cart._id), ...hydrated };
+}
+
+/**
+ * Le calcul d'une commande à partir de lignes brutes — celles du panier, ou
+ * l'unique ligne d'un achat rapide. Un seul calcul pour les deux chemins : un
+ * prix, une option ou un consentement ne peut pas différer selon la porte.
+ */
+async function hydrateLines(rawLines = []) {
+  const productIds = rawLines.map((line) => line.productId);
   const products = await CommerceProduct.find({ _id: { $in: productIds } });
   const byId = new Map(products.map((product) => [String(product._id), product]));
-  const lines = cart.lines.map((line) => {
+  const lines = rawLines.map((line) => {
     const product = byId.get(String(line.productId));
     if (!product) return null;
     const totals = lineTotals(product, line);
@@ -772,14 +899,17 @@ async function hydrateCart(cart) {
       unitPriceCents: totals.unitPriceCents,
       optionsTotalCents: totals.optionsTotalCents,
       totalCents: totals.totalCents,
+      fullTotalCents: totals.fullTotalCents,
+      balanceDueCents: totals.balanceDueCents,
+      paymentRule: totals.paymentRule,
       giftCard: giftCardLinePayload(product, line),
       consentRequirements: lineConsentRequirements(product),
     };
   }).filter(Boolean);
   return {
-    id: String(cart._id),
     lines,
     totalCents: lines.reduce((sum, line) => sum + line.totalCents, 0),
+    balanceDueCents: lines.reduce((sum, line) => sum + (line.balanceDueCents || 0), 0),
     currency: 'EUR',
   };
 }
@@ -803,7 +933,7 @@ export async function registerCustomer(payload) {
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw ApiError.badRequest('Adresse e-mail invalide');
   if (password.length < 8) throw ApiError.badRequest('Mot de passe trop court');
   const exists = await Customer.findOne({ email }).lean();
-  if (exists) throw ApiError.conflict('Un compte client existe deja pour cette adresse');
+  if (exists) throw ApiError.conflict('Un compte client existe déjà pour cette adresse');
   const code = verificationCode();
   const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000);
   const customer = await Customer.create({
@@ -834,7 +964,9 @@ export async function registerCustomer(payload) {
   });
   await emitCustomerVerificationRequested(customer, code, expiresAt);
   return {
-    customer,
+    // Relu sans les champs `select: false` : le document créé porte encore le
+    // mot de passe haché et l'empreinte du code (6 chiffres : réversible).
+    customer: await Customer.findById(customer._id).lean(),
     token: signCustomerToken(customer),
     ...(process.env.ENV === 'TEST' ? { verificationCode: code } : {}),
   };
@@ -851,7 +983,7 @@ export async function loginCustomer(email, password) {
 export async function requestCustomerEmailVerification(customerId) {
   const customer = await Customer.findById(customerId).select('+emailVerification.tokenHash');
   if (!customer) throw ApiError.notFound('Compte client introuvable');
-  if (customer.emailVerified) return { message: 'Adresse e-mail deja verifiee.' };
+  if (customer.emailVerified) return { message: 'Adresse e-mail déjà vérifiée.' };
   const code = verificationCode();
   const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000);
   customer.emailVerification = {
@@ -862,7 +994,7 @@ export async function requestCustomerEmailVerification(customerId) {
   };
   await customer.save();
   await emitCustomerVerificationRequested(customer, code, expiresAt);
-  return { message: 'Code de verification envoye.', ...(process.env.ENV === 'TEST' ? { verificationCode: code } : {}) };
+  return { message: 'Code de vérification envoyé.', ...(process.env.ENV === 'TEST' ? { verificationCode: code } : {}) };
 }
 
 export async function verifyCustomerEmail(code) {
@@ -871,7 +1003,7 @@ export async function verifyCustomerEmail(code) {
     'emailVerification.tokenHash': tokenHash,
     'emailVerification.expiresAt': { $gt: new Date() },
   }).select('+emailVerification.tokenHash');
-  if (!customer) throw ApiError.badRequest('Code de verification invalide ou expire');
+  if (!customer) throw ApiError.badRequest('Code de vérification invalide ou expiré');
   customer.emailVerified = true;
   customer.emailVerification.verifiedAt = new Date();
   customer.emailVerification.tokenHash = '';
@@ -886,15 +1018,9 @@ export async function verifyCustomerEmail(code) {
     },
     idempotencyKey: `customer-email-verified:${customer._id}:${customer.emailVerification.verifiedAt.getTime()}`,
   });
-  return { customer, token: signCustomerToken(customer), message: 'Adresse e-mail verifiee.' };
+  return { customer, token: signCustomerToken(customer), message: 'Adresse e-mail vérifiée.' };
 }
 
-function customerWebsiteBaseUrl() {
-  const fromCors = (process.env.CORS_ORIGINS || '').split(',')
-    .map((origin) => origin.trim().replace(/\/$/, ''))
-    .find((origin) => origin && origin.includes('beautysavage') && !origin.includes('api.') && !origin.includes('manager.'));
-  return fromCors || 'https://beautysavage.ly-solution.com';
-}
 
 function verificationCode() {
   return String(crypto.randomInt(100000, 1000000));
@@ -920,10 +1046,10 @@ async function emitCustomerVerificationRequested(customer, code, expiresAt) {
   });
 }
 
-export async function requestCustomerPasswordReset(email) {
+export async function requestCustomerPasswordReset(email, { siteUrl = '' } = {}) {
   const normalized = String(email || '').trim().toLowerCase();
   const customer = await Customer.findOne({ email: normalized }).select('+passwordReset.tokenHash');
-  const response = { message: 'Si ce compte existe, un lien de reinitialisation va etre envoye.' };
+  const response = { message: 'Si ce compte existe, un lien de réinitialisation va être envoyé.' };
   if (!customer) return response;
   const token = crypto.randomBytes(32).toString('hex');
   customer.passwordReset = {
@@ -933,7 +1059,7 @@ export async function requestCustomerPasswordReset(email) {
     usedAt: null,
   };
   await customer.save();
-  const resetUrl = `${customerWebsiteBaseUrl()}/espace-client/mot-de-passe?token=${token}`;
+  const resetUrl = `${siteUrl || await configuredSiteUrl()}/espace-client/mot-de-passe?token=${token}`;
   await emitAndDispatch({
     type: 'customer.password_reset.requested',
     entityType: 'Customer',
@@ -958,14 +1084,14 @@ export async function resetCustomerPassword(payload = {}) {
     'passwordReset.expiresAt': { $gt: new Date() },
     'passwordReset.usedAt': null,
   }).select('+password +passwordReset.tokenHash');
-  if (!customer) throw ApiError.badRequest('Lien de reinitialisation invalide ou expire');
+  if (!customer) throw ApiError.badRequest('Lien de réinitialisation invalide ou expiré');
   const password = String(payload.password || '');
   if (password.length < 8) throw ApiError.badRequest('Mot de passe trop court');
   customer.password = password;
   customer.passwordReset.usedAt = new Date();
   customer.passwordReset.tokenHash = '';
   await customer.save();
-  return { message: 'Mot de passe client mis a jour.' };
+  return { message: 'Mot de passe client mis à jour.' };
 }
 
 export async function getCustomerCart(customerId) {
@@ -978,23 +1104,46 @@ export async function getCustomerCart(customerId) {
 }
 
 export async function addCartItem(customerId, payload) {
+  const line = await buildOrderLine(payload);
+  const cart = await Cart.findOneAndUpdate(
+    { customerId },
+    { $push: { lines: line } },
+    { new: true, upsert: true }
+  );
+  return hydrateCart(cart);
+}
+
+/**
+ * UNE LIGNE DE COMMANDE VALIDÉE — produit publié, session ouverte, créneau
+ * libre, carte cadeau renseignée. Le panier et l'achat rapide passent tous deux
+ * par ici : la règle d'admissibilité n'existe qu'à un endroit.
+ */
+async function buildOrderLine(payload = {}) {
   const product = await CommerceProduct.findOne({ _id: payload.productId, status: PRODUCT_STATUS.PUBLISHED });
   if (!product) throw ApiError.notFound('Article indisponible');
   let bookingSnapshot = null;
   if (product.kind === 'IN_PERSON_TRAINING' && !payload.sessionId) {
-    throw ApiError.badRequest('Une session est requise pour cette formation presentielle');
+    throw ApiError.badRequest('Une session est requise pour cette formation présentielle');
   }
   if (product.kind === 'IN_PERSON_TRAINING' && payload.sessionId) {
     const session = product.sessions.id(payload.sessionId);
     if (!session || session.status !== 'ACTIVE') throw ApiError.badRequest('Session indisponible');
-    if ((session.reservedCount || 0) >= (session.capacity || 0)) throw ApiError.conflict('Cette session est complete');
+    if ((session.reservedCount || 0) >= (session.capacity || 0)) throw ApiError.conflict('Cette session est complète');
   }
   if (product.kind === 'SERVICE') {
     const startsAt = new Date(payload.serviceBooking?.startsAt || payload.bookingSnapshot?.startsAt || '');
     const durationMinutes = Math.max(5, Number(product.durationMinutes || payload.serviceBooking?.durationMinutes || 60));
-    const endsAt = new Date(payload.serviceBooking?.endsAt || startsAt.getTime() + durationMinutes * 60_000);
+    /*
+      LE CRÉNEAU RÉSERVÉ = L'HEURE CHOISIE + LA DURÉE DE LA PRESTATION.
+      La fin n'est plus reprise du navigateur : c'est la fiche prestation qui
+      dit combien de temps bloquer au planning. Seule une prestation sans
+      durée renseignée garde la fin proposée par le créneau choisi.
+    */
+    const endsAt = product.durationMinutes
+      ? new Date(startsAt.getTime() + durationMinutes * 60_000)
+      : new Date(payload.serviceBooking?.endsAt || startsAt.getTime() + durationMinutes * 60_000);
     if (Number.isNaN(startsAt.getTime()) || Number.isNaN(endsAt.getTime()) || endsAt <= startsAt) {
-      throw ApiError.badRequest('Choisissez un creneau disponible pour cette prestation');
+      throw ApiError.badRequest('Choisissez un créneau disponible pour cette prestation');
     }
     await assertNoOverlap({ startsAt, endsAt });
     bookingSnapshot = {
@@ -1008,26 +1157,35 @@ export async function addCartItem(customerId, payload) {
     ? giftCardLinePayload(product, { giftCard: payload.giftCard || payload })
     : null;
   if (product.kind === 'GIFT_CARD') {
-    if (!giftCard.recipientName) throw ApiError.badRequest('Beneficiaire requis pour la carte cadeau');
-    if (!giftCard.senderName) throw ApiError.badRequest('Nom de l expediteur requis pour la carte cadeau');
+    if (!giftCard.recipientName) throw ApiError.badRequest('Bénéficiaire requis pour la carte cadeau');
+    if (!giftCard.senderName) throw ApiError.badRequest("Nom de l'expéditeur requis pour la carte cadeau");
   }
-  const cart = await Cart.findOneAndUpdate(
-    { customerId },
-    {
-      $push: {
-        lines: {
-          productId: product._id,
-          quantity: Math.max(1, Number(payload.quantity || 1)),
-          sessionId: payload.sessionId || null,
-          bookingSnapshot,
-          optionKeys: Array.isArray(payload.optionKeys) ? payload.optionKeys : [],
-          giftCard,
-        },
-      },
-    },
-    { new: true, upsert: true }
-  );
-  return hydrateCart(cart);
+  return {
+    productId: product._id,
+    quantity: Math.max(1, Number(payload.quantity || 1)),
+    sessionId: payload.sessionId || null,
+    bookingSnapshot,
+    optionKeys: Array.isArray(payload.optionKeys) ? payload.optionKeys : [],
+    giftCard,
+  };
+}
+
+/** Identifiant de la ligne unique d'un achat rapide — il préfixe ses consentements. */
+export const QUICK_BUY_LINE_ID = 'achat-rapide';
+
+/**
+ * ACHAT RAPIDE — une prestation, une formation ou une carte cadeau payée
+ * directement depuis sa fiche, sans transiter par le panier.
+ *
+ * Le panier n'est ni lu ni vidé : ce que la cliente y avait mis reste là. La
+ * ligne est validée exactement comme un ajout au panier, puis la commande suit
+ * le même chemin de paiement que le panier.
+ */
+export async function createQuickCheckout(customerId, payload = {}) {
+  const line = await buildOrderLine(payload.item || payload);
+  const hydrated = await hydrateLines([{ _id: QUICK_BUY_LINE_ID, ...line }]);
+  if (hydrated.lines.length === 0) throw ApiError.notFound('Article indisponible');
+  return checkoutHydratedLines(customerId, hydrated, payload, { checkoutSource: 'QUICK_BUY' });
 }
 
 export async function removeCartItem(customerId, lineId) {
@@ -1043,6 +1201,10 @@ export async function createCheckout(customerId, payload = {}) {
   const cart = await Cart.findOne({ customerId });
   if (!cart || cart.lines.length === 0) throw ApiError.badRequest('Panier vide');
   const hydrated = await hydrateCart(cart);
+  return checkoutHydratedLines(customerId, hydrated, payload, { checkoutSource: 'CART' });
+}
+
+async function checkoutHydratedLines(customerId, hydrated, payload = {}, { checkoutSource = 'CART' } = {}) {
   const accepted = new Set(Array.isArray(payload.consents) ? payload.consents : []);
   const missingConsents = hydrated.lines.flatMap((line) => (
     (line.consentRequirements || [])
@@ -1055,18 +1217,21 @@ export async function createCheckout(customerId, payload = {}) {
   const customer = await Customer.findById(customerId).lean();
   if (!customer) throw ApiError.notFound('Compte client introuvable');
   if (!customer.emailVerified) {
-    throw ApiError.forbidden('Verification e-mail obligatoire avant achat', { code: 'CUSTOMER_EMAIL_NOT_VERIFIED' });
+    throw ApiError.forbidden('Vérification e-mail obligatoire avant achat', { code: 'CUSTOMER_EMAIL_NOT_VERIFIED' });
   }
-  const integration = await InstituteIntegration.findOne({ provider: 'STRIPE_INSTITUTE' }).lean();
-  const stripeReady = Boolean(integration?.verified);
+  // Les clés de l'environnement courant (ENV=PROD → clés live) décident seules.
+  const stripeReady = await instituteStripeReady();
+  const instituteMode = activeInstituteMode();
+  if ((payload.giftCardCodes || payload.giftCards || []).length) await releaseAbandonedCheckouts(customerId);
   let giftCardAllocations = await reserveGiftCardAllocations(payload.giftCardCodes || payload.giftCards || [], hydrated.totalCents);
   let giftCardAmountCents = giftCardAllocations.reduce((sum, item) => sum + item.amountCents, 0);
   let stripeAmountCents = Math.max(0, hydrated.totalCents - giftCardAmountCents);
   if (!stripeReady && stripeAmountCents > 0 && giftCardAllocations.length > 0) {
     await releaseGiftCardReservations(giftCardAllocations);
-    giftCardAllocations = [];
-    giftCardAmountCents = 0;
-    stripeAmountCents = hydrated.totalCents;
+    throw ApiError.conflict(
+      'Le paiement par carte bancaire est momentanément indisponible : votre carte cadeau ne couvre pas toute la commande. Rien n’a été débité.',
+      { code: 'CARD_PAYMENT_UNAVAILABLE' },
+    );
   }
 
   const saleNumber = `BS-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
@@ -1077,7 +1242,13 @@ export async function createCheckout(customerId, payload = {}) {
     quantity: line.quantity,
     unitPriceCents: line.unitPriceCents,
     optionsTotalCents: line.optionsTotalCents,
+    optionsSnapshot: (line.product.options || [])
+      .filter((option) => (line.optionKeys || []).includes(option.key))
+      .map((option) => ({ key: option.key, label: option.label, priceCents: Number(option.priceCents || 0) })),
     totalCents: line.totalCents,
+    fullTotalCents: line.fullTotalCents ?? line.totalCents,
+    balanceDueCents: line.balanceDueCents || 0,
+    paymentRule: line.paymentRule || 'FULL',
     sessionId: line.sessionId,
     bookingSnapshot: line.bookingSnapshot || null,
     giftCardSnapshot: line.giftCard,
@@ -1105,9 +1276,10 @@ export async function createCheckout(customerId, payload = {}) {
         currency: 'EUR',
         lines,
         giftCardAllocations,
+        checkoutSource,
         stripe: {
           checkoutSessionId: '',
-          mode: integration?.mode || 'TEST',
+          mode: instituteMode,
         },
       },
     },
@@ -1121,7 +1293,7 @@ export async function createCheckout(customerId, payload = {}) {
       total: money(sale.totalCents),
       paymentStatus: sale.paymentStatus,
       checkoutUrl: '/paiement/succes',
-      message: 'Commande deja payee.',
+      message: 'Commande déjà payée.',
     };
   }
 
@@ -1132,26 +1304,35 @@ export async function createCheckout(customerId, payload = {}) {
       saleNumber: paidSale.saleNumber,
       total: money(paidSale.totalCents),
       paymentStatus: paidSale.paymentStatus,
-      checkoutUrl: '/paiement/succes',
-      message: 'Commande reglee par carte cadeau.',
+      checkoutUrl: `/paiement/succes?commande=${encodeURIComponent(paidSale.saleNumber)}`,
+      message: 'Commande réglée par carte cadeau.',
     };
   }
 
   if (stripeReady && !sale.stripe.checkoutSessionId) {
+    // Le site d'où vient la cliente (fourni par la route, origine vérifiée), sinon celui de cette instance.
+    const site = String(payload.siteUrl || '').replace(/\/+$/, '') || await configuredSiteUrl();
     try {
+      // La part carte cadeau devient une remise : la page Stripe et la facture détaillent les articles.
+      const giftCents = Number(sale.giftCardAmountCents || 0);
+      const coupon = giftCents > 0
+        ? await createInstituteCoupon({
+          amountOffCents: giftCents,
+          name: `Carte cadeau ${(sale.giftCardAllocations || []).map((a) => a.codeMasked).join(', ')}`,
+          idempotencyKey: `coupon:${sale.idempotencyKey}`,
+        })
+        : null;
       const checkout = await createInstituteCheckoutSession({
         sale,
         customer,
-        lineItems: [{
-          quantity: 1,
-          price_data: {
-            currency: 'eur',
-            unit_amount: stripeAmountCents,
-            product_data: { name: `Commande BeautySavage ${sale.saleNumber}` },
-          },
-        }],
-        successUrl: `${websiteBaseUrl()}/paiement/succes?session_id={CHECKOUT_SESSION_ID}`,
-        cancelUrl: `${websiteBaseUrl()}/panier?paiement=annule`,
+        lineItems: stripeLineItems(sale),
+        discounts: coupon ? [{ coupon: coupon.id }] : null,
+        successUrl: `${site}/paiement/succes?session_id={CHECKOUT_SESSION_ID}`,
+        expiresInMinutes: sale.giftCardAllocations?.length ? 30 : null,
+        // Un achat rapide annulé ramène sur la fiche, pas sur un panier qu'il n'a jamais touché.
+        cancelUrl: checkoutSource === 'QUICK_BUY' && payload.returnPath && /^\/[a-z0-9/_-]*$/i.test(String(payload.returnPath))
+          ? `${site}${payload.returnPath}?paiement=annule`
+          : `${site}/panier?paiement=annule`,
       });
       sale.stripe.checkoutSessionId = checkout.id || '';
       sale.stripe.checkoutUrl = checkout.url || '';
@@ -1185,15 +1366,24 @@ async function reserveGiftCardAllocations(rawCodes, maxAmountCents) {
     ? rawCodes.map((entry) => typeof entry === 'string' ? { code: entry } : entry).filter(Boolean)
     : [];
   const allocations = [];
+  const seen = new Set();
   let remaining = Math.max(0, Number(maxAmountCents || 0));
   for (const entry of codes) {
     if (remaining <= 0) break;
-    const code = String(entry.code || '').trim();
-    if (!code) continue;
-    const card = await GiftCard.findOne({ codeHash: hashGiftSecret(code), status: 'ACTIVE' });
-    if (!card) throw ApiError.badRequest('Carte cadeau invalide ou inactive');
+    const code = normalizeGiftCode(entry.code);
+    if (!code || seen.has(code)) continue;
+    seen.add(code);
+    const card = await GiftCard.findOne({ codeHash: hashGiftSecret(code) });
+    const refusal = giftCardRefusal(card);
+    if (refusal) {
+      await releaseGiftCardReservations(allocations);
+      throw ApiError.badRequest(refusal.message, { code: refusal.code });
+    }
     const available = Math.max(0, (card.balanceCents || 0) - (card.reservedCents || 0));
-    if (available <= 0) throw ApiError.conflict('Solde carte cadeau insuffisant');
+    if (available <= 0) {
+      await releaseGiftCardReservations(allocations);
+      throw ApiError.conflict(GIFT_RESERVED_MESSAGE, { code: 'GIFT_CARD_RESERVED' });
+    }
     const requested = Number(entry.amountCents || entry.amount || 0);
     const amountCents = Math.min(remaining, available, requested > 0 ? requested : available);
     card.reservedCents = (card.reservedCents || 0) + amountCents;
@@ -1209,17 +1399,33 @@ async function reserveGiftCardAllocations(rawCodes, maxAmountCents) {
   return allocations;
 }
 
-async function applyGiftCardAllocations(sale) {
+async function applyGiftCardAllocations(sale, issues = null) {
   for (const allocation of sale.giftCardAllocations || []) {
     if (allocation.appliedAt) continue;
     const card = await GiftCard.findById(allocation.giftCardId);
-    if (!card) throw ApiError.notFound('Carte cadeau allouee introuvable');
+    if (!card) {
+      if (issues) { issues.push(`Carte cadeau ${allocation.codeMasked || ''} introuvable à la finalisation`); continue; }
+      throw ApiError.notFound('Carte cadeau allouée introuvable');
+    }
+    // Déjà débitée pour cette vente (finalisation reprise) : on ne redébite pas.
+    const ledgerKey = `sale:${sale._id}:gift:${card._id}`;
+    if ((card.ledger || []).some((entry) => entry.idempotencyKey === ledgerKey)) {
+      allocation.appliedAt = allocation.appliedAt || new Date();
+      continue;
+    }
     const amount = Number(allocation.amountCents || 0);
     const before = card.balanceCents;
-    if (before < amount) throw ApiError.conflict('Solde carte cadeau insuffisant a la finalisation');
+    if (before < amount) {
+      if (issues) { issues.push(`Solde insuffisant sur la carte cadeau ${card.codeMasked || ''} à la finalisation`); continue; }
+      throw ApiError.conflict('Solde carte cadeau insuffisant à la finalisation');
+    }
     card.balanceCents = before - amount;
     card.reservedCents = Math.max(0, (card.reservedCents || 0) - amount);
     card.status = card.balanceCents === 0 ? 'EMPTY' : 'ACTIVE';
+    // Une carte avec laquelle on a payé se retrouve ensuite dans son portefeuille.
+    if (sale.customerId && !(card.walletCustomerIds || []).some((id) => String(id) === String(sale.customerId))) {
+      card.walletCustomerIds.push(sale.customerId);
+    }
     card.ledger.push({
       type: 'DEBIT',
       amountCents: amount,
@@ -1242,26 +1448,30 @@ async function releaseGiftCardReservations(allocations = []) {
     if (amount <= 0) continue;
     await GiftCard.updateOne(
       { _id: allocation.giftCardId },
-      { $inc: { reservedCents: -amount } }
+      [{ $set: { reservedCents: { $max: [0, { $subtract: [{ $ifNull: ['$reservedCents', 0] }, amount] }] } } }]
     );
   }
 }
 
-async function incrementReservedSessions(sale) {
+async function incrementReservedSessions(sale, issues = null) {
   for (const line of sale.lines || []) {
     if (line.productSnapshot?.kind !== 'IN_PERSON_TRAINING' || !line.sessionId) continue;
     const product = await CommerceProduct.findById(line.productId);
     const session = product?.sessions.id(line.sessionId);
-    if (!session || session.status !== 'ACTIVE') throw ApiError.conflict('Session de formation indisponible');
+    if (!session || session.status !== 'ACTIVE') {
+      if (issues) { issues.push(`Session de « ${line.productSnapshot?.title || 'formation'} » indisponible au moment du paiement`); if (!session) continue; }
+      else throw ApiError.conflict('Session de formation indisponible');
+    }
     if ((session.reservedCount || 0) + (line.quantity || 1) > (session.capacity || 0)) {
-      throw ApiError.conflict('Session de formation complete');
+      if (issues) issues.push(`Session de « ${line.productSnapshot?.title || 'formation'} » complète : place payée en surnombre`);
+      else throw ApiError.conflict('Session de formation complète');
     }
     session.reservedCount = (session.reservedCount || 0) + (line.quantity || 1);
     await product.save();
   }
 }
 
-async function createServiceBookingsFromSale(sale, customer) {
+async function createServiceBookingsFromSale(sale, customer, issues = null) {
   for (const line of sale.lines || []) {
     if (line.productSnapshot?.kind !== 'SERVICE' || !line.bookingSnapshot?.startsAt || !line.bookingSnapshot?.endsAt) continue;
     const startsAt = new Date(line.bookingSnapshot.startsAt);
@@ -1270,8 +1480,17 @@ async function createServiceBookingsFromSale(sale, customer) {
     const source = { saleId: String(sale._id), lineId: String(line._id), kind: 'SERVICE_CHECKOUT' };
     const existing = await CalendarEvent.findOne({ 'source.saleId': source.saleId, 'source.lineId': source.lineId }).lean();
     if (existing) continue;
-    await assertNoOverlap({ startsAt, endsAt });
-    await CalendarEvent.create({
+    // Le créneau a pu être pris entre la réservation et le paiement : l'argent
+    // est encaissé, le rendez-vous est donc créé QUAND MÊME et signalé.
+    let overlapNote = '';
+    try {
+      await assertNoOverlap({ startsAt, endsAt });
+    } catch (err) {
+      if (!issues) throw err;
+      overlapNote = ' ⚠ Créneau déjà occupé au moment du paiement : à replacer.';
+      issues.push(`Rendez-vous « ${line.productSnapshot?.title || 'prestation'} » en chevauchement : à replacer`);
+    }
+    const booked = await CalendarEvent.create({
       type: 'SERVICE_BOOKING',
       title: line.productSnapshot?.title || 'Rendez-vous institut',
       productId: line.productId,
@@ -1287,15 +1506,16 @@ async function createServiceBookingsFromSale(sale, customer) {
       endsAt,
       status: 'SCHEDULED',
       paymentSnapshot: {
-        totalCents: line.totalCents || 0,
+        totalCents: line.fullTotalCents ?? line.totalCents ?? 0,
         paidCents: line.totalCents || 0,
-        depositCents: 0,
-        balanceDueCents: 0,
+        depositCents: line.balanceDueCents > 0 ? (line.totalCents || 0) : 0,
+        balanceDueCents: line.balanceDueCents || 0,
         currency: sale.currency || 'EUR',
       },
-      notes: `Reservation issue de ${sale.saleNumber}.`,
+      notes: `Reservation issue de ${sale.saleNumber}.${overlapNote}`,
       source,
     });
+    await emitAppointmentBooked(booked, { saleNumber: sale.saleNumber, origin: 'CHECKOUT' });
   }
 }
 
@@ -1341,64 +1561,125 @@ function commissionPeriod(date = new Date()) {
   return { key, start, end };
 }
 
+const commissionLabel = (periodKey) => `Commissions ${periodKey}`;
+
+function commissionDueAt(period) {
+  return new Date(Date.UTC(period.end.getUTCFullYear(), period.end.getUTCMonth(), period.end.getUTCDate() + 7));
+}
+
+/**
+ * LA COMMISSION D'UNE VENTE PAYÉE → photographiée sur la vente, puis ajoutée
+ * à la commission du mois (une ligne par vente, avec son numéro). Un mois
+ * déjà facturé ne bouge plus : une vente qui y arriverait en retard part
+ * dans le mois en cours.
+ */
+/** Le total déjà prélevé (tous mois confondus, hors commissions annulées) — la jauge du plafond. */
+async function commissionsChargedCents(excludeSaleId = null) {
+  const docs = await CommerceCommission.find({ status: { $ne: 'CANCELLED' } }).select('amountCents sourceSnapshot.lines').lean();
+  return docs.reduce((sum, d) => sum + Number(d.amountCents || 0), 0)
+    - (excludeSaleId ? docs.flatMap((d) => d.sourceSnapshot?.lines || []).filter((l) => String(l.saleId) === String(excludeSaleId)).reduce((s, l) => s + Number(l.amountCents || 0), 0) : 0);
+}
+
 async function recalculateMonthlyCommissionForSale(sale) {
-  const basisCents = (sale.lines || [])
-    .filter((line) => line.productSnapshot?.kind === 'DISTANCE_TRAINING')
-    .reduce((sum, line) => sum + (line.totalCents || 0), 0);
-  if (basisCents <= 0) return null;
-  const rateBps = 1000;
-  const amountCents = Math.round((basisCents * rateBps) / 10000);
-  const period = commissionPeriod(sale.finalizedAt || sale.updatedAt || new Date());
-  const label = `Commission formations en ligne ${period.key}`;
-  const alreadyIncluded = await CommerceCommission.exists({ periodKey: period.key, label, saleIds: sale._id });
-  if (alreadyIncluded) return CommerceCommission.findOne({ periodKey: period.key, label });
+  const rule = await activeCommissionRule();
+  const snapshot = applyCommissionCap(computeSaleCommission(sale, rule), rule, rule.capCents ? await commissionsChargedCents(sale._id) : 0);
+  await CommerceSale.updateOne({ _id: sale._id }, { $set: { commission: snapshot } });
+  if (!snapshot.subject || snapshot.amountCents <= 0) return null;
+  let period = commissionPeriod(sale.finalizedAt || sale.updatedAt || new Date());
+  const existing = await CommerceCommission.findOne({ periodKey: period.key, label: commissionLabel(period.key) }).lean();
+  if (existing && existing.status !== 'DUE') period = commissionPeriod(new Date());
+  const label = commissionLabel(period.key);
+  if (await CommerceCommission.exists({ periodKey: period.key, label, saleIds: sale._id })) {
+    return CommerceCommission.findOne({ periodKey: period.key, label });
+  }
   return CommerceCommission.findOneAndUpdate(
-    { periodKey: period.key, label },
+    { periodKey: period.key, label, status: 'DUE' },
     {
-      $setOnInsert: {
-        periodStart: period.start,
-        periodEnd: period.end,
-        dueAt: new Date(Date.UTC(period.end.getUTCFullYear(), period.end.getUTCMonth(), period.end.getUTCDate() + 7)),
-        currency: 'EUR',
-        status: 'DUE',
-      },
-      $set: { rateBps },
-      $inc: { amountCents, basisCents },
+      $setOnInsert: { periodStart: period.start, periodEnd: period.end, dueAt: commissionDueAt(period), currency: 'EUR' },
+      $set: { ratePercent: snapshot.ratePercent, basis: snapshot.basis, rateBps: Math.round(snapshot.ratePercent * 100) },
+      $inc: { amountCents: snapshot.amountCents, basisCents: snapshot.basisCents },
       $addToSet: { saleIds: sale._id },
-      $push: { 'sourceSnapshot.lines': { saleNumber: sale.saleNumber, basisCents, amountCents, rateBps } },
+      $push: {
+        'sourceSnapshot.lines': {
+          saleId: String(sale._id),
+          saleNumber: sale.saleNumber,
+          basisCents: snapshot.basisCents,
+          amountCents: snapshot.amountCents,
+          ratePercent: snapshot.ratePercent,
+          basis: snapshot.basis,
+          ...(snapshot.capped ? { capped: true } : {}),
+        },
+      },
     },
     { new: true, upsert: true }
   );
 }
 
+/** Une vente remboursée quitte la commission de son mois, tant que celui-ci n'est pas facturé. */
+async function removeSaleFromCommission(sale) {
+  const doc = await CommerceCommission.findOne({ saleIds: sale._id, status: 'DUE' });
+  if (!doc) return null;
+  const lines = doc.sourceSnapshot?.lines || [];
+  const line = lines.find((l) => String(l.saleId) === String(sale._id) || l.saleNumber === sale.saleNumber);
+  doc.saleIds = doc.saleIds.filter((id) => String(id) !== String(sale._id));
+  doc.amountCents = Math.max(0, doc.amountCents - Number(line?.amountCents || 0));
+  doc.basisCents = Math.max(0, doc.basisCents - Number(line?.basisCents || 0));
+  doc.sourceSnapshot = { ...(doc.sourceSnapshot || {}), lines: lines.filter((l) => l !== line) };
+  doc.markModified('sourceSnapshot');
+  if (!doc.saleIds.length) { await doc.deleteOne(); return null; }
+  await doc.save();
+  return doc;
+}
+
+/**
+ * RECALCUL COMPLET — reconstruit les mois NON facturés à partir des ventes
+ * payées. Chaque vente garde la règle photographiée à son paiement ; une
+ * vente sans photo reçoit la règle en vigueur. Les mois en paiement ou payés
+ * ne sont jamais réécrits.
+ */
 export async function recalculateMonthlyCommissions() {
+  const rule = await activeCommissionRule();
+  const locked = new Set((await CommerceCommission.find({ status: { $ne: 'DUE' } }).select('periodKey').lean()).map((d) => d.periodKey));
   const paidSales = await CommerceSale.find({ paymentStatus: 'PAID' }).sort({ finalizedAt: 1, createdAt: 1 }).lean();
   const groups = new Map();
+  // Le plafond se remplit d'abord avec ce qui est déjà facturé (mois payés ou en paiement).
+  let charged = rule.capCents
+    ? (await CommerceCommission.find({ status: { $nin: ['DUE', 'CANCELLED'] } }).select('amountCents').lean()).reduce((s, d) => s + Number(d.amountCents || 0), 0)
+    : 0;
   for (const sale of paidSales) {
-    const basisCents = (sale.lines || [])
-      .filter((line) => line.productSnapshot?.kind === 'DISTANCE_TRAINING')
-      .reduce((sum, line) => sum + (line.totalCents || 0), 0);
-    if (basisCents <= 0) continue;
     const period = commissionPeriod(sale.finalizedAt || sale.updatedAt || sale.createdAt || new Date());
-    const current = groups.get(period.key) || { period, basisCents: 0, saleIds: [], lines: [] };
-    current.basisCents += basisCents;
-    current.saleIds.push(sale._id);
-    current.lines.push({ saleNumber: sale.saleNumber, basisCents, rateBps: 1000, amountCents: Math.round(basisCents * 0.1) });
-    groups.set(period.key, current);
+    if (locked.has(period.key)) continue;
+    const before = sale.commission || computeSaleCommission(sale, rule);
+    const snapshot = applyCommissionCap(before, rule, charged);
+    if (!sale.commission || snapshot.amountCents !== sale.commission.amountCents || snapshot.capReached !== sale.commission.capReached) {
+      await CommerceSale.updateOne({ _id: sale._id }, { $set: { commission: snapshot } });
+    }
+    charged += snapshot.amountCents;
+    if (!snapshot.subject || snapshot.amountCents <= 0) continue;
+    const group = groups.get(period.key) || { period, basisCents: 0, amountCents: 0, saleIds: [], lines: [], ratePercent: snapshot.ratePercent, basis: snapshot.basis };
+    group.basisCents += snapshot.basisCents;
+    group.amountCents += snapshot.amountCents;
+    group.saleIds.push(sale._id);
+    group.lines.push({ saleId: String(sale._id), saleNumber: sale.saleNumber, basisCents: snapshot.basisCents, amountCents: snapshot.amountCents, ratePercent: snapshot.ratePercent, basis: snapshot.basis, ...(snapshot.capped ? { capped: true } : {}) });
+    groups.set(period.key, group);
   }
+  // Les anciennes fiches « Commission formations en ligne … » encore dues sont remplacées.
+  await CommerceCommission.deleteMany({ status: 'DUE', label: { $regex: '^Commission formations en ligne ' } });
+  await CommerceCommission.deleteMany({ status: 'DUE', periodKey: { $nin: [...groups.keys()] } });
   const docs = [];
   for (const group of groups.values()) {
-    const label = `Commission formations en ligne ${group.period.key}`;
     docs.push(await CommerceCommission.findOneAndUpdate(
-      { periodKey: group.period.key, label },
+      { periodKey: group.period.key, label: commissionLabel(group.period.key) },
       {
         $set: {
           periodStart: group.period.start,
           periodEnd: group.period.end,
-          dueAt: new Date(Date.UTC(group.period.end.getUTCFullYear(), group.period.end.getUTCMonth(), group.period.end.getUTCDate() + 7)),
-          amountCents: Math.round(group.basisCents * 0.1),
+          dueAt: commissionDueAt(group.period),
+          amountCents: group.amountCents,
           basisCents: group.basisCents,
-          rateBps: 1000,
+          ratePercent: group.ratePercent,
+          basis: group.basis,
+          rateBps: Math.round(group.ratePercent * 100),
           currency: 'EUR',
           sourceSnapshot: { lines: group.lines },
           saleIds: group.saleIds,
@@ -1411,69 +1692,330 @@ export async function recalculateMonthlyCommissions() {
   return docs;
 }
 
+const FINALIZE_LOCK_MS = 5 * 60_000;
+
+/**
+ * FINALISER UNE VENTE PAYÉE — sûr, quelle que soit la façon d'y arriver.
+ *
+ * Trois chemins y mènent, et ils peuvent arriver EN MÊME TEMPS : le webhook
+ * Stripe, la page de succès qui vérifie le paiement, le rattrapage
+ * automatique. D'où :
+ *
+ *   1. un VERROU atomique — une seule finalisation à la fois ; les autres
+ *      répondent « en cours » (le webhook sera rejoué par Stripe) ;
+ *   2. « PAYÉE » enregistré D'ABORD : dès que Stripe a encaissé, la vente
+ *      l'est chez nous, avant tout le reste ;
+ *   3. des ÉTAPES MARQUÉES : une finalisation interrompue (redémarrage,
+ *      erreur) reprend où elle s'était arrêtée, sans redébiter une carte
+ *      cadeau ni compter deux fois une place ;
+ *   4. RIEN DE BLOQUANT après encaissement : un créneau pris entre-temps ou
+ *      une session complète deviennent des incidents signalés à l'institut,
+ *      pas une erreur qui laisserait l'argent encaissé sans vente.
+ *
+ * `finalizedAt` n'est posé qu'à la fin : tant qu'il manque, une nouvelle
+ * finalisation termine les étapes restantes.
+ */
 export async function finalizePaidSale(saleOrId, stripePayload = {}) {
-  const sale = typeof saleOrId === 'string' ? await CommerceSale.findById(saleOrId) : saleOrId;
-  if (!sale) throw ApiError.notFound('Vente introuvable');
-  if (sale.paymentStatus === 'PAID' && sale.finalizedAt) return sale;
-  const customer = await Customer.findById(sale.customerId).lean();
-  await applyGiftCardAllocations(sale);
-  await incrementReservedSessions(sale);
-  await createServiceBookingsFromSale(sale, customer);
-  sale.status = 'PAID';
-  sale.paymentStatus = 'PAID';
-  sale.finalizedAt = sale.finalizedAt || new Date();
-  sale.stripe.paymentIntentId = stripePayload.paymentIntentId || stripePayload.payment_intent || sale.stripe.paymentIntentId || '';
-  sale.invoice = {
-    number: sale.invoice?.number || `FAC-${sale.saleNumber}`,
-    issuedAt: sale.invoice?.issuedAt || new Date(),
-    pdfUrl: sale.invoice?.pdfUrl || '',
-  };
-  if (!sale.invoice.pdfUrl) {
-    sale.invoice.pdfUrl = await generateSaleInvoicePdf(sale, customer);
-  }
-  await sale.save();
-  await issueGiftCardsFromSale(sale);
-  await recalculateMonthlyCommissionForSale(sale);
-  await Cart.updateOne({ customerId: sale.customerId }, { $set: { lines: [], updatedByCheckoutAt: new Date() } });
-  await emitAndDispatch({
-    type: 'commerce.sale.paid',
-    entityType: 'CommerceSale',
-    entityId: sale._id,
-    actor: { type: EVENT_ACTOR_TYPE.SYSTEM },
-    payloadSafe: {
-      saleId: String(sale._id),
-      saleNumber: sale.saleNumber,
-      customerId: String(sale.customerId),
-      totalAmount: Number(sale.totalCents || 0),
-      ...(sale.invoice?.pdfUrl ? { invoiceUrl: sale.invoice.pdfUrl } : {}),
-      paidAt: sale.finalizedAt.toISOString(),
+  const id = typeof saleOrId === 'string' ? saleOrId : saleOrId?._id;
+  const current = await CommerceSale.findById(id);
+  if (!current) throw ApiError.notFound('Vente introuvable');
+  if (current.paymentStatus === 'PAID' && current.finalizedAt) return current;
+
+  const sale = await CommerceSale.findOneAndUpdate(
+    {
+      _id: id,
+      finalizedAt: null,
+      $or: [{ 'finalizing.at': null }, { 'finalizing.at': { $lt: new Date(Date.now() - FINALIZE_LOCK_MS) } }],
     },
-    idempotencyKey: `commerce-sale-paid:${sale._id}`,
-  });
+    { $set: { 'finalizing.at': new Date() } },
+    { new: true },
+  );
+  if (!sale) {
+    const fresh = await CommerceSale.findById(id);
+    if (fresh?.finalizedAt) return fresh;
+    throw ApiError.conflict('Finalisation déjà en cours pour cette vente', { code: 'SALE_FINALIZING' });
+  }
+
+  try {
+    const issues = [];
+    // 1. Payée, tout de suite.
+    sale.status = 'PAID';
+    sale.paymentStatus = 'PAID';
+    sale.stripe.paymentIntentId = stripePayload.paymentIntentId || stripePayload.payment_intent || sale.stripe.paymentIntentId || '';
+    await sale.save();
+
+    const customer = await Customer.findById(sale.customerId).lean();
+    if (!sale.finalizeSteps?.giftCards) {
+      await applyGiftCardAllocations(sale, issues);
+      sale.finalizeSteps.giftCards = true;
+      sale.markModified('giftCardAllocations');
+      await sale.save();
+    }
+    if (!sale.finalizeSteps?.sessions) {
+      await incrementReservedSessions(sale, issues);
+      sale.finalizeSteps.sessions = true;
+      await sale.save();
+    }
+    if (!sale.finalizeSteps?.bookings) {
+      await createServiceBookingsFromSale(sale, customer, issues);
+      sale.finalizeSteps.bookings = true;
+      await sale.save();
+    }
+    if (issues.length) {
+      sale.finalizeIssues = [...new Set([...(sale.finalizeIssues || []), ...issues])];
+      await sale.save();
+    }
+
+    sale.invoice = {
+      number: sale.invoice?.number || `FAC-${sale.saleNumber}`,
+      issuedAt: sale.invoice?.issuedAt || new Date(),
+      pdfUrl: sale.invoice?.pdfUrl || '',
+    };
+    if (!sale.invoice.pdfUrl) sale.invoice.pdfUrl = await generateSaleInvoicePdf(sale, customer);
+    await sale.save();
+
+    if (!sale.finalizeSteps?.giftIssued) {
+      await issueGiftCardsFromSale(sale);
+      sale.finalizeSteps.giftIssued = true;
+      await sale.save();
+    }
+    if (!sale.finalizeSteps?.commission) {
+      await recalculateMonthlyCommissionForSale(sale);
+      sale.finalizeSteps.commission = true;
+      await sale.save();
+    }
+    if (!sale.finalizeSteps?.cart) {
+      if (sale.checkoutSource !== 'QUICK_BUY') {
+        await Cart.updateOne({ customerId: sale.customerId }, { $set: { lines: [], updatedByCheckoutAt: new Date() } });
+      }
+      sale.finalizeSteps.cart = true;
+    }
+    sale.finalizedAt = sale.finalizedAt || new Date();
+    sale.finalizing = { at: null };
+    await sale.save();
+
+    await emitAndDispatch({
+      type: 'commerce.sale.paid',
+      entityType: 'CommerceSale',
+      entityId: sale._id,
+      actor: { type: EVENT_ACTOR_TYPE.SYSTEM },
+      payloadSafe: {
+        saleId: String(sale._id),
+        saleNumber: sale.saleNumber,
+        customerId: String(sale.customerId),
+        totalAmount: Number(sale.totalCents || 0),
+        ...(sale.invoice?.pdfUrl ? { invoiceUrl: sale.invoice.pdfUrl } : {}),
+        paidAt: sale.finalizedAt.toISOString(),
+      },
+      idempotencyKey: `commerce-sale-paid:${sale._id}`,
+    });
+    return sale;
+  } catch (err) {
+    // Le verrou tombe : le prochain passage (webhook rejoué, rattrapage) reprend.
+    await CommerceSale.updateOne({ _id: id }, { $set: { 'finalizing.at': null } }).catch(() => null);
+    throw err;
+  }
+}
+
+/** Libère ce que la vente tenait (cartes cadeaux réservées) quand elle ne sera jamais payée. */
+async function closeUnpaidSale(sale, paymentStatus) {
+  if (sale.paymentStatus === 'PAID' || sale.finalizedAt) return sale;
+  await releaseGiftCardReservations(sale.giftCardAllocations || []);
+  // Libérées une fois pour toutes : une seconde clôture ne les relâcherait pas deux fois.
+  sale.giftCardAllocations = [];
+  sale.giftCardAmountCents = 0;
+  sale.paymentStatus = paymentStatus;
+  sale.status = 'CANCELLED';
+  await sale.save();
   return sale;
 }
 
+async function saleForSession(session) {
+  const saleId = session?.metadata?.saleId || session?.client_reference_id;
+  if (saleId) return CommerceSale.findById(saleId);
+  return CommerceSale.findOne({ 'stripe.checkoutSessionId': session?.id });
+}
+
+/**
+ * UNE SESSION STRIPE → L'ÉTAT DE LA VENTE. Même logique pour le webhook, la
+ * page de succès et le rattrapage : c'est Stripe qui dit si c'est payé.
+ *   paid / no_payment_required  → finalisée ;
+ *   complete + unpaid           → paiement différé en cours (PROCESSING) ;
+ *   expired                     → expirée, cartes cadeaux libérées ;
+ *   open                        → rien à faire encore.
+ */
 export async function finalizeInstituteStripeCheckout(sessionOrId) {
   const session = typeof sessionOrId === 'string'
     ? await retrieveInstituteCheckoutSession(sessionOrId)
     : sessionOrId;
-  const saleId = session?.metadata?.saleId || session?.client_reference_id;
-  const sale = saleId
-    ? await CommerceSale.findById(saleId)
-    : await CommerceSale.findOne({ 'stripe.checkoutSessionId': session?.id });
+  const sale = await saleForSession(session);
   if (!sale) throw ApiError.notFound('Vente Stripe introuvable');
-  if (session?.payment_status && session.payment_status !== 'paid') {
-    sale.paymentStatus = 'FAILED';
+  if (session?.id && !sale.stripe.checkoutSessionId) sale.stripe.checkoutSessionId = session.id;
+  const invoiceId = typeof session?.invoice === 'string' ? session.invoice : session?.invoice?.id;
+  if (invoiceId && !sale.stripe.invoiceId) sale.stripe.invoiceId = invoiceId;
+  const paid = session?.payment_status === 'paid' || session?.payment_status === 'no_payment_required';
+  if (paid) {
+    if (Number.isFinite(session?.amount_total) && session.amount_total !== sale.stripeAmountCents) {
+      sale.finalizeIssues = [...new Set([...(sale.finalizeIssues || []), `Montant encaissé par Stripe (${session.amount_total} c) différent du montant attendu (${sale.stripeAmountCents} c)`])];
+    }
+    await sale.save();
+    return finalizePaidSale(sale, { paymentIntentId: session?.payment_intent });
+  }
+  if (session?.status === 'expired') return closeUnpaidSale(sale, 'EXPIRED');
+  if (session?.status === 'complete' && sale.paymentStatus !== 'PAID') {
+    sale.paymentStatus = 'PROCESSING';
+    await sale.save();
+    // Paiement différé accepté par la cliente : ses articles sont engagés dans CETTE commande.
+    // Le panier se vide, sinon elle pourrait le payer une seconde fois pendant que la banque confirme.
+    if (sale.checkoutSource !== 'QUICK_BUY') {
+      await Cart.updateOne({ customerId: sale.customerId }, { $set: { lines: [], updatedByCheckoutAt: new Date() } });
+    }
+  }
+  return sale;
+}
+
+/** Paiement différé refusé : la vente n'aboutira pas. */
+export async function failInstituteStripeCheckout(session) {
+  const sale = await saleForSession(session);
+  if (!sale) return null;
+  return closeUnpaidSale(sale, 'FAILED');
+}
+
+/**
+ * REMBOURSEMENT FAIT DEPUIS STRIPE — reporté chez nous : une vente
+ * remboursée en totalité passe « remboursée » et libère ses rendez-vous.
+ */
+export async function recordInstituteStripeRefund(charge) {
+  const paymentIntentId = charge?.payment_intent;
+  if (!paymentIntentId) return null;
+  const sale = await CommerceSale.findOne({ 'stripe.paymentIntentId': paymentIntentId });
+  if (!sale || sale.paymentStatus === 'REFUNDED') return sale;
+  const refunded = Number(charge.amount_refunded || 0);
+  if (refunded < Number(charge.amount || 0)) {
+    sale.finalizeIssues = [...new Set([...(sale.finalizeIssues || []), `Remboursement partiel de ${refunded} c fait depuis Stripe`])];
     await sale.save();
     return sale;
   }
-  sale.stripe.checkoutSessionId = session?.id || sale.stripe.checkoutSessionId;
-  return finalizePaidSale(sale, { paymentIntentId: session?.payment_intent });
+  sale.status = 'REFUNDED';
+  sale.paymentStatus = 'REFUNDED';
+  sale.refund = { ...(sale.refund?.toObject?.() || sale.refund || {}), amountCents: refunded, reason: 'Remboursement effectué depuis Stripe', refundedAt: new Date() };
+  await sale.save();
+  await cancelSaleAppointments(sale, `Vente ${sale.saleNumber} remboursée depuis Stripe`);
+  await removeSaleFromCommission(sale);
+  return sale;
+}
+
+/**
+ * LA PAGE DE SUCCÈS DEMANDE OÙ EN EST LE PAIEMENT — la cliente ne voit
+ * « confirmé » que lorsque la vente est réellement payée CHEZ NOUS. Si le
+ * webhook n'est pas encore arrivé, on interroge Stripe directement et on
+ * finalise : la confirmation ne dépend plus d'un seul chemin.
+ */
+export async function getCustomerCheckoutStatus(customerId, sessionId, saleNumber = '') {
+  const id = String(sessionId || '').trim();
+  const number = String(saleNumber || '').trim();
+  let sale;
+  if (id) {
+    if (!/^cs_[A-Za-z0-9_]+$/.test(id)) throw ApiError.badRequest('Session de paiement invalide');
+    sale = await CommerceSale.findOne({ 'stripe.checkoutSessionId': id, customerId });
+  } else if (/^BS-[0-9]{8}-[0-9A-F]{6}$/.test(number)) {
+    // Commande réglée entièrement par carte cadeau : pas de session Stripe.
+    sale = await CommerceSale.findOne({ saleNumber: number, customerId });
+  } else {
+    throw ApiError.badRequest('Session de paiement invalide');
+  }
+  if (!sale) throw ApiError.notFound('Commande introuvable');
+  if (id && !(sale.paymentStatus === 'PAID' && sale.finalizedAt) && !['FAILED', 'EXPIRED', 'REFUNDED'].includes(sale.paymentStatus)) {
+    try {
+      await finalizeInstituteStripeCheckout(id);
+    } catch (err) {
+      if (err?.details?.code !== 'SALE_FINALIZING') logger.warn(`[checkout] vérification ${sale.saleNumber} : ${err.message}`);
+    }
+    sale = await CommerceSale.findById(sale._id);
+  }
+  const state = sale.paymentStatus === 'PAID'
+    ? (sale.finalizedAt ? 'PAID' : 'FINALIZING')
+    : ['FAILED', 'EXPIRED', 'REFUNDED', 'PROCESSING'].includes(sale.paymentStatus) ? sale.paymentStatus : 'PENDING';
+  return {
+    state,
+    saleNumber: sale.saleNumber,
+    totalCents: sale.totalCents,
+    giftCardAmountCents: sale.giftCardAmountCents || 0,
+    cardAmountCents: sale.stripeAmountCents ?? sale.totalCents,
+    giftCards: (sale.giftCardAllocations || []).map((a) => ({ codeMasked: a.codeMasked, amountCents: a.amountCents })),
+    invoiceUrl: sale.finalizedAt ? await stripeInvoiceUrl(sale) : '',
+    balanceDueCents: (sale.lines || []).reduce((s, l) => s + (l.balanceDueCents || 0), 0),
+  };
+}
+
+/**
+ * LA FACTURE STRIPE DE LA VENTE — page hébergée par Stripe, relue une fois puis
+ * gardée. Une commande sans paiement Stripe (carte cadeau seule, gratuit) n'en
+ * a pas : rien n'est proposé plutôt qu'un document maison.
+ */
+export async function stripeInvoiceUrl(sale) {
+  if (sale?.stripe?.hostedInvoiceUrl) return sale.stripe.hostedInvoiceUrl;
+  let invoiceId = sale?.stripe?.invoiceId || '';
+  try {
+    if (!invoiceId && sale?.stripe?.checkoutSessionId) {
+      const session = await retrieveInstituteCheckoutSession(sale.stripe.checkoutSessionId);
+      invoiceId = typeof session?.invoice === 'string' ? session.invoice : session?.invoice?.id || '';
+    }
+    if (!invoiceId) return '';
+    const invoice = await retrieveInstituteInvoice(invoiceId);
+    const url = invoice?.hosted_invoice_url || '';
+    if (url) await CommerceSale.updateOne({ _id: sale._id }, { $set: { 'stripe.invoiceId': invoiceId, 'stripe.hostedInvoiceUrl': url } });
+    return url;
+  } catch (err) {
+    logger.warn(`[checkout] facture Stripe ${sale?.saleNumber} pas encore lisible : ${err.message}`);
+    return '';
+  }
+}
+
+/**
+ * RATTRAPAGE — toutes les quelques minutes, les ventes encore « en paiement »
+ * sont confrontées à Stripe. Un webhook perdu (serveur redémarré, secret
+ * changé, panne réseau) ne laisse donc jamais un paiement encaissé sans vente
+ * enregistrée, ni une vente bloquée « en attente » pour toujours.
+ */
+export async function reconcileInstituteCheckouts({ olderThanMs = 2 * 60_000, limit = 50 } = {}) {
+  const now = Date.now();
+  const candidates = await CommerceSale.find({
+    $or: [
+      { paymentStatus: { $in: ['CHECKOUT_CREATED', 'PROCESSING'] }, 'stripe.checkoutSessionId': { $ne: '' } },
+      { paymentStatus: 'PAID', finalizedAt: null },
+    ],
+    createdAt: { $lt: new Date(now - olderThanMs), $gt: new Date(now - 30 * 86400_000) },
+    $and: [{ $or: [{ lastStripeCheckAt: null }, { lastStripeCheckAt: { $lt: new Date(now - olderThanMs) } }] }],
+  }).sort({ createdAt: 1 }).limit(limit).select('_id stripe paymentStatus saleNumber finalizedAt');
+  const result = { checked: 0, finalized: 0, closed: 0, errors: 0 };
+  for (const candidate of candidates) {
+    result.checked += 1;
+    await CommerceSale.updateOne({ _id: candidate._id }, { $set: { lastStripeCheckAt: new Date() } });
+    try {
+      const after = candidate.paymentStatus === 'PAID'
+        ? await finalizePaidSale(String(candidate._id))
+        : await finalizeInstituteStripeCheckout(candidate.stripe.checkoutSessionId);
+      if (after?.finalizedAt) result.finalized += 1;
+      else if (['EXPIRED', 'FAILED'].includes(after?.paymentStatus)) result.closed += 1;
+    } catch (err) {
+      if (err?.details?.code !== 'SALE_FINALIZING') {
+        result.errors += 1;
+        logger.warn(`[checkout] rattrapage ${candidate.saleNumber} : ${err.message}`);
+      }
+    }
+  }
+  if (result.finalized || result.closed || result.errors) logger.info(`[checkout] rattrapage : ${JSON.stringify(result)}`);
+  return result;
 }
 
 export async function listCustomerOrders(customerId) {
   const sales = await CommerceSale.find({ customerId }).sort({ createdAt: -1 }).lean();
-  return sales.map((sale) => ({
+  const urls = await Promise.all(sales.map((sale) => (sale.paymentStatus === 'PAID' || sale.paymentStatus === 'REFUNDED' ? stripeInvoiceUrl(sale) : '')));
+  return sales.map((sale, i) => ({
+    invoiceUrl: urls[i] || '',
+    totalCents: sale.totalCents,
+    balanceDueCents: (sale.lines || []).reduce((s, l) => s + (l.balanceDueCents || 0), 0),
     id: String(sale._id),
     saleNumber: sale.saleNumber,
     status: sale.status,
@@ -1495,29 +2037,60 @@ function dateOrNull(value) {
 }
 
 async function assertFormationSessionsAvailable(sessions, productId = null) {
-  const active = (sessions || [])
+  // Une session de plusieurs jours compte jour par jour : la nuit entre deux
+  // jours de formation reste libre.
+  const blocks = (sessions || [])
     .filter((session) => session.status !== 'CANCELLED' && session.startsAt && session.endsAt)
-    .map((session) => ({
+    .flatMap((session) => sessionBlocks({
       startsAt: dateOrNull(session.startsAt),
       endsAt: dateOrNull(session.endsAt),
+      days: (session.days || []).map((d) => ({ startsAt: dateOrNull(d.startsAt), endsAt: dateOrNull(d.endsAt) })),
     }));
-  for (const session of active) {
-    if (!session.startsAt || !session.endsAt || session.endsAt <= session.startsAt) {
-      throw ApiError.badRequest('Session de formation invalide : debut et fin requis, fin apres debut');
+  for (const block of blocks) {
+    if (!block.startsAt || !block.endsAt || Number.isNaN(block.startsAt.getTime()) || Number.isNaN(block.endsAt.getTime()) || block.endsAt <= block.startsAt) {
+      throw ApiError.badRequest('Session de formation invalide : début et fin requis, fin après début');
     }
   }
-  for (let i = 0; i < active.length; i += 1) {
-    for (let j = i + 1; j < active.length; j += 1) {
-      if (active[i].startsAt < active[j].endsAt && active[i].endsAt > active[j].startsAt) {
+  for (let i = 0; i < blocks.length; i += 1) {
+    for (let j = i + 1; j < blocks.length; j += 1) {
+      if (blocks[i].startsAt < blocks[j].endsAt && blocks[i].endsAt > blocks[j].startsAt) {
         throw ApiError.conflict('Deux sessions de cette formation se chevauchent', { code: 'CALENDAR_OVERLAP' });
       }
     }
     await assertNoOverlap({
-      startsAt: active[i].startsAt,
-      endsAt: active[i].endsAt,
+      startsAt: blocks[i].startsAt,
+      endsAt: blocks[i].endsAt,
       ignoreProductId: productId,
     });
   }
+}
+
+function slugify(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80);
+}
+
+/**
+ * L'ADRESSE DE LA FICHE — plus jamais saisie dans le Manager.
+ *
+ * Une fiche existante GARDE son adresse, même renommée : les liens déjà
+ * partagés et les commandes passées continuent de mener quelque part. Une
+ * fiche nouvelle la reçoit de son titre, suffixée si le titre est déjà pris
+ * (deux prestations peuvent porter le même nom, pas la même adresse).
+ */
+async function productSlug(payload, previous) {
+  if (previous?.slug) return previous.slug;
+  const base = slugify(payload.slug || payload.title) || 'fiche';
+  let candidate = base;
+  for (let n = 2; await CommerceProduct.exists({ slug: candidate }); n += 1) {
+    candidate = `${base}-${n}`;
+  }
+  return candidate;
 }
 
 export async function upsertProduct(payload) {
@@ -1525,11 +2098,11 @@ export async function upsertProduct(payload) {
   if (previous && previous.kind !== payload.kind) {
     const hasActivity = await CommerceSale.exists({ 'lines.productId': previous._id });
     if (hasActivity) {
-      throw ApiError.conflict('Le type est verrouille apres une vente, reservation ou progression client', { code: 'PRODUCT_KIND_LOCKED' });
+      throw ApiError.conflict('Le type est verrouillé après une vente, réservation ou progression client', { code: 'PRODUCT_KIND_LOCKED' });
     }
   }
   const data = {
-    slug: String(payload.slug || payload.title || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, ''),
+    slug: await productSlug(payload, previous),
     title: String(payload.title || '').trim(),
     subtitle: payload.subtitle || '',
     description: payload.description || '',
@@ -1539,11 +2112,20 @@ export async function upsertProduct(payload) {
     coverUrl: payload.coverUrl || '',
     gallery: Array.isArray(payload.gallery) ? payload.gallery : [],
     options: Array.isArray(payload.options) ? payload.options : [],
-    sessions: Array.isArray(payload.sessions) ? payload.sessions : [],
+    /**
+     * Les sessions ne passent plus par l'enregistrement de la fiche : elles ont
+     * leurs propres opérations (créer, déplacer, annuler — avec leurs
+     * participantes, remboursements et e-mails). Une fiche enregistrée sans
+     * `sessions` garde donc les siennes ; les écraser d'un formulaire ouvert
+     * depuis dix minutes effacerait un déplacement fait entre-temps.
+     */
+    sessions: Array.isArray(payload.sessions) ? payload.sessions : (previous?.sessions || []),
     durationMinutes: Number(payload.durationMinutes || 0),
     distanceDeliveryMode: payload.distanceDeliveryMode || null,
     requiresLegalWaiver: Boolean(payload.requiresLegalWaiver),
-    boostRank: payload.boostRank ?? null,
+    boostRank: payload.boostRank === undefined ? (previous?.boostRank ?? null) : payload.boostRank,
+    homeFeatured: previous ? Boolean(previous.homeFeatured) : false,
+    homeFeaturedRank: previous ? (previous.homeFeaturedRank ?? null) : null,
     trailer: payload.trailer || {},
     whatsappGroup: payload.whatsappGroup || {},
     faq: Array.isArray(payload.faq) ? payload.faq : [],
@@ -1554,9 +2136,13 @@ export async function upsertProduct(payload) {
     service: payload.service || {},
     paymentRules: payload.paymentRules || {},
     bookingRules: payload.bookingRules || {},
+    seo: {
+      metaTitle: String(payload.seo?.metaTitle ?? previous?.seo?.metaTitle ?? '').trim().slice(0, 120),
+      metaDescription: String(payload.seo?.metaDescription ?? previous?.seo?.metaDescription ?? '').trim().slice(0, 320),
+    },
   };
-  if (!data.slug || !data.title || !data.kind) throw ApiError.badRequest('Titre, slug et type requis');
-  if (data.kind === 'IN_PERSON_TRAINING') {
+  if (!data.slug || !data.title || !data.kind) throw ApiError.badRequest('Titre et type requis');
+  if (data.kind === 'IN_PERSON_TRAINING' && Array.isArray(payload.sessions)) {
     await assertFormationSessionsAvailable(data.sessions, payload.id || null);
   }
   if (payload.id) {
@@ -1581,14 +2167,19 @@ export async function deleteProduct(productId) {
 }
 
 export async function listManagerSales() {
-  return CommerceSale.find().populate('customerId', 'email firstName lastName').sort({ createdAt: -1 }).lean();
+  const [sales, rule] = await Promise.all([
+    CommerceSale.find().populate('customerId', 'email firstName lastName').sort({ createdAt: -1 }).lean(),
+    activeCommissionRule(),
+  ]);
+  // Une vente payée avant la photo de commission reçoit la règle en vigueur (affichage seulement).
+  return sales.map((sale) => (sale.commission ? sale : { ...sale, commission: computeSaleCommission(sale, rule) }));
 }
 
 export async function refundSale(saleId, payload = {}, userId = null) {
   const sale = await CommerceSale.findById(saleId);
   if (!sale) throw ApiError.notFound('Vente introuvable');
   if (sale.status === 'REFUNDED' || sale.paymentStatus === 'REFUNDED') {
-    throw ApiError.conflict('Cette vente est deja remboursee');
+    throw ApiError.conflict('Cette vente est déjà remboursée');
   }
   const amountCents = Number(payload.amountCents || sale.totalCents);
   if (!Number.isFinite(amountCents) || amountCents <= 0 || amountCents > sale.totalCents) {
@@ -1625,7 +2216,30 @@ export async function refundSale(saleId, payload = {}, userId = null) {
     pdfUrl: creditPdf,
   };
   await sale.save();
+  await cancelSaleAppointments(sale, `Vente ${sale.saleNumber} remboursée`);
+  await removeSaleFromCommission(sale);
   return sale.populate('customerId', 'email firstName lastName');
+}
+
+/**
+ * UNE VENTE REMBOURSÉE LIBÈRE SES CRÉNEAUX.
+ *
+ * Le rendez-vous né du paiement restait « prévu » au planning après le
+ * remboursement : il occupait encore la place et bloquait les disponibilités
+ * proposées aux clientes. Chaque rendez-vous encore actif de la vente est
+ * annulé par le même chemin qu'une annulation depuis le calendrier (statut,
+ * motif, message à la cliente).
+ */
+async function cancelSaleAppointments(sale, reason) {
+  const saleId = String(sale._id);
+  const events = await CalendarEvent.find({
+    status: { $ne: 'CANCELLED' },
+    $or: [{ saleId: sale._id }, { 'source.saleId': saleId }],
+  }).select('_id').lean();
+  for (const event of events) {
+    await cancelEvent(event._id, { reason });
+  }
+  return events.length;
 }
 
 export async function listManagerCustomers() {
@@ -1633,69 +2247,119 @@ export async function listManagerCustomers() {
 }
 
 export async function listCommissions() {
-  return CommerceCommission.find().populate('saleIds', 'saleNumber totalCents createdAt').sort({ createdAt: -1 }).lean();
-}
-
-export async function markCommissionPaid(id, payload = {}) {
-  const commission = await CommerceCommission.findById(id);
-  if (!commission) throw ApiError.notFound('Commission introuvable');
-  if (commission.status === 'PAID') throw ApiError.conflict('Cette commission est deja payee');
-  commission.status = 'PAID';
-  commission.paidAt = new Date();
-  commission.paymentReference = String(payload.paymentReference || '').trim();
-  await commission.save();
-  return commission;
+  const docs = await CommerceCommission.find().populate('saleIds', 'saleNumber totalCents createdAt').sort({ periodStart: -1, createdAt: -1 }).lean();
+  return docs.map(commissionView);
 }
 
 export async function getInstituteIntegrations() {
+  const mode = activeInstituteMode();
   const docs = await InstituteIntegration.find().lean();
-  return docs.map((doc) => ({
-    provider: doc.provider,
-    mode: doc.mode,
-    verified: doc.verified,
-    lastTestAt: doc.lastTestAt,
-    senderEmail: doc.senderEmail,
-    publicKey: doc.publicKey?.lastFour ? maskFromLastFour(doc.publicKey.lastFour) : '',
-    secretKey: doc.secretKey?.lastFour ? maskFromLastFour(doc.secretKey.lastFour) : '',
-    webhookSecret: doc.webhookSecret?.lastFour ? maskFromLastFour(doc.webhookSecret.lastFour) : '',
-    webhookEndpointId: doc.webhookEndpointId,
-    webhookUrl: doc.webhookUrl,
-    webhookLastProvisionedAt: doc.webhookLastProvisionedAt,
-    webhookLastError: doc.webhookLastError,
-    senderName: doc.senderName,
-  }));
+  return docs.map((doc) => {
+    const slot = doc.modes?.[mode] || {};
+    return {
+      provider: doc.provider,
+      // L'environnement du site décide des clés utilisées : pas de choix manuel.
+      mode,
+      activeMode: mode,
+      verified: Boolean(slot.verified),
+      lastTestAt: slot.lastTestAt || null,
+      senderEmail: slot.senderEmail || '',
+      senderName: slot.senderName || '',
+      publicKey: slot.publicKey?.lastFour ? maskFromLastFour(slot.publicKey.lastFour) : '',
+      secretKey: slot.secretKey?.lastFour ? maskFromLastFour(slot.secretKey.lastFour) : '',
+      webhookSecret: slot.webhookSecret?.lastFour ? maskFromLastFour(slot.webhookSecret.lastFour) : '',
+      webhookEndpointId: slot.webhookEndpointId || '',
+      webhookUrl: slot.webhookUrl || '',
+      webhookLastProvisionedAt: slot.webhookLastProvisionedAt || null,
+      webhookLastError: slot.webhookLastError || '',
+      lastTestError: slot.lastTestError || '',
+    };
+  });
 }
 
+/**
+ * ENREGISTRER LES CLÉS DE L'INSTITUT — toujours dans le jeu de
+ * l'environnement du site (`ENV`). Une clé qui ne correspond pas (clé de
+ * test sur la PROD, clé live sur la recette) est refusée avant d'être écrite.
+ */
 export async function saveInstituteIntegration(payload) {
   const provider = payload.provider;
   if (!['STRIPE_INSTITUTE', 'BREVO_INSTITUTE'].includes(provider)) {
     throw ApiError.badRequest('Fournisseur institut inconnu');
   }
-  const set = { provider, mode: payload.mode === 'PROD' ? 'PROD' : 'TEST', verified: false };
+  const mode = activeInstituteMode();
+  if (payload.mode && payload.mode !== mode) {
+    throw ApiError.badRequest(`Ce site tourne en ${mode} : seules les clés ${mode} s'enregistrent ici.`);
+  }
+  if (provider === 'STRIPE_INSTITUTE') {
+    if (payload.secretKey) assertInstituteKeyMatchesMode('secretKey', String(payload.secretKey).trim(), mode);
+    if (payload.publicKey) assertInstituteKeyMatchesMode('publicKey', String(payload.publicKey).trim(), mode);
+  }
+  const prefix = `modes.${mode}`;
+  const set = { provider, mode, [`${prefix}.verified`]: false, [`${prefix}.lastTestError`]: '' };
   for (const key of ['publicKey', 'secretKey', 'webhookSecret']) {
     if (payload[key]) {
-      set[key] = {
-        encryptedValue: encryptSecret(String(payload[key])),
-        lastFour: lastFourOf(payload[key]),
-        verifiedAt: null,
-      };
+      const value = String(payload[key]).trim();
+      set[`${prefix}.${key}`] = { encryptedValue: encryptSecret(value), lastFour: lastFourOf(value), verifiedAt: null };
     }
   }
-  if (payload.senderEmail !== undefined) set.senderEmail = String(payload.senderEmail || '').trim();
-  if (payload.senderName !== undefined) set.senderName = String(payload.senderName || '').trim();
+  if (payload.senderEmail !== undefined) set[`${prefix}.senderEmail`] = String(payload.senderEmail || '').trim();
+  if (payload.senderName !== undefined) set[`${prefix}.senderName`] = String(payload.senderName || '').trim();
   const doc = await InstituteIntegration.findOneAndUpdate({ provider }, { $set: set }, { upsert: true, new: true });
   if (provider === 'STRIPE_INSTITUTE' && payload.secretKey) {
-    try {
-      await provisionInstituteStripeWebhook();
-      doc.verified = true;
-      doc.lastTestAt = new Date();
-      await doc.save();
-    } catch (err) {
-      doc.webhookLastError = err instanceof Error ? err.message : 'Provision webhook impossible';
-      await doc.save();
-    }
+    const ok = await provisionInstituteStripeWebhook().then(() => true).catch(async (err) => {
+      await InstituteIntegration.updateOne({ provider }, { $set: { [`${prefix}.webhookLastError`]: err instanceof Error ? err.message : 'Provision webhook impossible' } });
+      return false;
+    });
+    if (ok) await InstituteIntegration.updateOne({ provider }, { $set: { [`${prefix}.verified`]: true, [`${prefix}.lastTestAt`]: new Date() } });
   }
-  return doc;
+  // Réponse masquée : jamais de secret, même chiffré, vers le navigateur.
+  return (await getInstituteIntegrations()).find((item) => item.provider === provider) || null;
+}
+
+/**
+ * « TESTER » — vérifie auprès du fournisseur que les clés enregistrées pour
+ * l'environnement du site fonctionnent. Rien n'est jamais renvoyé des clés ;
+ * seulement un verdict lisible.
+ */
+export async function testInstituteIntegration(provider) {
+  if (!['STRIPE_INSTITUTE', 'BREVO_INSTITUTE'].includes(provider)) throw ApiError.badRequest('Fournisseur institut inconnu');
+  const mode = activeInstituteMode();
+  const prefix = `modes.${mode}`;
+  const doc = await InstituteIntegration.findOne({ provider }).lean();
+  const slot = doc?.modes?.[mode] || {};
+  const clear = (ref) => (ref?.encryptedValue ? decryptSecret(ref.encryptedValue) : '');
+  let ok = false;
+  let message = '';
+  try {
+    if (provider === 'STRIPE_INSTITUTE') {
+      const secret = clear(slot.secretKey);
+      if (!secret) throw new Error('Renseignez d’abord la clé secrète Stripe.');
+      const res = await fetch('https://api.stripe.com/v1/balance', { headers: { Authorization: `Bearer ${secret}` } });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error?.message || 'Stripe refuse la clé secrète.');
+      if (!slot.publicKey?.lastFour) {
+        ok = true;
+        message = 'Clé secrète valide. Ajoutez la clé publique pour compléter la configuration.';
+      } else {
+        ok = true;
+        message = `Connexion Stripe réussie (${mode === 'PROD' ? 'mode réel' : 'mode test'}).`;
+      }
+    } else {
+      const key = clear(slot.secretKey);
+      if (!key) throw new Error('Renseignez d’abord la clé API Brevo.');
+      const res = await fetch('https://api.brevo.com/v3/account', { headers: { 'api-key': key, accept: 'application/json' } });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.message || 'Brevo refuse la clé API.');
+      ok = true;
+      message = `Connexion Brevo réussie${json.email ? ` (compte ${json.email})` : ''}.`;
+      if (!slot.senderEmail) message += ' Renseignez l’adresse expéditeur.';
+    }
+  } catch (err) {
+    message = err instanceof Error ? err.message : 'Test impossible.';
+  }
+  await InstituteIntegration.updateOne({ provider }, { $set: { [`${prefix}.verified`]: ok, [`${prefix}.lastTestAt`]: new Date(), ...(ok ? {} : { [`${prefix}.lastTestError`]: message }) } });
+  return { ok, message, integration: (await getInstituteIntegrations()).find((item) => item.provider === provider) || null };
 }
 
 export async function listPublishedReviews(query = {}) {
@@ -1776,7 +2440,7 @@ export async function createManualReview(payload = {}, userId = null) {
 
 export async function moderateReview(id, payload = {}, userId = null) {
   const status = payload.status === 'PUBLISHED' ? 'PUBLISHED' : payload.status === 'REJECTED' ? 'REJECTED' : null;
-  if (!status) throw ApiError.badRequest('Statut de moderation invalide');
+  if (!status) throw ApiError.badRequest('Statut de modération invalide');
   const review = await Review.findByIdAndUpdate(id, {
     status,
     moderationComment: String(payload.moderationComment || '').trim(),
@@ -1833,6 +2497,10 @@ export async function decideRefundRequest(id, payload = {}, userId = null) {
   }
   refund.actions.push({ action: nextStatus, byUser: userId, comment: refund.managerComment });
   await refund.save();
+  if (nextStatus === 'REFUNDED' && refund.saleId) {
+    const sale = await CommerceSale.findById(refund.saleId).select('_id saleNumber').lean();
+    if (sale) await cancelSaleAppointments(sale, `Vente ${sale.saleNumber} remboursée`);
+  }
   return refund;
 }
 
@@ -1847,6 +2515,7 @@ export async function issueGiftCard(payload = {}, actor = {}) {
   const card = await GiftCard.create({
     codeHash: hashGiftSecret(code),
     codeMasked: maskGiftCode(code),
+    codeEncrypted: encryptGiftCode(code),
     purchaserCustomerId: actor.customerId || null,
     saleId: payload.saleId || null,
     senderName: String(payload.senderName || '').trim(),
@@ -1886,8 +2555,110 @@ export async function listManagerGiftCards() {
   return GiftCard.find().populate('purchaserCustomerId', 'email firstName lastName').sort({ createdAt: -1 }).lean();
 }
 
+/**
+ * LE PORTEFEUILLE D'UNE CLIENTE — les cartes qu'elle a achetées, celles qui lui
+ * sont adressées (son e-mail), et celles qu'elle a ajoutées avec leur code.
+ * Le code complet n'est rendu qu'ici, à qui la carte appartient.
+ */
 export async function listCustomerGiftCards(customerId) {
-  return GiftCard.find({ purchaserCustomerId: customerId }).sort({ createdAt: -1 }).lean();
+  const customer = await Customer.findById(customerId).select('email').lean();
+  const email = String(customer?.email || '').toLowerCase();
+  const escaped = email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const cards = await GiftCard.find({
+    $or: [
+      { purchaserCustomerId: customerId },
+      { walletCustomerIds: customerId },
+      ...(email ? [{ recipientEmail: new RegExp(`^${escaped}$`, 'i') }] : []),
+    ],
+  }).select('+codeEncrypted').sort({ createdAt: -1 }).lean();
+  return cards.map((card) => giftCardWalletView(card, customerId, email));
+}
+
+function giftCardWalletView(card, customerId, email) {
+  const bought = String(card.purchaserCustomerId || '') === String(customerId);
+  const received = Boolean(email) && String(card.recipientEmail || '').toLowerCase() === email;
+  const usage = (card.ledger || []).filter((e) => e.type === 'DEBIT').map((e) => ({ at: e.at, amountCents: e.amountCents, reason: e.reason }));
+  return {
+    id: String(card._id),
+    code: decryptGiftCode(card.codeEncrypted) || null,
+    codeMasked: card.codeMasked,
+    initialAmountCents: card.initialAmountCents,
+    balanceCents: card.balanceCents,
+    availableCents: Math.max(0, (card.balanceCents || 0) - (card.reservedCents || 0)),
+    status: card.status,
+    origin: received && !bought ? 'RECEIVED' : bought ? 'BOUGHT' : 'ADDED',
+    recipientName: card.recipientName || '',
+    senderName: card.senderName || '',
+    message: card.message || '',
+    pdfUrl: card.pdfUrl || '',
+    createdAt: card.createdAt,
+    usage,
+  };
+}
+
+function giftCardRefusal(card) {
+  if (!card) return { code: 'GIFT_CARD_UNKNOWN', message: 'Ce code ne correspond à aucune carte cadeau. Vérifiez-le et réessayez.' };
+  if (card.status === 'VOID') return { code: 'GIFT_CARD_VOID', message: 'Cette carte cadeau a été annulée.' };
+  if (card.status === 'EXPIRED') return { code: 'GIFT_CARD_EXPIRED', message: 'Cette carte cadeau a expiré.' };
+  if (card.status === 'EMPTY' || (card.balanceCents || 0) <= 0) return { code: 'GIFT_CARD_EMPTY', message: 'Cette carte cadeau a déjà été entièrement utilisée.' };
+  return null;
+}
+
+const GIFT_RESERVED_MESSAGE = 'Le solde de cette carte est retenu par un paiement en cours. Réessayez dans quelques minutes.';
+
+/**
+ * VÉRIFIER UN CODE AVANT DE PAYER — ce que la carte paiera sur ce montant, et
+ * ce qu'il restera à régler. Rien n'est réservé ici.
+ */
+export async function checkCustomerGiftCard(customerId, payload = {}) {
+  const code = normalizeGiftCode(payload.code);
+  if (!code) throw ApiError.badRequest('Saisissez le code de votre carte cadeau.', { code: 'GIFT_CARD_UNKNOWN' });
+  await releaseAbandonedCheckouts(customerId);
+  const card = await GiftCard.findOne({ codeHash: hashGiftSecret(code) }).lean();
+  const refusal = giftCardRefusal(card);
+  if (refusal) throw ApiError.badRequest(refusal.message, { code: refusal.code });
+  const availableCents = Math.max(0, (card.balanceCents || 0) - (card.reservedCents || 0));
+  if (availableCents <= 0) throw ApiError.conflict(GIFT_RESERVED_MESSAGE, { code: 'GIFT_CARD_RESERVED' });
+  const totalCents = Math.max(0, Math.round(Number(payload.totalCents) || 0));
+  const debitCents = Math.min(availableCents, totalCents);
+  return { code, codeMasked: card.codeMasked, availableCents, debitCents, remainingToPayCents: totalCents - debitCents, balanceAfterCents: availableCents - debitCents };
+}
+
+/** Ajouter une carte reçue (papier, e-mail d'un tiers) à son portefeuille, avec son code. */
+export async function addGiftCardToWallet(customerId, payload = {}) {
+  const code = normalizeGiftCode(payload.code);
+  const card = code ? await GiftCard.findOne({ codeHash: hashGiftSecret(code) }).select('+codeEncrypted') : null;
+  if (!card) throw ApiError.badRequest('Ce code ne correspond à aucune carte cadeau. Vérifiez-le et réessayez.', { code: 'GIFT_CARD_UNKNOWN' });
+  if (!card.codeEncrypted) card.codeEncrypted = encryptGiftCode(code);
+  if (!card.walletCustomerIds.some((id) => String(id) === String(customerId))) card.walletCustomerIds.push(customerId);
+  await card.save();
+  return listCustomerGiftCards(customerId);
+}
+
+/**
+ * LES PAIEMENTS ABANDONNÉS DE CETTE CLIENTE retiennent le solde de ses cartes.
+ * Avant d'en réutiliser une, on ferme chez Stripe les sessions qu'elle a
+ * laissées ouvertes : une session expirée ne peut plus être payée, la
+ * réservation peut donc être rendue sans risque.
+ */
+async function releaseAbandonedCheckouts(customerId) {
+  const stale = await CommerceSale.find({
+    customerId,
+    paymentStatus: 'CHECKOUT_CREATED',
+    finalizedAt: null,
+    'giftCardAllocations.0': { $exists: true },
+  }).limit(5);
+  for (const sale of stale) {
+    try {
+      if (sale.stripe?.checkoutSessionId) {
+        const session = await expireInstituteCheckoutSession(sale.stripe.checkoutSessionId);
+        if (session?.status === 'complete') { await finalizeInstituteStripeCheckout(session.id).catch(() => null); continue; }
+      }
+      await closeUnpaidSale(sale, 'EXPIRED');
+    } catch (err) {
+      logger.warn(`[gift-card] paiement abandonné ${sale.saleNumber} non refermé : ${err.message}`);
+    }
+  }
 }
 
 export async function adjustGiftCard(id, payload = {}, userId = null) {
@@ -1939,14 +2710,19 @@ function safeUploadExtension(file) {
 }
 
 export async function uploadCustomerTrainingDeliverable(customerId, file) {
-  if (!file?.buffer?.length) throw ApiError.badRequest('Aucun fichier recu');
+  if (!file?.path && !file?.buffer?.length) throw ApiError.badRequest('Aucun fichier reçu');
   const mime = String(file.mimetype || 'application/octet-stream');
   const kind = mime.startsWith('image/') ? 'IMAGE' : mime.startsWith('video/') ? 'VIDEO' : mime === 'application/pdf' ? 'PDF' : 'FILE';
   const dir = path.join(config.paths.uploads, 'training-deliverables');
-  await fs.mkdir(dir, { recursive: true });
-  const filename = `${Date.now()}-${crypto.randomUUID()}${safeUploadExtension(file)}`;
-  const absolute = path.join(dir, filename);
-  await fs.writeFile(absolute, file.buffer);
+  let filename;
+  if (file.path) {
+    // Déjà écrit sur le disque par multer, sous le nom qui porte la cliente.
+    filename = path.basename(file.path);
+  } else {
+    await fs.mkdir(dir, { recursive: true });
+    filename = `${Date.now()}-${crypto.randomUUID()}${safeUploadExtension(file)}`;
+    await fs.writeFile(path.join(dir, filename), file.buffer);
+  }
   return {
     url: `/uploads/training-deliverables/${filename}`,
     name: file.originalname || filename,
@@ -1956,6 +2732,26 @@ export async function uploadCustomerTrainingDeliverable(customerId, file) {
     uploadedAt: new Date().toISOString(),
     customerId: String(customerId),
   };
+}
+
+/**
+ * SUPPRIMER un livrable envoyé mais pas encore soumis — remplacement ou retrait.
+ *
+ * Seule sa propriétaire le peut (le nom du fichier porte son identifiant), et
+ * jamais un fichier déjà joint à un dossier soumis : la correctrice doit voir
+ * ce que la cliente a réellement envoyé. Le fichier quitte le disque — sans
+ * cela, chaque remplacement laisserait une vidéo orpheline sur le serveur.
+ */
+export async function deleteCustomerTrainingDeliverable(customerId, url) {
+  const match = String(url || '').match(/\/uploads\/training-deliverables\/([A-Za-z0-9._-]+)$/);
+  if (!match) throw ApiError.badRequest('Fichier invalide');
+  const filename = match[1];
+  if (!filename.startsWith(`c${customerId}-`)) throw ApiError.forbidden('Ce fichier ne vous appartient pas');
+  const submissions = await TrainingSubmission.find({ customerId }).select('deliverablesSnapshot').lean();
+  const used = submissions.some((submission) => JSON.stringify(submission.deliverablesSnapshot || {}).includes(filename));
+  if (used) throw ApiError.conflict("Ce fichier fait partie d'un dossier déjà soumis");
+  await fs.rm(path.join(config.paths.uploads, 'training-deliverables', filename), { force: true });
+  return { deleted: true };
 }
 
 export async function uploadTrainingResourceFile(file) {
@@ -2019,9 +2815,9 @@ export async function createTrainingSubmission(customerId, payload = {}) {
   }
   const product = await CommerceProduct.findById(payload.productId).lean();
   const evaluation = product?.evaluation || {};
-  if (evaluation.enabled === false) throw ApiError.badRequest('Evaluation finale inactive pour cette formation');
+  if (evaluation.enabled === false) throw ApiError.badRequest('Évaluation finale inactive pour cette formation');
   const pending = await TrainingSubmission.exists({ customerId, productId: payload.productId, status: 'PENDING' });
-  if (pending) throw ApiError.conflict('Une soumission est deja en attente pour cette formation');
+  if (pending) throw ApiError.conflict('Une soumission est déjà en attente pour cette formation');
   const last = await TrainingSubmission.findOne({ customerId, productId: payload.productId }).sort({ attempt: -1 }).lean();
   const scoreSnapshot = scoreEvaluationSubmission(evaluation, payload.answers || {});
   const submission = await TrainingSubmission.create({
@@ -2033,6 +2829,20 @@ export async function createTrainingSubmission(customerId, payload = {}) {
     answersSnapshot: payload.answers || {},
     deliverablesSnapshot: payload.deliverables || {},
     scoreSnapshot,
+  });
+  await emitAndDispatch({
+    type: 'training.submission.created',
+    entityType: 'TrainingSubmission',
+    entityId: submission._id,
+    payloadSafe: {
+      submissionId: String(submission._id),
+      customerId: String(customerId),
+      trainingTitle: String(product?.title || line.productSnapshot?.title || 'Formation').slice(0, 180),
+      attempt: submission.attempt,
+      ...(scoreSnapshot.percent === null ? {} : { scorePercent: scoreSnapshot.percent }),
+      submittedAt: submission.createdAt.toISOString(),
+    },
+    idempotencyKey: `training-submission-created:${submission._id}`,
   });
   const object = submission.toObject();
   if (!evaluation.showScoreToCustomer) delete object.scoreSnapshot;
@@ -2067,7 +2877,7 @@ function answerIds(value) {
   return [String(value)];
 }
 
-function scoreEvaluationSubmission(evaluation = {}, answers = {}) {
+export function scoreEvaluationSubmission(evaluation = {}, answers = {}) {
   const sections = Array.isArray(evaluation.sections) ? evaluation.sections : [];
   let totalPoints = 0;
   let earnedPoints = 0;
@@ -2102,20 +2912,44 @@ function scoreEvaluationSubmission(evaluation = {}, answers = {}) {
   return { totalPoints, earnedPoints, percent, details, calculatedAt: new Date() };
 }
 
+/**
+ * LE SCORE QUE LA CORRECTRICE VOIT — toujours détaillé question par question.
+ *
+ * Un score enregistré sans son détail (dossier importé, soumission antérieure
+ * au barème détaillé, barème retouché depuis) laissait la fiche de correction
+ * sans rien à quoi rattacher chaque question : toutes s'affichaient « 0 / 4 »,
+ * bonne réponse comprise. Le détail est alors recalculé depuis les réponses
+ * DE LA CLIENTE et le barème de la formation — jamais inventé.
+ */
+function withDetailedScore(submission) {
+  const stored = submission.scoreSnapshot || {};
+  if (Array.isArray(stored.details) && stored.details.length > 0) return submission;
+  const evaluation = submission.productId && typeof submission.productId === 'object'
+    ? submission.productId.evaluation || {}
+    : {};
+  const computed = scoreEvaluationSubmission(evaluation, submission.answersSnapshot || {});
+  if (computed.details.length === 0) return submission;
+  return {
+    ...submission,
+    scoreSnapshot: { ...stored, ...computed, recomputedFrom: 'answersSnapshot' },
+  };
+}
+
 export async function listManagerTrainingSubmissions() {
-  return TrainingSubmission.find()
+  const rows = await TrainingSubmission.find()
     .populate('customerId', 'email firstName lastName')
     .populate('productId', 'title slug kind evaluation modules')
     .populate('saleId', 'saleNumber')
     .sort({ createdAt: -1 })
     .lean();
+  return rows.map(withDetailedScore);
 }
 
 export async function decideTrainingSubmission(id, payload = {}, userId = null) {
   const submission = await TrainingSubmission.findById(id);
   if (!submission) throw ApiError.notFound('Soumission introuvable');
   const status = payload.status === 'VALIDATED' ? 'VALIDATED' : payload.status === 'REJECTED' ? 'REJECTED' : null;
-  if (!status) throw ApiError.badRequest('Decision invalide');
+  if (!status) throw ApiError.badRequest('Décision invalide');
   if (status === 'REJECTED' && !String(payload.comment || '').trim()) {
     throw ApiError.badRequest('Un commentaire est obligatoire en cas de refus');
   }
@@ -2129,5 +2963,43 @@ export async function decideTrainingSubmission(id, payload = {}, userId = null) 
     certificateUrl: status === 'VALIDATED' ? (payload.certificateUrl || `/certificats/${submission._id}.pdf`) : '',
   };
   await submission.save();
+  const product = await CommerceProduct.findById(submission.productId).select('title').lean();
+  await emitAndDispatch({
+    type: status === 'VALIDATED' ? 'training.submission.validated' : 'training.submission.rejected',
+    entityType: 'TrainingSubmission',
+    entityId: submission._id,
+    payloadSafe: {
+      submissionId: String(submission._id),
+      customerId: String(submission.customerId),
+      trainingTitle: String(product?.title || 'Formation').slice(0, 180),
+      attempt: submission.attempt,
+      comment: submission.decision.comment.slice(0, 1000),
+      decidedAt: submission.decision.decidedAt.toISOString(),
+    },
+    idempotencyKey: `training-submission-decided:${submission._id}:${submission.decision.decidedAt.getTime()}`,
+  });
   return submission;
+}
+
+const HOME_GROUPS = Object.freeze({
+  TRAINING: ['DISTANCE_TRAINING', 'IN_PERSON_TRAINING'],
+  SERVICE: ['SERVICE'],
+});
+
+/**
+ * MISE EN AVANT SUR L'ACCUEIL — une rubrique à la fois, dans l'ordre choisi.
+ * Les fiches de la rubrique absentes de la liste perdent leur mise en avant.
+ * Aucun plafond : l'institut met en avant autant de fiches qu'il le souhaite.
+ */
+export async function setHomeFeatured(group, productIds = []) {
+  const kinds = HOME_GROUPS[group];
+  if (!kinds) throw ApiError.badRequest('Rubrique inconnue');
+  const ids = [...new Set((Array.isArray(productIds) ? productIds : []).map(String))];
+  const found = await CommerceProduct.find({ _id: { $in: ids }, kind: { $in: kinds } }).select('_id').lean();
+  if (found.length !== ids.length) throw ApiError.badRequest('Fiche introuvable dans cette rubrique');
+  await CommerceProduct.updateMany({ kind: { $in: kinds }, _id: { $nin: ids } }, { $set: { homeFeatured: false, homeFeaturedRank: null } });
+  for (let index = 0; index < ids.length; index += 1) {
+    await CommerceProduct.updateOne({ _id: ids[index] }, { $set: { homeFeatured: true, homeFeaturedRank: index + 1 } });
+  }
+  return CommerceProduct.find({ kind: { $in: kinds }, homeFeatured: true }).sort({ homeFeaturedRank: 1 }).lean();
 }

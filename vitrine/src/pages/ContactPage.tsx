@@ -28,8 +28,8 @@ export default function ContactPage() {
         <div className="mt-10 flex items-start gap-5">
           <span className="mt-3 h-px w-10 shrink-0 sm:w-16" style={{ background: 'var(--v-accent)' }} />
           <p className="max-w-2xl text-lg font-light leading-relaxed" style={{ color: 'color-mix(in srgb, var(--v-foreground) 70%, var(--v-background))' }}>
-            Prestations, formations, cartes cadeaux ou demande particuliere : envoyez-nous les informations utiles,
-            l'institut vous recontacte avec une reponse claire.
+            Prestations, formations, cartes cadeaux ou demande particulière : envoyez-nous les informations utiles,
+            l'institut vous recontacte avec une réponse claire.
           </p>
         </div>
       </section>
@@ -75,8 +75,8 @@ export default function ContactPage() {
                 <ol className="mt-6 space-y-5">
                   {[
                     'Nous lisons votre demande avec le contexte de votre besoin.',
-                    'Nous vous repondons avec les disponibilites, le tarif ou les prochaines etapes.',
-                    'Si un rendez-vous est necessaire, il est confirme avec acompte et rappel clair.',
+                    'Nous vous répondons avec les disponibilités, le tarif ou les prochaines étapes.',
+                    'Si un rendez-vous est nécessaire, il est confirmé avec acompte et rappel clair.',
                   ].map((step, index) => (
                     <li key={step} className="flex gap-4 text-sm font-light leading-relaxed">
                       <span className="shrink-0 tabular-nums tracking-[0.2em]" style={{ color: 'var(--v-accent)' }}>

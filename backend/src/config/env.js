@@ -99,6 +99,14 @@ function positiveInt(name, fallback) {
 
 export const config = {
   env: ENV,
+  /**
+   * LE MONDE PANEL de cette instance — celui dont elle accepte les données
+   * (entreprise cliente, documents légaux, entreprise développeur). C'est
+   * l'environnement d'exécution, sauf rattachement explicite : une production
+   * branchée sur les comptes de recette du Panel porte `PANEL_WORLD=TEST`.
+   * Les clés Stripe de l'institut, elles, suivent toujours `ENV`.
+   */
+  panelWorld: ['TEST', 'PROD'].includes(String(process.env.PANEL_WORLD || '').toUpperCase()) ? String(process.env.PANEL_WORLD).toUpperCase() : ENV,
   isProd,
   isTest: !isProd,
   port: Number(process.env.PORT) || 4000,

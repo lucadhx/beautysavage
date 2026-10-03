@@ -224,7 +224,7 @@ function TemplateView({ templateId, onBack }: { templateId: string; onBack: () =
     }
   }
 
-  if (loading) return <BrandLoader />;
+  if (loading) return <BrandLoader variant="form" />;
 
   if (loadError || !template) {
     return (
@@ -425,7 +425,7 @@ export default function DevEmailTemplatesPage() {
       <EmailConfigurationSection />
 
       {loading ? (
-        <BrandLoader />
+        <BrandLoader variant="list" />
       ) : error ? (
         <div className="mt-4 rounded-md border border-border p-4" role="status">
           <p className="text-sm text-muted-foreground">{error}</p>

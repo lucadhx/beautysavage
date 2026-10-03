@@ -3,11 +3,18 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+      EN-TÊTE DE REPLI. En production, le backend sert cette coquille enrichie
+      du titre, de la description, de la canonique, des balises de partage et
+      des données structurées PROPRES À CHAQUE PAGE, tirés des données du site
+      (voir backend/src/services/seo). Ces valeurs-ci ne sont lues que si le
+      backend est indisponible.
+    -->
     <meta
       name="description"
-      content="L.Y Solution conçoit des présences digitales sur mesure : identité, direction artistique, architecture publique et espace privé. Pas de modèle, pas de catalogue — une conception unique par entreprise."
+      content="BeautySavage — institut de beauté : prestations regard et ongles, formations professionnelles en ligne et en présentiel, cartes cadeaux."
     />
-    <title>BeautySavage — Une présence digitale qui n’appartient qu’à vous</title>
+    <title>BeautySavage · Institut de beauté et formations</title>
     <!--
       ICÔNE VIDE, REMPLACÉE AU DÉMARRAGE — et il faut qu'elle soit là.
 
@@ -47,17 +54,18 @@
     <!-- OpenGraph -->
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="BeautySavage" />
-    <meta property="og:title" content="BeautySavage — Une présence digitale qui n’appartient qu’à vous" />
+    <meta property="og:locale" content="fr_FR" />
+    <meta property="og:title" content="BeautySavage · Institut de beauté et formations" />
     <meta
       property="og:description"
-      content="Une maison de conception digitale. Nous ne choisissons pas un design : nous créons le vôtre."
+      content="Prestations regard et ongles, formations professionnelles et cartes cadeaux."
     />
     <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="BeautySavage — Une présence digitale qui n’appartient qu’à vous" />
+    <meta name="twitter:title" content="BeautySavage · Institut de beauté et formations" />
     <meta
       name="twitter:description"
-      content="Une maison de conception digitale. Nous ne choisissons pas un design : nous créons le vôtre."
+      content="Prestations regard et ongles, formations professionnelles et cartes cadeaux."
     />
   </head>
   <body>

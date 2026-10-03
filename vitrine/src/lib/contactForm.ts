@@ -134,7 +134,7 @@ export const ERROR_MESSAGE: Record<string, string> = {
   CONTACT_NAME_TOO_LONG: `Nom trop long (${MAX_NAME_LENGTH} caractères maximum).`,
   CONTACT_COMPANY_REQUIRED: 'Indiquez le sujet de votre demande.',
   CONTACT_COMPANY_TOO_LONG: `Sujet trop long (${MAX_COMPANY_LENGTH} caractères maximum).`,
-  CONTACT_ACTIVITY_TOO_LONG: `Preference trop longue (${MAX_ACTIVITY_LENGTH} caractères maximum).`,
+  CONTACT_ACTIVITY_TOO_LONG: `Préférence trop longue (${MAX_ACTIVITY_LENGTH} caractères maximum).`,
   CONTACT_EMAIL_INVALID: 'Indiquez une adresse e-mail valide.',
   CONTACT_PHONE_INVALID: 'Numéro de téléphone invalide.',
   CONTACT_REASON_INVALID: 'Choisissez le motif de votre demande.',
@@ -243,7 +243,7 @@ export function newClientSubmissionId(): string {
  * est bien enregistrée. C'est cela qu'on lui dit, et c'est vrai.
  */
 export const SUCCESS_MESSAGE =
-  'Votre demande est bien envoyee. L institut revient vers vous rapidement.';
+  "Votre demande est bien envoyée. L'institut revient vers vous rapidement.";
 
 /** Erreur réseau : neutre, et surtout pas alarmante. */
 export const NETWORK_ERROR_MESSAGE =

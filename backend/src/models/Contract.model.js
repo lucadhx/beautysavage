@@ -286,6 +286,23 @@ const contractSchema = new mongoose.Schema(
     taxRate: { type: Number, default: DEFAULT_TAX_RATE }, // taux par défaut du contrat
 
     /**
+     * LA COMMISSION SUR LES VENTES DE L'INSTITUT — étape « Commission » de la
+     * configuration : pourcentage, types de produits assujettis, base HT ou
+     * TTC (HT = TTC ÷ (1 + TVA des ventes)). `configuredAt` dit qu'elle a été
+     * réglée : sans lui, la règle par défaut s'applique (voir commissionRules).
+     */
+    commission: {
+      enabled: { type: Boolean, default: true },
+      ratePercent: { type: Number, default: 10, min: 0, max: 100 },
+      productKinds: { type: [String], default: () => ['DISTANCE_TRAINING'] },
+      basis: { type: String, enum: ['HT', 'TTC'], default: 'TTC' },
+      salesVatRate: { type: Number, default: 20, min: 0, max: 100 },
+      /** Plafond TOTAL des commissions (HT, centimes) ; `null` = sans plafond. Atteint, plus rien n'est prélevé. */
+      capCents: { type: Number, default: null, min: 0 },
+      configuredAt: { type: Date, default: null },
+    },
+
+    /**
      * DÉLAI DE GRÂCE EN CAS D'IMPAYÉ D'ABONNEMENT, EN JOURS (L10.6B-1).
      *
      * ══ POURQUOI SUR LE CONTRAT ═════════════════════════════════════════════

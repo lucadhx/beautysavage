@@ -129,7 +129,7 @@ export async function applyLegalDocument(payload, source = 'SYNC', bridgeEntityI
    * l'adresse réels d'un client sur une adresse d'essai. Même garde que pour
    * l'entreprise développeur et l'entreprise cliente.
    */
-  if (value.environment !== config.env) {
+  if (value.environment !== config.panelWorld) {
     logger.warn(
       `[panel-bridge] Document légal ignoré : il vise ${value.environment}, `
       + `ce projet est en ${config.env}.`,

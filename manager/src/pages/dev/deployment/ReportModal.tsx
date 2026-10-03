@@ -10,7 +10,8 @@ import { X, Copy as CopyIcon, Check, ExternalLink, Globe, MonitorSmartphone, Clo
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import type { DeploymentRunFull } from '@/types';
-import { Button, Spinner } from '@/components/ui/primitives';
+import { Button } from '@/components/ui/primitives';
+import { Skeleton } from '@/components/ui/Skeleton';
 import { formatDateTime } from '@/lib/utils';
 import { useScrollLock } from '@/lib/scrollLock';
 import { StatusDot, type StepState } from './ui';
@@ -147,8 +148,17 @@ export function ReportModal({ runId, onClose }: { runId: string; onClose: () => 
         {/* Contenu */}
         <div className="min-h-0 flex-1 overflow-auto overscroll-contain p-5">
           {loading ? (
-            <div className="flex justify-center py-10">
-              <Spinner className="h-6 w-6" />
+            <div className="grid gap-4" aria-busy="true">
+              <span role="status" className="sr-only">Chargement du rapport…</span>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {Array.from({ length: 4 }, (_, i) => <Skeleton key={i} className="h-16 w-full rounded-xl" />)}
+              </div>
+              {Array.from({ length: 5 }, (_, i) => (
+                <div key={i} className="flex items-center gap-3">
+                  <Skeleton className="h-5 w-5 shrink-0 rounded-full" />
+                  <Skeleton className="h-3.5 w-3/5" />
+                </div>
+              ))}
             </div>
           ) : !run ? null : tab === 'summary' ? (
             <SummaryView run={run} />

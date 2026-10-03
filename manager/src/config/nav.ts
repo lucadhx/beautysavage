@@ -1,4 +1,6 @@
 import {
+  Layers,
+  SearchCheck,
   Activity,
   Inbox,
   Mail,
@@ -62,11 +64,13 @@ export const NAV_ITEMS: NavItem[] = [
   { to: '/demandes-contact', label: 'Demandes de contact', icon: Inbox, section: 'manager', group: 'Activité', badge: 'contactUnread' },
   { to: '/commerce/formations', label: 'Formations', icon: GraduationCap, section: 'manager', group: 'Commerce' },
   { to: '/commerce/prestations', label: 'Prestations', icon: Sparkles, section: 'manager', group: 'Commerce' },
+  { to: '/commerce/collections', label: 'Collections', icon: Layers, section: 'manager', group: 'Commerce' },
   { to: '/commerce/calendrier', label: 'Calendrier', icon: CalendarDays, section: 'manager', group: 'Commerce' },
   { to: '/commerce/cartes-cadeaux', label: 'Cartes cadeaux', icon: Gift, section: 'manager', group: 'Commerce' },
   { to: '/commerce/validation-formations', label: 'Validation formations', icon: ShieldCheck, section: 'manager', group: 'Commerce' },
   { to: '/commerce/avis', label: 'Avis', icon: Star, section: 'manager', group: 'Commerce' },
-  { to: '/commerce/mails', label: 'Mails institut', icon: Mail, section: 'manager', group: 'Commerce' },
+  // « Mails institut » n'est plus ici : les modèles d'e-mail sont un réglage
+  // technique, ils vivent dans l'espace Développeur (« Templates e-mail »).
   { to: '/commerce/remboursements', label: 'Remboursements', icon: Undo2, section: 'manager', group: 'Commerce' },
   { to: '/commerce/commissions', label: 'Commissions', icon: HandCoins, section: 'manager', group: 'Commerce' },
   { to: '/commerce/clients', label: 'Clients', icon: Users, section: 'manager', group: 'Commerce' },
@@ -103,6 +107,7 @@ export const NAV_ITEMS: NavItem[] = [
   { to: '/contacts', label: 'Coordonnées', icon: Phone, section: 'manager', group: 'Entreprise' },
   { to: '/theme', label: 'Thème du site', icon: Palette, section: 'manager', group: 'Entreprise' },
   { to: '/statut', label: 'Statut du site', icon: Power, section: 'manager', group: 'Entreprise' },
+  { to: '/referencement', label: 'Référencement', icon: SearchCheck, section: 'manager', group: 'Entreprise' },
 
   /**
    * MON ENTREPRISE — dans « Mon espace », et pas dans « Entreprise ».

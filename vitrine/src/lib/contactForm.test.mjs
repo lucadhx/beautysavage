@@ -207,7 +207,7 @@ section('Identifiant de soumission');
 section('Messages du visiteur');
 {
   check('succès : formulation attendue',
-    SUCCESS_MESSAGE === 'Votre demande est bien envoyee. L institut revient vers vous rapidement.');
+    SUCCESS_MESSAGE === "Votre demande est bien envoyée. L'institut revient vers vous rapidement.");
   // Le visiteur n'a pas à connaître notre infrastructure — et l'e-mail peut
   // parfaitement avoir échoué alors que sa demande est bien enregistrée.
   check('succès : ne mentionne AUCUN e-mail', !/e-?mail/i.test(SUCCESS_MESSAGE));

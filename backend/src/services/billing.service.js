@@ -74,6 +74,7 @@ export function invoiceType(stripeInvoice) {
   const meta = stripeInvoice.metadata || {};
   if (meta.paymentType === PAYMENT_TYPE.SUBSCRIPTION) return PAYMENT_TYPE.SUBSCRIPTION;
   if (meta.paymentType === PAYMENT_TYPE.LAUNCH_FEE) return PAYMENT_TYPE.LAUNCH_FEE;
+  if (meta.paymentType === PAYMENT_TYPE.COMMISSION) return PAYMENT_TYPE.COMMISSION;
 
   // 2. billing_reason — l'autorité.
   const reason = stripeInvoice.billing_reason;
@@ -179,7 +180,7 @@ function normaliserFacture(f) {
   return f ?? {};
 }
 
-export async function upsertInvoiceFromStripe(facture, contract, { label, addedManually } = {}) {
+export async function upsertInvoiceFromStripe(facture, contract, { label, addedManually, type } = {}) {
   const stripeInvoice = normaliserFacture(facture);
   const amountTTC = stripeInvoice.total ?? stripeInvoice.amount_due ?? stripeInvoice.amount_paid ?? 0;
   const tax = stripeInvoice.tax || 0;
@@ -190,7 +191,12 @@ export async function upsertInvoiceFromStripe(facture, contract, { label, addedM
     {
       contractId: contract?._id || before?.contractId || null,
       number: stripeInvoice.number || before?.number || '',
-      type: invoiceType(stripeInvoice),
+      /**
+       * Une facture de COMMISSIONS le reste : la vue du Panel ne porte pas les
+       * metadata, et une synchronisation ultérieure la retyperait sinon en
+       * « frais de lancement » (`billing_reason: manual`).
+       */
+      type: type ?? (before?.type === PAYMENT_TYPE.COMMISSION ? PAYMENT_TYPE.COMMISSION : invoiceType(stripeInvoice)),
       amountExcludingTax: Math.max(0, amountTTC - tax),
       taxAmount: tax,
       amountIncludingTax: amountTTC,

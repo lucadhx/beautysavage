@@ -28,6 +28,7 @@ export const ENTITY_TYPE = Object.freeze({
   CUSTOMER: 'Customer',
   COMMERCE_SALE: 'CommerceSale',
   CALENDAR_EVENT: 'CalendarEvent',
+  TRAINING_SUBMISSION: 'TrainingSubmission',
   CONTRACT: 'Contract',
   SITE: 'Site',
   /** Un compte LOCAL du projet (LOT 2C) — jamais une identité fédérée L.Y Solution. */
@@ -255,6 +256,125 @@ export const DOMAIN_EVENT_REGISTRY = Object.freeze({
       appointmentEnd: z.string().max(40),
       refundedAmount: z.number().int().nonnegative(),
       reason: z.string().max(300),
+      cancelledAt: z.string().max(40),
+    }).strict(),
+  },
+
+  'appointment.booked': {
+    type: 'appointment.booked',
+    description: "Un rendez-vous prestation est confirme a un client identifie (vitrine ou Manager).",
+    entityTypes: [ENTITY_TYPE.CALENDAR_EVENT],
+    retentionClass: RETENTION_CLASS.OPERATIONAL,
+    payloadSchema: z.object({
+      calendarEventId: z.string().max(64),
+      customerId: z.string().max(64),
+      appointmentTitle: z.string().max(180),
+      appointmentStart: z.string().max(40),
+      appointmentEnd: z.string().max(40),
+      paidAmount: z.number().int().nonnegative(),
+      balanceDueAmount: z.number().int().nonnegative(),
+      saleNumber: z.string().max(64).optional(),
+      origin: z.enum(['CHECKOUT', 'MANAGER']),
+      bookedAt: z.string().max(40),
+    }).strict(),
+  },
+
+  'customer.account_created': {
+    type: 'customer.account_created',
+    description: "L'institut a cree le compte d'un client (reservation manuelle) ; il doit choisir son mot de passe.",
+    entityTypes: [ENTITY_TYPE.CUSTOMER],
+    retentionClass: RETENTION_CLASS.OPERATIONAL,
+    payloadSchema: z.object({
+      customerId: z.string().max(64),
+      customerEmailMasked: z.string().max(254),
+      actionUrl: z.string().max(500),
+      expiresAt: z.string().max(40),
+      origin: z.enum(['MANUAL_BOOKING']),
+      createdAt: z.string().max(40),
+    }).strict(),
+  },
+
+  'training.submission.created': {
+    type: 'training.submission.created',
+    description: "Une cliente a envoye son dossier final de formation ; il attend une correction.",
+    entityTypes: [ENTITY_TYPE.TRAINING_SUBMISSION],
+    retentionClass: RETENTION_CLASS.OPERATIONAL,
+    payloadSchema: z.object({
+      submissionId: z.string().max(64),
+      customerId: z.string().max(64),
+      trainingTitle: z.string().max(180),
+      attempt: z.number().int().positive(),
+      scorePercent: z.number().int().min(0).max(100).optional(),
+      submittedAt: z.string().max(40),
+    }).strict(),
+  },
+
+  'training.submission.validated': {
+    type: 'training.submission.validated',
+    description: "L'institut a valide le dossier final d'une formation.",
+    entityTypes: [ENTITY_TYPE.TRAINING_SUBMISSION],
+    retentionClass: RETENTION_CLASS.OPERATIONAL,
+    payloadSchema: z.object({
+      submissionId: z.string().max(64),
+      customerId: z.string().max(64),
+      trainingTitle: z.string().max(180),
+      attempt: z.number().int().positive(),
+      comment: z.string().max(1000),
+      decidedAt: z.string().max(40),
+    }).strict(),
+  },
+
+  'training.submission.rejected': {
+    type: 'training.submission.rejected',
+    description: "L'institut a refuse le dossier final d'une formation ; la cliente peut le renvoyer.",
+    entityTypes: [ENTITY_TYPE.TRAINING_SUBMISSION],
+    retentionClass: RETENTION_CLASS.OPERATIONAL,
+    payloadSchema: z.object({
+      submissionId: z.string().max(64),
+      customerId: z.string().max(64),
+      trainingTitle: z.string().max(180),
+      attempt: z.number().int().positive(),
+      comment: z.string().max(1000),
+      decidedAt: z.string().max(40),
+    }).strict(),
+  },
+
+  'formation.session.rescheduled': {
+    type: 'formation.session.rescheduled',
+    description: "Une session de formation presentielle a ete deplacee ; chaque inscrite est prevenue.",
+    entityTypes: [ENTITY_TYPE.COMMERCE_SALE],
+    retentionClass: RETENTION_CLASS.OPERATIONAL,
+    payloadSchema: z.object({
+      saleId: z.string().max(64),
+      customerId: z.string().max(64),
+      productId: z.string().max(64),
+      slotId: z.string().max(64),
+      trainingTitle: z.string().max(180),
+      location: z.string().max(180),
+      previousStart: z.string().max(40),
+      previousEnd: z.string().max(40),
+      newStart: z.string().max(40),
+      newEnd: z.string().max(40),
+      message: z.string().max(600).optional(),
+      rescheduledAt: z.string().max(40),
+    }).strict(),
+  },
+
+  'formation.session.cancelled': {
+    type: 'formation.session.cancelled',
+    description: "Une session de formation presentielle a ete annulee par l'institut ; chaque inscrite est prevenue (et remboursee selon le choix).",
+    entityTypes: [ENTITY_TYPE.COMMERCE_SALE],
+    retentionClass: RETENTION_CLASS.OPERATIONAL,
+    payloadSchema: z.object({
+      saleId: z.string().max(64),
+      customerId: z.string().max(64),
+      productId: z.string().max(64),
+      slotId: z.string().max(64),
+      trainingTitle: z.string().max(180),
+      sessionStart: z.string().max(40),
+      sessionEnd: z.string().max(40),
+      reason: z.string().max(600),
+      refundedAmount: z.number().int().nonnegative(),
       cancelledAt: z.string().max(40),
     }).strict(),
   },
@@ -517,6 +637,24 @@ export const DOMAIN_EVENT_REGISTRY = Object.freeze({
    * Émis APRÈS l'encaissement acté, en best-effort : un e-mail qui ne part pas
    * ne défait pas un paiement.
    */
+  /**
+   * LES COMMISSIONS D'UN MOIS TERMINÉ SONT PAYABLES — annoncé une fois par mois,
+   * dès le 1er du mois suivant, aux administrateurs du projet.
+   */
+  'commission.payment_due': {
+    type: 'commission.payment_due',
+    description: "Les commissions d'un mois terminé sont disponibles au paiement.",
+    entityTypes: [ENTITY_TYPE.CONTRACT],
+    retentionClass: RETENTION_CLASS.OPERATIONAL,
+    payloadSchema: z
+      .object({
+        commissionId: z.string().max(64),
+        periodKey: z.string().regex(/^\d{4}-\d{2}$/),
+        amountCents: z.number().int().nonnegative(),
+      })
+      .strict(),
+  },
+
   'launch_fee.paid': {
     type: 'launch_fee.paid',
     description: 'Les frais de lancement ont été encaissés (constat Stripe, via webhook ou réconciliation).',

@@ -10,6 +10,7 @@ import sitePageRoutes from './sitePage.routes.js';
 import homeContentRoutes from './homeContent.routes.js';
 import themeRoutes from './theme.routes.js';
 import siteStatusRoutes from './siteStatus.routes.js';
+import seoSettingsRoutes from './seoSettings.routes.js';
 import teamRoutes from './team.routes.js';
 import accountRoutes from './account.routes.js';
 import uploadRoutes from './upload.routes.js';
@@ -84,6 +85,8 @@ apiRouter.use('/pages', sitePageRoutes);
 apiRouter.use('/home-content', homeContentRoutes);
 apiRouter.use('/theme', themeRoutes);
 apiRouter.use('/site-status', siteStatusRoutes);
+// Le référencement (SEO / GEO) : réglages de l'entreprise et diagnostic.
+apiRouter.use('/seo-settings', seoSettingsRoutes);
 apiRouter.use('/uploads', uploadRoutes);
 /**
  * FLUX D'INVALIDATION D'INTERFACE — le dernier maillon du live.

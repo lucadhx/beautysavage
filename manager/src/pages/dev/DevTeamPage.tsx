@@ -41,7 +41,7 @@ export default function DevTeamPage() {
     } catch { /* le toast dit ce qui bloque */ }
   };
 
-  if (loading) return <BrandLoader />;
+  if (loading) return <BrandLoader variant="form" />;
 
   const company = data?.company ?? null;
   const panelUrl = data?.pairing?.panelUrl ?? null;

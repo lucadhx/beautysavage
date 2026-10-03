@@ -14,7 +14,7 @@ import { api, ApiError } from '@/lib/api';
 import { describeServerFailure } from '@/lib/serverErrors';
 import { estIndisponibiliteTransitoire, malgreUnRedemarrage } from '@/lib/backendAvailability';
 import type { DeploymentTarget } from '@/types';
-import { Spinner } from '@/components/ui/primitives';
+import { Skeleton } from '@/components/ui/Skeleton';
 import { Landing, type LandingDestination } from './deployment/Landing';
 import { DuplicateAssistant } from './deployment/DuplicateAssistant';
 import { DeployAssistant, type VpsSessionInfo } from './deployment/DeployAssistant';
@@ -270,8 +270,21 @@ export default function DeploymentPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-[calc(var(--m-viewport-h)*0.6)] items-center justify-center">
-        <Spinner className="h-7 w-7" />
+      <div className="mx-auto max-w-4xl pb-16" aria-busy="true">
+        <span role="status" className="sr-only">Chargement…</span>
+        <div className="grid justify-items-center gap-4 rounded-3xl border border-border/70 px-8 py-12">
+          <Skeleton className="h-6 w-44 rounded-full" />
+          <Skeleton className="h-9 w-full max-w-lg" />
+          <Skeleton className="h-4 w-full max-w-md" />
+        </div>
+        <div className="mt-6 grid gap-5 sm:grid-cols-2">
+          <Skeleton className="h-56 w-full rounded-2xl" />
+          <Skeleton className="h-56 w-full rounded-2xl" />
+        </div>
+        <div className="mt-5 grid gap-4 sm:grid-cols-2">
+          <Skeleton className="h-20 w-full rounded-2xl" />
+          <Skeleton className="h-20 w-full rounded-2xl" />
+        </div>
       </div>
     );
   }

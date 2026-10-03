@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '@/lib/api';
+import { CardsSkeleton } from '@/components/ui/Skeleton';
 import {
   CommercePageFrame,
   Metric,
@@ -10,6 +11,7 @@ import {
   type CommerceProduct,
   type CommerceSale,
 } from './CommerceShared';
+import { FeaturedStrip, SearchInput, matchesSearch } from './HomeFeaturedPanel';
 
 const TRAINING_KINDS = ['DISTANCE_TRAINING', 'IN_PERSON_TRAINING'] as const;
 
@@ -17,12 +19,15 @@ export default function CommerceFormationsPage() {
   const [products, setProducts] = React.useState<CommerceProduct[]>([]);
   const [sales, setSales] = React.useState<CommerceSale[]>([]);
   const [error, setError] = React.useState('');
+  const [loaded, setLoaded] = React.useState(false);
+  const [query, setQuery] = React.useState('');
 
   const refresh = React.useCallback(() => {
     Promise.all([api.commerceProducts(), api.commerceSales()])
       .then(([productList, saleList]) => {
         setProducts(productList as CommerceProduct[]);
         setSales(saleList as CommerceSale[]);
+        setLoaded(true);
       })
       .catch((err) => setError(err instanceof Error ? err.message : 'Chargement impossible'));
   }, []);
@@ -41,13 +46,17 @@ export default function CommerceFormationsPage() {
       actions={<Link to="/commerce/formations/nouveau" className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground">Nouvelle formation</Link>}
     >
       {error && <p className="rounded-md border border-destructive/30 p-3 text-sm text-destructive">{error}</p>}
-      <div className="grid gap-4 md:grid-cols-3">
+      {!loaded && !error ? <CardsSkeleton /> : <div className="grid gap-4 md:grid-cols-3">
         <Metric label="Formations catalogue" value={formations.length} />
         <Metric label="Inscriptions vendues" value={paidTrainingLines.length} />
         <Metric label="CA formations" value={cents(revenue)} />
-      </div>
+      </div>}
+      <FeaturedStrip group="TRAINING" products={formations} loading={!loaded && !error} />
       <Panel title="Formations">
-        <ProductTable products={formations} editBase="/commerce/formations" />
+        <div className="mb-3">
+          <SearchInput value={query} onChange={setQuery} placeholder="Rechercher une formation…" testId="list-search" />
+        </div>
+        <ProductTable products={formations.filter((p) => matchesSearch(p, query))} emptyText={query ? 'Aucun résultat pour cette recherche.' : undefined} loading={!loaded && !error} editBase="/commerce/formations" />
       </Panel>
     </CommercePageFrame>
   );

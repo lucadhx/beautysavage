@@ -114,8 +114,14 @@ export function Field({
   count,
   max,
   htmlFor,
+  icon,
+  unit,
 }: {
   label?: string;
+  /** Pictogramme discret devant le libellé, pour structurer un bloc dense. */
+  icon?: React.ReactNode;
+  /** Précision d'unité affichée après le libellé : « (heures) », « (%) »… */
+  unit?: string;
   hint?: string;
   error?: string;
   children: React.ReactNode;
@@ -186,7 +192,12 @@ export function Field({
     <div className={cn('space-y-1.5', className)}>
       {(label || compteur) && (
         <div className="flex items-baseline justify-between gap-2">
-          {label ? <Label htmlFor={effectiveId}>{label}</Label> : <span />}
+          {label ? (
+            <Label htmlFor={effectiveId} className="inline-flex items-center gap-1.5">
+              {icon && <span className="inline-flex shrink-0 text-muted-foreground [&>svg]:h-3.5 [&>svg]:w-3.5" aria-hidden>{icon}</span>}
+              <span>{label}{unit && <span className="font-normal text-muted-foreground"> ({unit})</span>}</span>
+            </Label>
+          ) : <span />}
           {compteur && (
             /*
               `aria-live="polite"` : un lecteur d'écran annonce l'approche de la

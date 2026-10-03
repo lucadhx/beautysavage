@@ -5,6 +5,7 @@ import { Theme } from '../models/Theme.model.js';
 import { ManagerTheme } from '../models/ManagerTheme.model.js';
 
 import { RoleAppearance } from '../models/RoleAppearance.model.js';
+import { SeoSettings } from '../models/SeoSettings.model.js';
 
 /**
  * ENTREPRISE — la fiche brute, plus les adresses d'affichage de ses médias.
@@ -78,3 +79,12 @@ export const themeController = singletonFactory(Theme);
 export const managerThemeController = singletonFactory(ManagerTheme);
 
 export const roleAppearanceController = singletonFactory(RoleAppearance);
+
+/** Référencement : chaque enregistrement vide le cache des pages rendues. */
+export const seoSettingsController = singletonFactory(SeoSettings, {
+  transform: async (body) => {
+    const { invalidateSeoCache } = await import('../services/seo/seo.service.js');
+    invalidateSeoCache();
+    return body;
+  },
+});

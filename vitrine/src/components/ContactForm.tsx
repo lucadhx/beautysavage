@@ -317,14 +317,14 @@ export function ContactForm() {
 
         <div>
           <label htmlFor="contact-activity" className={labelStyle}>
-            Preference ou disponibilite <span className="text-xs font-normal text-muted-foreground">(facultatif)</span>
+            Préférence ou disponibilité <span className="text-xs font-normal text-muted-foreground">(facultatif)</span>
           </label>
           <input
             id="contact-activity"
             name="activity"
             type="text"
             disabled={pending}
-            placeholder="Ex : mercredi apres-midi, matin uniquement..."
+            placeholder="Ex : mercredi après-midi, matin uniquement..."
             value={values.activity}
             onChange={(e) => set('activity', e.target.value)}
             onBlur={() => blur('activity')}

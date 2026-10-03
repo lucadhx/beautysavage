@@ -11,6 +11,7 @@ import { api } from '@/lib/api';
 import type { ControlTarget, VersionInfo } from '@/types';
 import { Button } from '@/components/ui/primitives';
 import { messageUtilisateur } from '@/lib/erreurs';
+import { Skeleton } from '@/components/ui/Skeleton';
 
 const HEALTH_COLORS: Record<string, string> = {
   HEALTHY: 'bg-emerald-500/15 text-emerald-600',
@@ -85,8 +86,25 @@ export default function DeploymentsControlPage() {
       {error && <p className="rounded-lg bg-red-500/[0.06] px-4 py-3 text-sm text-red-600">{error}</p>}
 
       {targets === null ? (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" /> Chargement…
+        <div className="space-y-3" aria-busy="true">
+          <span role="status" className="sr-only">Chargement…</span>
+          {Array.from({ length: 3 }, (_, i) => (
+            <div key={i} className="grid gap-3 rounded-xl border bg-card p-4">
+              <div className="flex items-center gap-3">
+                <div className="grid gap-1.5">
+                  <Skeleton className="h-4 w-40" />
+                  <Skeleton className="h-3 w-56" />
+                </div>
+                <Skeleton className="ml-auto h-5 w-24" />
+              </div>
+              <div className="grid grid-cols-2 gap-x-6 gap-y-1 md:grid-cols-4">
+                {Array.from({ length: 4 }, (_, c) => <Skeleton key={c} className="h-3 w-4/5" />)}
+              </div>
+              <div className="flex gap-2">
+                {Array.from({ length: 4 }, (_, c) => <Skeleton key={c} className="h-8 w-24" />)}
+              </div>
+            </div>
+          ))}
         </div>
       ) : targets.length === 0 && !error ? (
         <p className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">

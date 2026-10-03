@@ -2,8 +2,11 @@ import * as React from 'react';
 import { CheckCircle2, Image, PlayCircle, Search, Send, XCircle } from 'lucide-react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '@/lib/api';
+import { resolvePreviewMediaUrl } from '@/lib/media';
+import { CustomVideoPlayer } from '@/components/CustomVideoPlayer';
 import { Button, Field, Textarea } from '@/components/ui/primitives';
 import { Dropdown } from '@/components/base/dropdown/dropdown';
+import { CardsSkeleton, FormSkeleton, TableSkeleton } from '@/components/ui/Skeleton';
 import { CommercePageFrame, Metric, Panel, StatusBadge, dateShort, type TrainingSubmission } from './CommerceShared';
 
 function customer(value: TrainingSubmission['customerId']) {
@@ -53,6 +56,7 @@ export default function CommerceValidationFormationsPage() {
   const [query, setQuery] = React.useState('');
   const [comment, setComment] = React.useState('');
   const [message, setMessage] = React.useState('');
+  const [loaded, setLoaded] = React.useState(false);
   const { submissionId } = useParams();
   const navigate = useNavigate();
   const selected = submissionId ? items.find((item) => item._id === submissionId) ?? null : items.find((item) => item._id === selectedId) ?? null;
@@ -64,7 +68,8 @@ export default function CommerceValidationFormationsPage() {
         setItems(next);
         setSelectedId((current) => current ?? next[0]?._id ?? null);
       })
-      .catch((err) => setMessage(err instanceof Error ? err.message : 'Chargement impossible'));
+      .catch((err) => setMessage(err instanceof Error ? err.message : 'Chargement impossible'))
+      .finally(() => setLoaded(true));
   }, []);
   React.useEffect(refresh, [refresh]);
 
@@ -96,9 +101,11 @@ export default function CommerceValidationFormationsPage() {
         actions={<Button variant="outline" onClick={() => navigate('/commerce/validation-formations')}>Retour aux validations</Button>}
       >
         {message && <p className="rounded-md border p-3 text-sm text-muted-foreground">{message}</p>}
-        {!selected ? (
+        {!loaded ? (
+          <FormSkeleton fields={6} />
+        ) : !selected ? (
           <Panel title="Chargement">
-            <p className="text-sm text-muted-foreground">{items.length === 0 ? 'Chargement de la soumission...' : 'Soumission introuvable.'}</p>
+            <p className="text-sm text-muted-foreground">Soumission introuvable.</p>
           </Panel>
         ) : (
           <Panel title="Correction">
@@ -109,8 +116,9 @@ export default function CommerceValidationFormationsPage() {
                 <Textarea value={comment} onChange={(event) => setComment(event.target.value)} placeholder="Expliquez la validation ou le refus. Obligatoire en cas de refus." />
               </Field>
               <div className="flex flex-wrap gap-2">
-                <Button onClick={() => decide('VALIDATED')}><CheckCircle2 className="h-4 w-4" /> Valider la formation</Button>
-                <Button variant="destructive" onClick={() => decide('REJECTED')}><XCircle className="h-4 w-4" /> Refuser</Button>
+                {/* Les deux décisions portent leur couleur : vert = valider, rouge = refuser. */}
+                <Button className="bg-emerald-600 text-white hover:bg-emerald-700" onClick={() => decide('VALIDATED')} data-testid="decision-validate"><CheckCircle2 className="h-4 w-4" /> Valider la formation</Button>
+                <Button className="bg-red-600 text-white hover:bg-red-700" onClick={() => decide('REJECTED')} data-testid="decision-reject"><XCircle className="h-4 w-4" /> Refuser</Button>
               </div>
             </div>
           </Panel>
@@ -122,11 +130,13 @@ export default function CommerceValidationFormationsPage() {
   return (
     <CommercePageFrame title="Validation formations" description="Correction ergonomique des evaluations finales, livrables et decisions client.">
       {message && <p className="rounded-md border p-3 text-sm text-muted-foreground">{message}</p>}
-      <div className="grid gap-4 md:grid-cols-3">
-        <Metric label="En attente" value={items.filter((item) => item.status === 'PENDING').length} />
-        <Metric label="Validees" value={items.filter((item) => item.status === 'VALIDATED').length} />
-        <Metric label="Refusees" value={items.filter((item) => item.status === 'REJECTED').length} />
-      </div>
+      {!loaded ? <CardsSkeleton count={3} /> : (
+        <div className="grid gap-4 md:grid-cols-3">
+          <Metric label="En attente" value={items.filter((item) => item.status === 'PENDING').length} />
+          <Metric label="Validees" value={items.filter((item) => item.status === 'VALIDATED').length} />
+          <Metric label="Refusees" value={items.filter((item) => item.status === 'REJECTED').length} />
+        </div>
+      )}
 
       <div className="grid gap-4">
         <Panel title="Soumissions">
@@ -146,20 +156,24 @@ export default function CommerceValidationFormationsPage() {
               {formationOptions.map((name) => <option key={name} value={name}>{name}</option>)}
             </select>
           </div>
-          <div className="max-w-full overflow-x-auto rounded-lg border">
+          {!loaded ? <TableSkeleton rows={6} cols={6} /> : (
+          <div className="m-table max-w-full overflow-x-auto rounded-lg border">
             {filteredItems.length === 0 && <p className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">Aucune demande ne correspond aux filtres.</p>}
             {filteredItems.length > 0 && (
               <table className="min-w-[760px] w-full text-left text-sm">
                 <thead className="bg-muted/40 text-xs uppercase tracking-wide text-muted-foreground">
-                  <tr><th className="px-4 py-3">Formation</th><th className="px-4 py-3">Cliente</th><th className="px-4 py-3">Date</th><th className="px-4 py-3">Tentative</th><th className="px-4 py-3">Statut</th><th className="px-4 py-3">Action</th></tr>
+                  <tr><th className="px-4 py-3">Formation</th><th className="m-hide px-4 py-3">Cliente</th><th className="m-hide px-4 py-3">Date</th><th className="m-hide px-4 py-3">Tentative</th><th className="px-4 py-3">Statut</th><th className="px-4 py-3">Action</th></tr>
                 </thead>
                 <tbody>
                   {filteredItems.map((item) => (
                     <tr key={item._id} className="border-t">
-                      <td className="px-4 py-3 font-medium">{product(item.productId)}</td>
-                      <td className="px-4 py-3">{customer(item.customerId)}</td>
-                      <td className="px-4 py-3">{dateShort(item.createdAt)}</td>
-                      <td className="px-4 py-3">#{item.attempt} - v{item.evaluationVersion || 1}</td>
+                      <td className="px-4 py-3 font-medium">
+                        {product(item.productId)}
+                        <div className="text-xs font-normal text-muted-foreground sm:hidden">{customer(item.customerId)} · {dateShort(item.createdAt)} · tentative #{item.attempt}</div>
+                      </td>
+                      <td className="m-hide px-4 py-3">{customer(item.customerId)}</td>
+                      <td className="m-hide whitespace-nowrap px-4 py-3">{dateShort(item.createdAt)}</td>
+                      <td className="m-hide px-4 py-3">#{item.attempt}</td>
                       <td className="px-4 py-3"><StatusBadge>{item.status}</StatusBadge></td>
                       <td className="px-4 py-3">
                         <Dropdown.Root>
@@ -179,6 +193,7 @@ export default function CommerceValidationFormationsPage() {
               </table>
             )}
           </div>
+          )}
         </Panel>
       </div>
     </CommercePageFrame>
@@ -240,15 +255,127 @@ function SubmissionReview({ item }: { item: TrainingSubmission }) {
       </section>
 
       <section className="grid gap-3">
-        <h3 className="text-base font-semibold">Livrables</h3>
-        {entries(item.deliverablesSnapshot).length === 0 && <p className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">Aucun livrable envoye.</p>}
-        <div className="grid gap-3 md:grid-cols-2">
-          {entries(item.deliverablesSnapshot).map(([key, value], index) => (
-            <DeliverableCard key={key} label={answerLabel(key, index)} value={value} />
+        <h3 className="text-base font-semibold">Travaux rendus</h3>
+        {deliverableRows(item, evaluation).length === 0 && <p className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">Aucun livrable envoye.</p>}
+        <div className="grid gap-4">
+          {deliverableRows(item, evaluation).map((row) => (
+            <DeliverableCard key={row.key} label={row.label} description={row.description} items={row.items} />
           ))}
         </div>
       </section>
     </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Livrables : ce que la cliente a envoyé, MONTRÉ — pas un nom de fichier    */
+/* -------------------------------------------------------------------------- */
+
+type MediaKind = 'image' | 'video' | 'streamable' | 'file';
+interface MediaItem { url: string; name: string; kind: MediaKind; shortcode?: string; caption?: string }
+
+const SLOT_LABELS: Record<string, string> = { before: 'Avant', after: 'Apres' };
+
+function streamableCode(value: unknown) {
+  const raw = String(value || '').trim();
+  const match = raw.match(/^https?:\/\/(?:www\.)?streamable\.com\/(?:e\/)?([a-z0-9]{4,12})/i);
+  return match ? match[1].toLowerCase() : '';
+}
+
+function mediaKind(url: string, mime: string, shortcode: string): MediaKind {
+  if (shortcode) return 'streamable';
+  if (mime.startsWith('image/') || /\.(png|jpe?g|webp|gif|avif)(?:[?#].*)?$/i.test(url)) return 'image';
+  if (mime.startsWith('video/') || /\.(mp4|webm|mov|m4v)(?:[?#].*)?$/i.test(url)) return 'video';
+  return 'file';
+}
+
+/**
+ * Aplatit une valeur de livrable, quelle que soit sa forme : un fichier seul,
+ * une galerie (tableau), un couple avant/après (objet à emplacements). C'est
+ * la forme imbriquée qui s'affichait « [object Object] ».
+ */
+function mediaItems(value: unknown, caption?: string): MediaItem[] {
+  if (!value) return [];
+  if (Array.isArray(value)) return value.flatMap((entry, index) => mediaItems(entry, caption ? `${caption} ${index + 1}` : undefined));
+  if (typeof value === 'string') {
+    const shortcode = streamableCode(value);
+    return [{ url: value, name: value.split('/').pop() || value, kind: mediaKind(value, '', shortcode), shortcode, caption }];
+  }
+  if (typeof value !== 'object') return [];
+  const object = value as Record<string, unknown>;
+  const url = String(object.url || object.sourceUrl || '');
+  if (url || object.streamableShortcode) {
+    const shortcode = String(object.streamableShortcode || '') || streamableCode(url);
+    const mime = String(object.mimeType || object.type || '');
+    return [{ url: resolvePreviewMediaUrl(url), name: String(object.name || url.split('/').pop() || 'Fichier'), kind: mediaKind(url, mime, shortcode), shortcode, caption }];
+  }
+  return Object.entries(object).flatMap(([slot, entry]) => mediaItems(entry, SLOT_LABELS[slot] || slot));
+}
+
+/** Livrables dans l'ordre de la consigne, avec LEUR libellé — puis tout reste envoyé. */
+function deliverableRows(item: TrainingSubmission, evaluation: Record<string, any>) {
+  const snapshot = (item.deliverablesSnapshot || {}) as Record<string, unknown>;
+  const definitions = Array.isArray(evaluation.deliverables) ? evaluation.deliverables as Record<string, any>[] : [];
+  const seen = new Set<string>();
+  const rows = definitions
+    .map((definition, index) => {
+      const key = String(definition.id || definition.label || index);
+      seen.add(key);
+      return { key, label: String(definition.label || `Livrable ${index + 1}`), description: String(definition.description || ''), items: mediaItems(snapshot[key]) };
+    })
+    .filter((row) => row.items.length > 0);
+  for (const [key, value] of Object.entries(snapshot)) {
+    if (seen.has(key)) continue;
+    const items = mediaItems(value);
+    if (items.length) rows.push({ key, label: answerLabel(key.replace(/^liv_/, ''), rows.length), description: '', items });
+  }
+  return rows;
+}
+
+function DeliverableCard({ label, description, items }: { label: string; description: string; items: MediaItem[] }) {
+  return (
+    <article className="overflow-hidden rounded-lg border bg-card">
+      <div className="border-b bg-muted/30 px-4 py-3">
+        <p className="font-semibold">{label}</p>
+        {description && <p className="mt-1 text-xs text-muted-foreground">{description}</p>}
+      </div>
+      <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3">
+        {items.map((media, index) => <MediaTile key={`${media.url}-${index}`} media={media} />)}
+      </div>
+    </article>
+  );
+}
+
+function MediaTile({ media }: { media: MediaItem }) {
+  const legend = (
+    <figcaption className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground">
+      {media.kind === 'image' ? <Image className="h-3.5 w-3.5" /> : media.kind === 'file' ? <Send className="h-3.5 w-3.5" /> : <PlayCircle className="h-3.5 w-3.5" />}
+      {media.caption && <span className="font-semibold text-foreground">{media.caption}</span>}
+      <span className="truncate">{media.name}</span>
+    </figcaption>
+  );
+  if (media.kind === 'image') {
+    return (
+      <figure className="overflow-hidden rounded-md border bg-background" data-testid="deliverable-image">
+        <a href={media.url} target="_blank" rel="noreferrer" title="Ouvrir en grand">
+          <img src={media.url} alt={media.caption || media.name} className="aspect-square w-full bg-muted object-cover" loading="lazy" />
+        </a>
+        {legend}
+      </figure>
+    );
+  }
+  if (media.kind === 'video' || media.kind === 'streamable') {
+    return (
+      <figure className="overflow-hidden rounded-md border bg-background sm:col-span-2" data-testid="deliverable-video">
+        <CustomVideoPlayer {...(media.kind === 'streamable' ? { shortcode: media.shortcode || '' } : { src: media.url })} title={media.caption || media.name} />
+        {legend}
+      </figure>
+    );
+  }
+  return (
+    <figure className="rounded-md border bg-background p-3">
+      <a href={media.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 text-sm font-semibold hover:underline"><Send className="h-4 w-4" /> Ouvrir {media.name}</a>
+    </figure>
   );
 }
 
@@ -265,12 +392,28 @@ function answerArray(value: unknown) {
   return [String(value)];
 }
 
+/** Les bonnes réponses d'une question — liste explicite si elle existe, sinon les options cochées « bonne ». */
+function expectedIds(question: any, detail: any) {
+  if (Array.isArray(detail?.correctOptionIds) && detail.correctOptionIds.length) return detail.correctOptionIds.map(String);
+  if (Array.isArray(question.correctOptionIds) && question.correctOptionIds.length) return question.correctOptionIds.map(String);
+  return optionRows(question, detail).filter((option: any) => option.correct).map((option: any) => String(option.id));
+}
+
 function QuestionCorrection({ question, answer, detail }: { question: any; answer: unknown; detail: any }) {
-  const selected = new Set(answerArray(answer));
-  const correctIds = new Set((detail?.correctOptionIds || question.correctOptionIds || optionRows(question, detail).filter((option: any) => option.correct).map((option: any) => String(option.id))).map(String));
-  const ok = detail ? Boolean(detail.correct ?? Number(detail.earnedPoints || 0) >= Number(detail.points || 0)) : null;
-  const earned = Number(detail?.earnedPoints || 0);
-  const points = Number(detail?.points || question.points || 0);
+  const selectedList = answerArray(answer);
+  const selected = new Set(selectedList);
+  const expected = expectedIds(question, detail);
+  const correctIds = new Set<string>(expected);
+  const points = Number(detail?.points ?? question.points ?? 0);
+  /**
+   * Sans détail enregistré, la question est corrigée ICI, avec la même règle
+   * que le serveur (mêmes réponses cochées, ni plus ni moins). Elle affichait
+   * sinon « 0 / 4 » même sur une bonne réponse.
+   */
+  const computedOk = expected.length > 0 && selectedList.length > 0
+    && [...selectedList].sort().join('|') === [...expected].sort().join('|');
+  const ok = detail ? Boolean(detail.correct ?? Number(detail.earnedPoints || 0) >= points) : (expected.length > 0 ? computedOk : null);
+  const earned = detail ? Number(detail.earnedPoints || 0) : ok ? points : 0;
   return (
     <article className={`rounded-lg border p-4 ${ok === true ? 'border-emerald-200 bg-emerald-50' : ok === false ? 'border-red-200 bg-red-50' : 'bg-background'}`}>
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -281,7 +424,7 @@ function QuestionCorrection({ question, answer, detail }: { question: any; answe
         <div className="flex items-center gap-2">
           {ok === true && <span className="rounded-full bg-emerald-600 px-2 py-1 text-xs font-semibold text-white">Correcte</span>}
           {ok === false && <span className="rounded-full bg-red-600 px-2 py-1 text-xs font-semibold text-white">Fausse</span>}
-          <span className={`rounded-full px-2 py-1 text-xs font-semibold ${earned > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
+          <span data-testid="question-points" className={`rounded-full px-2 py-1 text-xs font-semibold ${earned > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
             {earned} / {points} pts
           </span>
         </div>
@@ -308,26 +451,3 @@ function QuestionCorrection({ question, answer, detail }: { question: any; answe
   );
 }
 
-function DeliverableCard({ label, value }: { label: string; value: unknown }) {
-  const first = Array.isArray(value) ? value[0] : value;
-  const object = first && typeof first === 'object' ? first as any : null;
-  const text = object?.url || renderValue(first ?? value);
-  const title = object?.name || label;
-  const isImage = /^https?:\/\/.+\.(png|jpe?g|webp|gif)$/i.test(text) || text.startsWith('/uploads/');
-  const isVideo = /^https?:\/\/.+\.(mp4|webm|mov)$/i.test(text) || /\.(mp4|webm|mov)$/i.test(text) || object?.mimeType?.startsWith?.('video/');
-  return (
-    <div className="overflow-hidden rounded-lg border bg-card">
-      <div className="flex items-center gap-2 border-b p-3 text-sm font-semibold">
-        {isImage ? <Image className="h-4 w-4" /> : isVideo ? <PlayCircle className="h-4 w-4" /> : <Send className="h-4 w-4" />}
-        {title}
-      </div>
-      {isImage ? (
-        <img src={text} alt="" className="aspect-video w-full object-cover" />
-      ) : isVideo ? (
-        <video src={text} controls className="aspect-video w-full bg-black object-contain" />
-      ) : (
-        <p className="break-words p-4 text-sm">{text}</p>
-      )}
-    </div>
-  );
-}

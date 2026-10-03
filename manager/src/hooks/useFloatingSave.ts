@@ -4,9 +4,11 @@ import {
   deriveSaveState,
   isDirty,
   SAVED_DECAY_MS,
+  snapshot,
   type SavePhase,
   type SaveState,
 } from '@/lib/saveState';
+import { registerLeaveGuard } from '@/components/LeaveGuard';
 
 export type { SaveState };
 
@@ -87,27 +89,65 @@ export function useFloatingSave<T>(
     return () => window.removeEventListener('beforeunload', avertir);
   }, [dirty]);
 
+  /**
+   * NAVIGATION INTERNE : l'écran se déclare au registre de `<LeaveGuard/>`,
+   * qui demande « Quitter sans enregistrer ? » avant un clic de menu, un
+   * bouton Retour ou le bouton précédent. Voir `components/LeaveGuard.tsx`.
+   */
+  const guardId = React.useRef(Symbol('floating-save'));
+  const saveRef = React.useRef<() => Promise<boolean>>(async () => true);
+  React.useEffect(() => {
+    registerLeaveGuard(guardId.current, { dirty, save: () => saveRef.current() });
+  }, [dirty]);
+  React.useEffect(() => {
+    const id = guardId.current;
+    return () => registerLeaveGuard(id, null);
+  }, []);
+
   React.useEffect(() => {
     if (phase !== 'saved') return;
     const t = setTimeout(() => setPhase('resting'), SAVED_DECAY_MS);
     return () => clearTimeout(t);
   }, [phase]);
 
+  /**
+   * APRÈS UN ENREGISTREMENT, LA RÉFÉRENCE EST CE QUI EST PARTI — ou la réponse
+   * du serveur si l'écran l'a adoptée.
+   *
+   * Les écrans ne font pas tous la même chose de la réponse : certains
+   * l'affichent (`setData(maj)`), d'autres gardent leur brouillon. Se caler
+   * d'office sur la réponse laissait ces derniers bloqués sur « Enregistrer »
+   * (Accueil, Pages : un brouillon « hydraté » n'est jamais identique à
+   * l'objet brut rendu par l'API). Règle unique désormais : la référence est
+   * la valeur ENVOYÉE ; si, au rendu qui suit, l'écran montre exactement la
+   * réponse du serveur, c'est elle qui devient la référence. Seule une frappe
+   * faite PENDANT l'enregistrement laisse le bouton sur « Enregistrer ».
+   */
+  const adoptAfterSave = React.useRef<string | null>(null);
+  React.useEffect(() => {
+    if (adoptAfterSave.current === null) return;
+    if (snapshot(value) === adoptAfterSave.current) setBaseline(value);
+    adoptAfterSave.current = null;
+  }, [value]);
+
   const save = React.useCallback(async () => {
+    const sent = value;
     setPhase('saving');
     try {
       const saved = await onSave();
-      // La référence devient ce qui est PARTI au serveur, pas l'état de l'écran
-      // à l'arrivée de la réponse : si l'utilisateur a continué à éditer pendant
-      // la requête, ces modifications-là restent à enregistrer.
-      setBaseline((saved ?? value) as T | null);
+      setBaseline(sent);
+      adoptAfterSave.current = snapshot(saved ?? sent);
       setPhase('saved');
+      return true;
     } catch {
       // Erreur déjà signalée (toast de `useAction`). Retour au repos : `dirty`
       // est toujours vrai, donc le widget redevient « Enregistrer ».
       setPhase('resting');
+      return false;
     }
   }, [onSave, value]);
+
+  saveRef.current = save;
 
   return { state: deriveSaveState(phase, dirty), dirty, save };
 }

@@ -162,7 +162,18 @@ export async function createContract(actor, { name } = {}) {
 /** Met à jour le brouillon (tarification, notes) — DRAFT uniquement. */
 export async function updateDraft(contract, payload, actor) {
   assertMutable(contract);
-  const { launchFee, subscription, taxRate, name } = payload || {};
+  const { launchFee, subscription, taxRate, name, commission } = payload || {};
+  if (commission) {
+    contract.commission = {
+      enabled: commission.enabled !== false,
+      ratePercent: Math.round(Number(commission.ratePercent) * 100) / 100,
+      productKinds: [...new Set(commission.productKinds || [])],
+      basis: commission.basis === 'HT' ? 'HT' : 'TTC',
+      salesVatRate: Number.isFinite(Number(commission.salesVatRate)) ? Number(commission.salesVatRate) : 20,
+      capCents: Number.isInteger(commission.capCents) && commission.capCents > 0 ? commission.capCents : null,
+      configuredAt: new Date(),
+    };
+  }
   const rate = Number.isFinite(taxRate) ? taxRate : contract.taxRate;
   if (typeof name === 'string' && name.trim()) contract.name = name.trim();
 
@@ -1325,6 +1336,17 @@ export function serializeContract(contract, { role } = {}) {
     // plutôt qu'afficher un 0 qui signifierait l'inverse (fermeture au premier
     // refus).
     paymentGraceDays: Number.isInteger(c.paymentGraceDays) ? c.paymentGraceDays : null,
+    commission: c.commission
+      ? {
+          enabled: c.commission.enabled !== false,
+          ratePercent: c.commission.ratePercent ?? 10,
+          productKinds: c.commission.productKinds || [],
+          basis: c.commission.basis || 'TTC',
+          salesVatRate: c.commission.salesVatRate ?? 20,
+          capCents: c.commission.capCents ?? null,
+          configuredAt: c.commission.configuredAt || null,
+        }
+      : null,
     /**
      * == LA SIGNATURE, SOUS DEUX NOMS, ET C'EST TEMPORAIRE =================
      *

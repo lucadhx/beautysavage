@@ -87,6 +87,86 @@ export const DOMAIN_EVENT_ACTION_REGISTRY = Object.freeze({
       recipientResolver: 'CUSTOMER_EMAIL',
       description: 'Confirme au client sa commande BeautySavage.',
     },
+    {
+      actionId: 'notify-admins-sale-paid',
+      actionType: ACTION_TYPE.SEND_EMAIL,
+      enabled: true,
+      templateId: 'COMMERCE_SALE_ADMIN_NOTIFICATION',
+      // Les comptes ADMIN de l'institut — jamais les DEV : une vente n'appelle
+      // aucune intervention technique.
+      recipientResolver: 'ADMIN_EMAILS',
+      description: "Previent l'institut d'une nouvelle vente payee.",
+    },
+  ],
+  'appointment.booked': [
+    {
+      actionId: 'send-customer-appointment-confirmed',
+      actionType: ACTION_TYPE.SEND_EMAIL,
+      enabled: true,
+      templateId: 'APPOINTMENT_CONFIRMED_CLIENT',
+      recipientResolver: 'CUSTOMER_EMAIL',
+      description: 'Confirme au client son rendez-vous (vitrine ou reservation manuelle).',
+    },
+  ],
+  'customer.account_created': [
+    {
+      actionId: 'send-customer-account-created',
+      actionType: ACTION_TYPE.SEND_EMAIL,
+      enabled: true,
+      templateId: 'CUSTOMER_ACCOUNT_CREATED',
+      recipientResolver: 'CUSTOMER_EMAIL',
+      description: "Remet au client dont l'institut a cree le compte le lien pour choisir son mot de passe.",
+    },
+  ],
+  'training.submission.created': [
+    {
+      actionId: 'notify-admins-training-submission',
+      actionType: ACTION_TYPE.SEND_EMAIL,
+      enabled: true,
+      templateId: 'TRAINING_SUBMISSION_ADMIN_NOTIFICATION',
+      recipientResolver: 'ADMIN_EMAILS',
+      description: "Previent l'institut qu'un dossier final attend sa correction.",
+    },
+  ],
+  'formation.session.rescheduled': [
+    {
+      actionId: 'send-customer-session-rescheduled',
+      actionType: ACTION_TYPE.SEND_EMAIL,
+      enabled: true,
+      templateId: 'FORMATION_SESSION_RESCHEDULED_CLIENT',
+      recipientResolver: 'CUSTOMER_EMAIL',
+      description: 'Previent une inscrite du deplacement de sa session de formation.',
+    },
+  ],
+  'formation.session.cancelled': [
+    {
+      actionId: 'send-customer-session-cancelled',
+      actionType: ACTION_TYPE.SEND_EMAIL,
+      enabled: true,
+      templateId: 'FORMATION_SESSION_CANCELLED_CLIENT',
+      recipientResolver: 'CUSTOMER_EMAIL',
+      description: "Previent une inscrite de l'annulation de sa session et du remboursement.",
+    },
+  ],
+  'training.submission.validated': [
+    {
+      actionId: 'send-customer-training-validated',
+      actionType: ACTION_TYPE.SEND_EMAIL,
+      enabled: true,
+      templateId: 'TRAINING_VALIDATED_CLIENT',
+      recipientResolver: 'CUSTOMER_EMAIL',
+      description: 'Annonce a la cliente que sa formation est validee.',
+    },
+  ],
+  'training.submission.rejected': [
+    {
+      actionId: 'send-customer-training-rejected',
+      actionType: ACTION_TYPE.SEND_EMAIL,
+      enabled: true,
+      templateId: 'TRAINING_REJECTED_CLIENT',
+      recipientResolver: 'CUSTOMER_EMAIL',
+      description: 'Transmet a la cliente le commentaire de correction et l invite a renvoyer son dossier.',
+    },
   ],
   'commerce.gift_card.issued': [
     {
@@ -121,6 +201,22 @@ export const DOMAIN_EVENT_ACTION_REGISTRY = Object.freeze({
   // AUCUN message « DEV » ici : un encaissement nominal n'appelle aucune
   // intervention technique. L'inscrire aux alertes développeur aurait appris à
   // l'équipe à les ignorer.
+  // --- Commissions d'un mois terminé ------------------------------------------
+  //
+  // Un message par mois au plus : l'événement est émis une seule fois par mois
+  // (clé d'idempotence `commission-payment-due:<id>`). Son bouton mène à la page
+  // de paiement Stripe du mois ; un mois déjà payé n'est jamais annoncé.
+  'commission.payment_due': [
+    {
+      actionId: 'notify-admins-commission-payment-due',
+      actionType: ACTION_TYPE.SEND_EMAIL,
+      enabled: true,
+      templateId: 'COMMISSION_PAYMENT_DUE_ADMIN',
+      recipientResolver: 'ADMIN_EMAILS',
+      description: "Annonce à l'institut que les commissions du mois terminé sont payables, avec le lien de paiement.",
+    },
+  ],
+
   'launch_fee.paid': [
     {
       actionId: 'notify-admins-launch-fee-paid',

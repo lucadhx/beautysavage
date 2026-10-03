@@ -792,6 +792,47 @@ export async function fetchContractDocumentBlob(
   return (await fetchAuthenticatedFile(contractDocumentUrl(contractId, kind))).blob;
 }
 
+export interface SeoSettings {
+  _id?: string;
+  indexable: boolean;
+  businessType: 'BeautySalon' | 'NailSalon' | 'DaySpa' | 'HealthAndBeautyBusiness';
+  homeTitle: string;
+  homeDescription: string;
+  address: { street: string; postalCode: string; city: string; region: string; country: string };
+  geo: { latitude: number | null; longitude: number | null };
+  areaServed: string;
+  priceRange: string;
+  sameAs: string[];
+  shareImage: string;
+}
+
+export interface SeoDiagnostic {
+  checks: { id: string; level: 'ok' | 'warning' | 'error'; label: string; detail: string; action?: string }[];
+  score: number;
+  urls: { site: string; sitemap: string; robots: string; llms: string };
+  counts: { products: number; pages: number; reviews: number };
+  preview: { title: string; description: string; url: string };
+}
+
+export interface ProductSeoPreview {
+  url: string;
+  published: boolean;
+  autoTitle: string;
+  autoDescription: string;
+  title: string;
+  description: string;
+}
+
+export interface ServiceCollection {
+  _id: string;
+  title: string;
+  slug: string;
+  description: string;
+  coverUrl: string;
+  order: number;
+  productIds: string[];
+}
+
 export const api = {
   // Auth
   login: (email: string, password: string) =>
@@ -941,6 +982,11 @@ export const api = {
      singleton, comme le thème : il n'y a qu'une page d'accueil, et lui donner
      une liste inviterait à en créer une seconde qui ne s'afficherait jamais. */
   getHomeContent: () => request<HomeContent>('/home-content'),
+  // Référencement (SEO / GEO) : réglages, diagnostic, aperçu d'une fiche.
+  getSeoSettings: () => request<SeoSettings>('/seo-settings'),
+  updateSeoSettings: (data: Partial<SeoSettings>) => request<SeoSettings>('/seo-settings', { method: 'PUT', body: data }),
+  seoDiagnostic: () => request<SeoDiagnostic>('/seo-settings/diagnostic'),
+  productSeoPreview: (id: string) => request<ProductSeoPreview>(`/seo-settings/product/${id}`),
   updateHomeContent: (data: Partial<HomeContent>) =>
     request<HomeContent>('/home-content', { method: 'PUT', body: data }),
 
@@ -1005,6 +1051,13 @@ export const api = {
     request<SiteStatus>('/site-status/contract-protection', { method: 'POST', body: { enabled } }),
 
   // Commerce BeautySavage
+  // Collections de prestations (rayons de la page « Prestations » de la vitrine).
+  serviceCollections: () => request<ServiceCollection[]>('/commerce/collections'),
+  serviceCollection: (id: string) => request<ServiceCollection>(`/commerce/collections/${id}`),
+  saveServiceCollection: (data: Partial<ServiceCollection>, id?: string) =>
+    request<ServiceCollection>(id ? `/commerce/collections/${id}` : '/commerce/collections', { method: id ? 'PUT' : 'POST', body: data }),
+  deleteServiceCollection: (id: string) => request<{ deleted: boolean }>(`/commerce/collections/${id}`, { method: 'DELETE' }),
+  reorderServiceCollections: (ids: string[]) => request<ServiceCollection[]>('/commerce/collections/order', { method: 'PUT', body: { ids } }),
   commerceProducts: () => request<any[]>('/commerce/products'),
   saveCommerceProduct: (data: any) =>
     request<any>(data.id ? `/commerce/products/${data.id}` : '/commerce/products', {
@@ -1042,9 +1095,19 @@ export const api = {
   commerceCommissions: () => request<any[]>('/commerce/commissions'),
   recalculateCommerceCommissions: () =>
     request<any[]>('/commerce/commissions/recalculate', { method: 'POST' }),
-  payCommerceCommission: (id: string, data: { paymentReference?: string }) =>
-    request<any>(`/commerce/commissions/${id}/pay`, { method: 'POST', body: data }),
+  /** Ouvre (ou reprend) la page de paiement Stripe d'un mois terminé. */
+  openCommissionCheckout: (id: string) =>
+    request<{ url: string; reused: boolean }>(`/commerce/commissions/${id}/checkout`, { method: 'POST' }),
+  /** Relit l'état du paiement auprès de Stripe (retour de paiement, vérification). */
+  /** Compteur du plafond : total prélevé, payé, reste à payer, place sous le plafond. */
+  commissionSummary: () =>
+    request<{ capCents: number | null; totalCents: number; paidCents: number; remainingToPayCents: number; capLeftCents: number | null; capReached: boolean }>('/commerce/commissions/summary'),
+  syncCommissionPayment: (id: string) =>
+    request<any>(`/commerce/commissions/${id}/sync`, { method: 'POST' }),
   commerceIntegrations: () => request<any[]>('/commerce/integrations'),
+  /** Teste les clés enregistrées auprès du fournisseur (verdict lisible, jamais une clé). */
+  testCommerceIntegration: (provider: 'STRIPE_INSTITUTE' | 'BREVO_INSTITUTE') =>
+    request<{ ok: boolean; message: string; integration: any }>('/commerce/integrations/test', { method: 'POST', body: { provider } }),
   saveCommerceIntegration: (data: any) =>
     request<any>('/commerce/integrations', { method: 'PUT', body: data }),
   commerceReviews: () => request<any[]>('/commerce/reviews'),
@@ -1077,6 +1140,21 @@ export const api = {
   },
   createCalendarEvent: (data: any) =>
     request<any>('/calendar/events', { method: 'POST', body: data }),
+  /** Sessions d'une formation présentielle — opérations propres, hors enregistrement de la fiche. */
+  createFormationSession: (productId: string, data: { startsAt?: string; endsAt?: string; days?: { startsAt: string; endsAt: string }[]; day?: string; capacity: number }) =>
+    request<any>(`/commerce/products/${productId}/sessions`, { method: 'POST', body: data }),
+  updateFormationSession: (productId: string, sessionId: string, data: Record<string, unknown>) =>
+    request<any>(`/commerce/products/${productId}/sessions/${sessionId}`, { method: 'PUT', body: data }),
+  cancelFormationSession: (productId: string, sessionId: string, data: { reason: string; refundMode: 'FULL' | 'NONE' }) =>
+    request<any>(`/commerce/products/${productId}/sessions/${sessionId}/cancel`, { method: 'POST', body: data }),
+  deleteFormationSession: (productId: string, sessionId: string) =>
+    request<any>(`/commerce/products/${productId}/sessions/${sessionId}`, { method: 'DELETE' }),
+  /** Mise en avant sur l'accueil : la liste ordonnée d'une rubrique. */
+  setHomeFeatured: (group: 'TRAINING' | 'SERVICE', productIds: string[]) =>
+    request<any[]>(`/commerce/home-featured/${group}`, { method: 'PUT', body: { productIds } }),
+  /** Fiche d'une session de formation : inscrites payées, places, lieu. */
+  calendarFormationSession: (productId: string, sessionId: string) =>
+    request<any>(`/calendar/formation-sessions/${encodeURIComponent(productId)}/${encodeURIComponent(sessionId)}`),
   updateCalendarEvent: (id: string, data: any) =>
     request<any>(`/calendar/events/${id}`, { method: 'PUT', body: data }),
   cancelCalendarEvent: (id: string, data: any) =>
@@ -1193,7 +1271,7 @@ export const api = {
      * `recurrence` est la forme à envoyer. `interval` (l'UNITÉ seule) reste
      * accepté par le serveur, lu « tous les 1 » — il n'est plus émis d'ici.
      */
-    data: { name?: string; launchFee?: { enabled: boolean; amountExcludingTax?: number }; subscription?: { enabled: boolean; amountExcludingTax?: number; recurrence?: Recurrence; interval?: 'MONTH' | 'YEAR' }; taxRate?: number; signatureRequirement?: 'REQUIRED' | 'NOT_REQUIRED' }
+    data: { name?: string; launchFee?: { enabled: boolean; amountExcludingTax?: number }; subscription?: { enabled: boolean; amountExcludingTax?: number; recurrence?: Recurrence; interval?: 'MONTH' | 'YEAR' }; taxRate?: number; signatureRequirement?: 'REQUIRED' | 'NOT_REQUIRED'; commission?: { enabled?: boolean; ratePercent: number; productKinds: string[]; basis: 'HT' | 'TTC'; salesVatRate?: number; capCents?: number | null } }
   ) => request<Contract>(`/contracts/${id}/draft`, { method: 'PUT', body: data }),
   /**
    * Politique de grâce en cas d'impayé. `null` retire la politique — l'impayé

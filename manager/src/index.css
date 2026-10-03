@@ -162,6 +162,61 @@ body {
   animation: m-rise-in 0.22s ease-out both;
 }
 
+/* ----------------------------- Tableaux sur téléphone ----------------------
+   Sous 640 px, un tableau de 5-6 colonnes ne tient pas : il imposait sa
+   largeur minimale (540 à 760 px) et se lisait en défilant de côté, souvent
+   au doigt sur la poignée de glisser-déposer elle-même.
+
+   Règle commune, posée par la classe `m-table` sur le conteneur du tableau :
+     · le tableau s'étend jusqu'aux bords du panneau (il récupère la marge
+       intérieure de 12 px) et renonce à sa largeur minimale ;
+     · cellules plus serrées ;
+     · les colonnes secondaires (`m-hide`) disparaissent — l'essentiel est
+       repris en petit sous le titre de la ligne (`sm:hidden`) quand il compte.
+   Le défilement latéral reste en dernier recours pour un contenu hors norme. */
+@media (max-width: 639px) {
+  .m-table {
+    margin-inline: -0.75rem;
+    max-width: none !important;
+    border-radius: 0 !important;
+    border-left-width: 0 !important;
+    border-right-width: 0 !important;
+  }
+  /* Tableau déjà collé aux bords de son cadre : rien à récupérer. */
+  .m-table.m-flush {
+    margin-inline: 0;
+    max-width: 100% !important;
+  }
+  .m-table table {
+    min-width: 0 !important;
+  }
+  .m-table th,
+  .m-table td {
+    padding-left: 0.5rem !important;
+    padding-right: 0.5rem !important;
+  }
+  .m-table th:first-child,
+  .m-table td:first-child {
+    padding-left: 0.75rem !important;
+  }
+  .m-table th:last-child,
+  .m-table td:last-child {
+    padding-right: 0.75rem !important;
+  }
+  .m-table .m-hide {
+    display: none !important;
+  }
+  /* Un `truncate` (nowrap) dans une cellule impose la longueur du texte au
+     tableau entier : sur téléphone, il passe à la ligne et se coupe à 2 lignes. */
+  .m-table td .truncate {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+}
+
 /* ---------------------------- prefers-reduced-motion -----------------------
    Les composants framer-motion gèrent déjà `useReducedMotion()`, mais les
    transitions Tailwind/CSS (toggle, boutons, FAB) ne passent pas par lui.

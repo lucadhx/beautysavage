@@ -229,8 +229,23 @@ function sha256(str) {
  */
 export async function checkWebsiteArtifact(transport, host, expected, { label = 'site' } = {}) {
   if (!expected?.indexHash) return { ok: true, reachable: true, skipped: true, label };
-  const remoteIndex = await fetchBody(transport, `https://${host}/`);
+  /**
+   * LA COQUILLE EST LUE À SON ADRESSE PROPRE, `/index.html`.
+   *
+   * Sur un hôte public dont les pages sont rendues par le backend (référencement),
+   * `/` n'est plus le fichier construit : c'est la coquille ENRICHIE (titre,
+   * données structurées, contenu lisible), différente par nature. Comparer son
+   * empreinte au build échouait donc à chaque déploiement réussi. Le fichier
+   * lui-même reste servi tel quel à `/index.html` ; on le compare, et l'on vérifie
+   * en plus que la page rendue à `/` pointe le MÊME script d'entrée — preuve que
+   * le rendu utilise la coquille fraîche. Hôte sans `/index.html` : repli sur `/`.
+   */
+  const staticIndex = await fetchBody(transport, `https://${host}/index.html`);
+  const rootPage = await fetchBody(transport, `https://${host}/`);
+  const remoteIndex = staticIndex ?? rootPage;
   if (remoteIndex == null) return { ok: false, reachable: false, indexMatch: false, jsMatch: false, versionMatch: false, label };
+  const renderMatch = !(staticIndex != null && rootPage != null && rootPage !== staticIndex && expected.mainJs?.name)
+    || rootPage.includes(`/assets/${expected.mainJs.name}`);
 
   const remoteIndexHash = sha256(remoteIndex);
   const indexMatch = remoteIndexHash === expected.indexHash;
@@ -253,7 +268,7 @@ export async function checkWebsiteArtifact(transport, host, expected, { label = 
   }
 
   return {
-    ok: indexMatch && jsMatch && versionMatch, reachable: true, indexMatch, jsMatch, versionMatch, label,
+    ok: indexMatch && jsMatch && versionMatch && renderMatch, reachable: true, indexMatch, jsMatch, versionMatch, renderMatch, label,
     remoteIndexHash, expectedIndexHash: expected.indexHash,
     expectedJs: expected.mainJs?.name || null, remoteMainJsHash,
     expectedCommit: expected.commitHash || null, remoteCommit,

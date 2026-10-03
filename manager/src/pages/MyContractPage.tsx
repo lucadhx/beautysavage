@@ -4,15 +4,17 @@ import { toast } from 'sonner';
 import { AnimatePresence, motion } from 'framer-motion';
 import { FileCheck2, PenLine, CreditCard, RefreshCw, CheckCircle2, Download, Clock, Mail } from 'lucide-react';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { Button, Card, CardContent, CardHeader, CardTitle, Badge, Spinner, EmptyState } from '@/components/ui/primitives';
+import { Button, Card, CardContent, CardHeader, CardTitle, Badge, EmptyState } from '@/components/ui/primitives';
+import { Skeleton } from '@/components/ui/Skeleton';
 import { BrandLoader } from '@/components/ui/BrandLoader';
 import { ConfirmDialog } from '@/components/ui/dialog';
 import { LaunchFeeStatusBadge, SubscriptionStatusBadge } from '@/components/contracts/status';
-import { ContractTimeline } from '@/components/contracts/ContractTimeline';
+import { ContractTimeline, ContractTimelineSkeleton } from '@/components/contracts/ContractTimeline';
 import { ContractProgressTracker } from '@/components/contracts/ContractProgressTracker';
 import { JourneyStage, StepCelebration, stageMotion } from '@/components/contracts/journey/JourneyStage';
 import { PriceRecap } from '@/components/contracts/journey/PriceRecap';
 import { SubscriptionCostCard } from '@/components/contracts/SubscriptionCostCard';
+import { CommissionCoverage } from '@/components/contracts/CommissionCoverage';
 import {
   SignatureArt, LaunchFeeArt, SubscriptionArt, ActivationArt, WaitingArt, LiveArt, PreparationArt,
 } from '@/components/contracts/journey/art';
@@ -69,7 +71,18 @@ function PaymentCard() {
   const { pending, run } = useAction();
   const vue = data as PaymentMethodView | null;
 
-  if (loading) return <Card><CardContent className="py-6"><Spinner className="h-5 w-5" /></CardContent></Card>;
+  if (loading) {
+    return (
+      <Card aria-busy="true">
+        <CardHeader><Skeleton className="h-5 w-28" /></CardHeader>
+        <CardContent className="grid gap-3">
+          <Skeleton className="h-3.5 w-3/5" />
+          <Skeleton className="h-3.5 w-2/5" />
+          <Skeleton className="h-10 w-full" />
+        </CardContent>
+      </Card>
+    );
+  }
   if (!vue?.hasCustomer) return null; // rien à modifier tant qu'aucun règlement n'a eu lieu
 
   const ouvrir = async () => {
@@ -123,7 +136,7 @@ function TimelineCard({ events, loading }: { events: TimelineEvent[]; loading: b
   return (
     <Card>
       <CardHeader><CardTitle>Suivi du contrat</CardTitle></CardHeader>
-      <CardContent>{loading ? <Spinner className="h-5 w-5" /> : <ContractTimeline events={events} />}</CardContent>
+      <CardContent>{loading ? <ContractTimelineSkeleton /> : <ContractTimeline events={events} />}</CardContent>
     </Card>
   );
 }
@@ -280,7 +293,7 @@ export default function MyContractPage() {
     } catch { /* toast */ }
   };
 
-  if (loading) return <BrandLoader />;
+  if (loading) return <BrandLoader variant="form" />;
 
   if (!contract) {
     return (
@@ -356,6 +369,14 @@ export default function MyContractPage() {
               </motion.div>
             )}
           </AnimatePresence>
+        </CardContent>
+      </Card>
+
+      {/* LES COMMISSIONS DU CONTRAT — ce sur quoi elles portent, en clair. */}
+      <Card className="mt-5" data-testid="contract-commission-card">
+        <CardHeader><CardTitle className="text-base">Commissions sur les ventes</CardTitle></CardHeader>
+        <CardContent>
+          <CommissionCoverage commission={contract.commission} />
         </CardContent>
       </Card>
 

@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { SiteDataProvider } from '@/context/SiteDataContext';
 import { applyCachedTheme } from '@/lib/theme';
+import { prefetchCatalog, prefetchCollections, prefetchReviews } from '@/lib/catalogCache';
 import { App } from './App';
 import './index.css';
 
@@ -16,6 +17,15 @@ import './index.css';
   loader peint aux mauvaises couleurs serait pire qu'un instant de fond neutre.
 */
 applyCachedTheme();
+
+/*
+  LE CATALOGUE PART EN MÊME TEMPS QUE LE BOOTSTRAP — pas après l'affichage de
+  l'accueil. Le loader couvre ce temps ; les rubriques mises en avant sont
+  prêtes quand il s'efface (voir lib/catalogCache).
+*/
+prefetchCatalog().catch(() => null);
+prefetchReviews().catch(() => null);
+prefetchCollections().catch(() => null);
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

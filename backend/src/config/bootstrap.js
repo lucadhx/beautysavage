@@ -1645,6 +1645,33 @@ async function demarrerServices(panel) {
   }
 
   /**
+   * RATTRAPAGE DES PAIEMENTS CLIENTS — après les reprises, comme tout service
+   * de fond. Il confronte à Stripe les ventes encore « en paiement » : aucun
+   * paiement encaissé ne reste sans vente enregistrée si un webhook se perd.
+   */
+  try {
+    const { startCommerceReconcileScheduler, drainCommerceReconcileScheduler } = await import(
+      '../services/commerceReconcile.scheduler.js'
+    );
+    const { intervalMs } = startCommerceReconcileScheduler();
+    inscrireRessource('rattrapage des paiements clients', () => drainCommerceReconcileScheduler());
+    recordCheck({
+      section: BOOT_SECTION.BACKGROUND,
+      name: 'Rattrapage des paiements clients',
+      outcome: BOOT_OUTCOME.OK,
+      proof: `cadence ${Math.round(intervalMs / 1000)} s`,
+    });
+  } catch (err) {
+    recordCheck({
+      section: BOOT_SECTION.BACKGROUND,
+      name: 'Rattrapage des paiements clients',
+      outcome: BOOT_OUTCOME.DEGRADED,
+      reason: 'COMMERCE_RECONCILE_SCHEDULER_FAILED',
+      detail: String(err?.message || err),
+    });
+  }
+
+  /**
    * ── UN SEUL VIDANGEUR POUR TOUS LES SERVICES ────────────────────────────
    *
    * L'arrêt parcourt `ressourcesDeFond` À L'ENVERS de l'ordre de démarrage.

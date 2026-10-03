@@ -143,7 +143,7 @@ export default function SitePageEditPage() {
     return await run(() => api.updatePage(id!, draft), { success: 'Page enregistrée' }) as Partial<SitePage>;
   });
 
-  if (loading || !draft) return <BrandLoader />;
+  if (loading || !draft) return <BrandLoader variant="form" />;
 
   const maj = (patch: Partial<SitePage>) => setDraft({ ...draft, ...patch });
 

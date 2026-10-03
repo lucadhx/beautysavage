@@ -1,10 +1,12 @@
-import { Save, ShieldCheck, UserCog } from 'lucide-react';
+import { ShieldCheck, UserCog } from 'lucide-react';
 import { api } from '@/lib/api';
 import type { Role, RoleAppearance } from '@/types';
 import { useResource, useAction } from '@/hooks/useResource';
+import { useFloatingSave } from '@/hooks/useFloatingSave';
+import { FloatingSaveWidget } from '@/components/ui/FloatingSaveWidget';
 import { useRoleAppearance } from '@/context/RoleAppearanceContext';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { Card, CardContent, CardHeader, CardTitle, Button, Badge } from '@/components/ui/primitives';
+import { Card, CardContent, CardHeader, CardTitle, Badge } from '@/components/ui/primitives';
 import { BrandLoader } from '@/components/ui/BrandLoader';
 import { ColorField } from '@/components/fields/ColorField';
 
@@ -26,11 +28,20 @@ const ROLE_ORDER: Role[] = ['DEV', 'ADMIN'];
 export default function DevRolesPage() {
   const { data, loading, setData } = useResource(() => api.getRoleAppearance());
   const { set: setContext } = useRoleAppearance();
-  const { pending, run } = useAction();
+  const { run } = useAction();
+  // Enregistrement flottant + garde « Quitter sans enregistrer ? » (voir useFloatingSave).
+  const { state: saveState, save } = useFloatingSave<RoleAppearance | null>(loading ? null : data, async () => {
+    const saved = await run(() => api.updateRoleAppearance({ roles: data!.roles }), {
+      success: 'Couleurs des rôles enregistrées',
+    });
+    setData(saved);
+    setContext(saved);
+    return saved;
+  });
 
   if (loading || !data) {
     return (
-      <BrandLoader />
+      <BrandLoader variant="form" />
     );
   }
 
@@ -41,24 +52,12 @@ export default function DevRolesPage() {
     } as RoleAppearance);
   };
 
-  const save = async () => {
-    const saved = await run(() => api.updateRoleAppearance({ roles: data.roles }), {
-      success: 'Couleurs des rôles enregistrées',
-    });
-    setData(saved);
-    setContext(saved);
-  };
 
   return (
     <div>
       <PageHeader
         title="Couleurs des rôles"
         description="Personnalisez l'apparence des badges de rôle affichés dans le manager."
-        action={
-          <Button onClick={save} loading={pending}>
-            <Save className="h-4 w-4" /> Enregistrer
-          </Button>
-        }
       />
 
       <div className="grid gap-6 md:grid-cols-2">
@@ -105,6 +104,7 @@ export default function DevRolesPage() {
           );
         })}
       </div>
+      <FloatingSaveWidget state={saveState} onSave={save} />
     </div>
   );
 }

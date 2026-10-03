@@ -1,5 +1,7 @@
 import * as React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { customerApi, customerTokenStore, type Customer } from '@/lib/api';
+import { LogoutDialog } from '@/components/LogoutDialog';
 
 interface CustomerContextValue {
   customer: Customer | null;
@@ -7,7 +9,10 @@ interface CustomerContextValue {
   login: (email: string, password: string) => Promise<void>;
   register: (payload: { email: string; password: string; firstName?: string; lastName?: string }) => Promise<{ verificationCode?: string }>;
   refresh: () => Promise<void>;
+  /** Demande la déconnexion : fenêtre de confirmation, puis animation et confirmation. */
   logout: () => void;
+  /** Déconnexion immédiate, sans fenêtre (changer de compte depuis la vérification). */
+  signOutNow: () => void;
 }
 
 const CustomerContext = React.createContext<CustomerContextValue | null>(null);
@@ -48,14 +53,22 @@ export function CustomerProvider({ children }: { children: React.ReactNode }) {
     return { verificationCode: result.verificationCode };
   }, []);
 
-  const logout = React.useCallback(() => {
+  const signOutNow = React.useCallback(() => {
     customerTokenStore.clear();
     setCustomer(null);
   }, []);
+  const [askLogout, setAskLogout] = React.useState(false);
+  const navigate = useNavigate();
+  const logout = React.useCallback(() => setAskLogout(true), []);
 
   return (
-    <CustomerContext.Provider value={{ customer, loading, login, register, refresh, logout }}>
+    <CustomerContext.Provider value={{ customer, loading, login, register, refresh, logout, signOutNow }}>
       {children}
+      <LogoutDialog
+        open={askLogout}
+        onCancel={() => setAskLogout(false)}
+        onConfirm={() => { signOutNow(); navigate('/', { replace: true }); }}
+      />
     </CustomerContext.Provider>
   );
 }

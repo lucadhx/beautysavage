@@ -51,7 +51,9 @@ section('MEDIA_UPLOAD_LIMITS_DO_NOT_DIVERGE — Nginx ≥ application');
   console.log(`    politique : ${politique.HTTP_BODY_LIMIT_MB} Mo requis · profil : ${profil.HTTP_MAX_BODY_MB} Mo`);
   check('le vhost couvre la politique',
     profil.HTTP_MAX_BODY_MB >= politique.HTTP_BODY_LIMIT_MB);
-  check('…sans être illimité', profil.HTTP_MAX_BODY_MB > 0 && profil.HTTP_MAX_BODY_MB <= 100);
+  // 150 : les livrables vidéo des formations montent à 120 Mo (TRAINING_DELIVERABLE_MAX_BYTES).
+  // La borne reste là pour ce qu'elle garde : que la limite ne devienne jamais illimitée.
+  check('…sans être illimité', profil.HTTP_MAX_BODY_MB > 0 && profil.HTTP_MAX_BODY_MB <= 150);
 
   const target = {
     name: 'T', host: 'exemple.test', environment: 'PROD',

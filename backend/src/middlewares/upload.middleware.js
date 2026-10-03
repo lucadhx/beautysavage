@@ -1,4 +1,8 @@
+import crypto from 'node:crypto';
+import fs from 'node:fs/promises';
+import path from 'node:path';
 import multer from 'multer';
+import { config } from '../config/env.js';
 import { ApiError } from '../utils/ApiError.js';
 import { MAX_INPUT_BYTES, humanBytes } from '../services/media/mediaPolicy.js';
 
@@ -86,9 +90,32 @@ export const uploadContractPdf = multer({
   },
 });
 
+/** Plafond d'un livrable (vidéo comprise) — Nginx doit laisser passer au moins autant. */
+export const TRAINING_DELIVERABLE_MAX_BYTES = 120 * 1024 * 1024;
+
+/**
+ * LES LIVRABLES S'ÉCRIVENT DIRECTEMENT SUR LE DISQUE.
+ *
+ * Une vidéo de 120 Mo gardée en mémoire le temps de la requête, c'est 120 Mo
+ * de RAM du serveur par cliente qui envoie son dossier. Le nom de fichier
+ * porte l'identité de la cliente (`c<id>-…`) : c'est ce qui l'autorise, elle
+ * seule, à supprimer ou remplacer son fichier avant de soumettre.
+ */
+const trainingDeliverableStorage = multer.diskStorage({
+  destination(_req, _file, cb) {
+    const dir = path.join(config.paths.uploads, 'training-deliverables');
+    fs.mkdir(dir, { recursive: true }).then(() => cb(null, dir), (err) => cb(err));
+  },
+  filename(req, file, cb) {
+    const owner = req.customer?._id ? `c${req.customer._id}` : 'manager';
+    const ext = path.extname(file.originalname || '').toLowerCase().replace(/[^.a-z0-9]/g, '').slice(0, 12) || '';
+    cb(null, `${owner}-${Date.now()}-${crypto.randomUUID()}${ext}`);
+  },
+});
+
 export const uploadTrainingDeliverable = multer({
-  storage,
-  limits: { fileSize: 120 * 1024 * 1024 },
+  storage: trainingDeliverableStorage,
+  limits: { fileSize: TRAINING_DELIVERABLE_MAX_BYTES },
   fileFilter(req, file, cb) {
     const mime = String(file.mimetype || '');
     if (!mime.startsWith('image/') && !mime.startsWith('video/') && mime !== 'application/pdf') {

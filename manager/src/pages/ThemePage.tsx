@@ -59,7 +59,7 @@ export default function ThemePage() {
 
   if (loading || !data) {
     return (
-      <BrandLoader />
+      <BrandLoader variant="form" />
     );
   }
 

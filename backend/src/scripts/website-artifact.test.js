@@ -80,6 +80,16 @@ async function main() {
   const rDown = await checkWebsiteArtifact(downTx, HOST, expected);
   check('site injoignable -> non ok, reachable=false', rDown.reachable === false && rDown.ok === false);
 
+  // (d2) hôte à pages rendues par le backend : `/` enrichi, `/index.html` intact
+  const rendered = html.replace('<body>', '<body><div id="root"><h1>Page rendue</h1></div>');
+  const ssrTx = curlTransport({ [`https://${HOST}/index.html`]: html, [`https://${HOST}/`]: rendered, [`https://${HOST}/assets/${jsName}`]: jsBody });
+  const rSsr = await checkWebsiteArtifact(ssrTx, HOST, expected);
+  check('pages rendues : /index.html comparé, / enrichi accepté -> ok', rSsr.ok && rSsr.indexMatch && rSsr.renderMatch);
+  const staleRender = rendered.replace(jsName, 'index-OLD000.js');
+  const ssrStaleTx = curlTransport({ [`https://${HOST}/index.html`]: html, [`https://${HOST}/`]: staleRender, [`https://${HOST}/assets/${jsName}`]: jsBody });
+  const rSsrStale = await checkWebsiteArtifact(ssrStaleTx, HOST, expected);
+  check('pages rendues avec une ANCIENNE coquille -> mismatch', rSsrStale.reachable && !rSsrStale.ok && rSsrStale.renderMatch === false);
+
   // (e) pas d'empreinte attendue -> skip non bloquant
   const rSkip = await checkWebsiteArtifact(okTx, HOST, null);
   check('empreinte absente -> skipped ok', rSkip.ok === true && rSkip.skipped === true);

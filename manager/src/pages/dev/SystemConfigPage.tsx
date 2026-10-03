@@ -5,7 +5,6 @@ import {
   Globe,
   Copy,
   Check,
-  Save,
   RotateCcw,
   Wifi,
   CircleCheck,
@@ -21,6 +20,8 @@ import type { NetworkConfig, NetworkConfigResponse, NetworkTestResponse, UrlTest
 import { normalizeAppUrl } from '@/lib/normalizeUrl';
 import { useNetworkConfiguration } from '@/context/NetworkConfigContext';
 import { useAction } from '@/hooks/useResource';
+import { useFloatingSave } from '@/hooks/useFloatingSave';
+import { FloatingSaveWidget } from '@/components/ui/FloatingSaveWidget';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Card, CardContent, Input, Label, Button, Badge } from '@/components/ui/primitives';
 import { BrandLoader } from '@/components/ui/BrandLoader';
@@ -44,7 +45,7 @@ export default function SystemConfigPage() {
   const [results, setResults] = React.useState<NetworkTestResponse | null>(null);
   const [testing, setTesting] = React.useState(false);
   const [copied, setCopied] = React.useState<Key | null>(null);
-  const { pending, run } = useAction();
+  const { run } = useAction();
   const { refresh: refreshNetwork } = useNetworkConfiguration();
 
   const load = React.useCallback(async () => {
@@ -104,13 +105,18 @@ export default function SystemConfigPage() {
     }
   };
 
-  const save = async () => {
-    if (!allValid) return toast.error('Corrigez les URL avant d’enregistrer.');
+  // Enregistrement flottant + garde « Quitter sans enregistrer ? » (voir useFloatingSave).
+  const { state: saveState, save } = useFloatingSave<NetworkConfig>(loading ? null : form, async () => {
+    if (!allValid) {
+      toast.error('Corrigez les URL avant d’enregistrer.');
+      throw new Error('URL invalides');
+    }
     const res = await run(() => api.updateNetworkConfig(normalized()), { success: 'Configuration réseau enregistrée' });
     setForm(res.network);
     setMeta({ updatedAt: res.updatedAt, updatedBy: res.updatedBy });
     await refreshNetwork();
-  };
+    return res.network;
+  });
 
   const copy = async (key: Key) => {
     const r = norm[key];
@@ -119,7 +125,7 @@ export default function SystemConfigPage() {
     setTimeout(() => setCopied(null), 1200);
   };
 
-  if (loading) return <BrandLoader />;
+  if (loading) return <BrandLoader variant="form" />;
 
   const resultByKey: Record<Key, UrlTestResult | undefined> = {
     backendUrl: results?.backend,
@@ -139,9 +145,6 @@ export default function SystemConfigPage() {
             </Button>
             <Button variant="outline" onClick={runTest} loading={testing} disabled={!allValid}>
               <Wifi className="h-4 w-4" /> Tester les URL
-            </Button>
-            <Button onClick={save} loading={pending} disabled={!allValid}>
-              <Save className="h-4 w-4" /> Enregistrer
             </Button>
           </div>
         }
@@ -248,6 +251,7 @@ ngrok http 6062   # Vitrine`}</pre>
           )}
         </div>
       </div>
+      <FloatingSaveWidget state={saveState} onSave={save} />
     </div>
   );
 }

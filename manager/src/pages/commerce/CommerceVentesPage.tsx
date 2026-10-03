@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { api } from '@/lib/api';
 import { Dropdown } from '@/components/base/dropdown/dropdown';
 import { ConfirmDialog } from '@/components/ui/dialog';
+import { CardsSkeleton, FormSkeleton, Skeleton, TableSkeleton } from '@/components/ui/Skeleton';
 import { LineChart } from '@/components/charts/line-chart';
 import { Line } from '@/components/charts/line';
 import { Grid } from '@/components/charts/grid';
@@ -32,13 +33,15 @@ export default function CommerceVentesPage() {
   const [period, setPeriod] = React.useState<'7d' | '30d' | '90d' | 'all'>('30d');
   const [refundTarget, setRefundTarget] = React.useState<CommerceSale | null>(null);
   const [message, setMessage] = React.useState('');
+  const [loaded, setLoaded] = React.useState(false);
   const { saleId } = useParams();
   const navigate = useNavigate();
 
   const refresh = React.useCallback(() => {
     api.commerceSales()
       .then((list) => setSales(list as CommerceSale[]))
-      .catch((err) => setMessage(err instanceof Error ? err.message : 'Chargement impossible'));
+      .catch((err) => setMessage(err instanceof Error ? err.message : 'Chargement impossible'))
+      .finally(() => setLoaded(true));
   }, []);
 
   React.useEffect(refresh, [refresh]);
@@ -69,9 +72,11 @@ export default function CommerceVentesPage() {
         actions={<button type="button" onClick={() => navigate('/commerce/ventes')} className="rounded-md border px-3 py-2 text-sm font-semibold hover:bg-muted">Retour aux ventes</button>}
       >
         {message && <p className="rounded-md border p-3 text-sm text-muted-foreground">{message}</p>}
-        {!selected ? (
+        {!loaded ? (
+          <FormSkeleton fields={6} />
+        ) : !selected ? (
           <Panel title="Chargement">
-            <p className="text-sm text-muted-foreground">{sales.length === 0 ? 'Chargement de la commande...' : 'Commande introuvable.'}</p>
+            <p className="text-sm text-muted-foreground">Commande introuvable.</p>
           </Panel>
         ) : (
           <SaleDetailCard sale={selected} onRefund={() => setRefundTarget(selected)} />
@@ -95,12 +100,14 @@ export default function CommerceVentesPage() {
       description="Consultation des commandes, suivi des paiements, factures et remboursements manuels."
     >
       {message && <p className="rounded-md border p-3 text-sm text-muted-foreground">{message}</p>}
-      <div className="grid gap-4 md:grid-cols-4">
-        <Metric label="Ventes" value={filteredSales.length} />
-        <Metric label="Payees" value={paid.length} />
-        <Metric label="Remboursees" value={refunded.length} />
-        <Metric label="CA paye" value={cents(revenue)} />
-      </div>
+      {!loaded ? <CardsSkeleton count={4} className="md:grid-cols-4" /> : (
+        <div className="grid gap-4 md:grid-cols-4">
+          <Metric label="Ventes" value={filteredSales.length} />
+          <Metric label="Payees" value={paid.length} />
+          <Metric label="Remboursees" value={refunded.length} />
+          <Metric label="CA paye" value={cents(revenue)} />
+        </div>
+      )}
       <Panel title="Statistiques">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm text-muted-foreground">Suivez les commandes et le chiffre d'affaires sur la periode choisie.</p>
@@ -125,35 +132,39 @@ export default function CommerceVentesPage() {
         <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
           <div className="rounded-lg border bg-card p-3">
             <p className="px-2 pt-1 text-sm font-semibold">Chiffre d'affaires</p>
-            <LineChart data={chartData} xDataKey="date" aspectRatio="2.3 / 1" margin={{ top: 28, right: 22, bottom: 38, left: 22 }}>
-              <Grid horizontal vertical={false} />
-              <XAxis numTicks={5} />
-              <ChartTooltip rows={(point) => [{ label: 'CA', value: cents(Number(point.revenue || 0)), color: 'hsl(var(--primary))' }]} />
-              <Line dataKey="revenue" stroke="hsl(var(--primary))" strokeWidth={3} showMarkers />
-            </LineChart>
+            {!loaded ? <Skeleton className="mt-3 aspect-[2.3/1] w-full" /> : (
+              <LineChart data={chartData} xDataKey="date" aspectRatio="2.3 / 1" margin={{ top: 28, right: 22, bottom: 38, left: 22 }}>
+                <Grid horizontal vertical={false} />
+                <XAxis numTicks={5} />
+                <ChartTooltip rows={(point) => [{ label: 'CA', value: cents(Number(point.revenue || 0)), color: 'hsl(var(--primary))' }]} />
+                <Line dataKey="revenue" stroke="hsl(var(--primary))" strokeWidth={3} showMarkers />
+              </LineChart>
+            )}
           </div>
           <div className="rounded-lg border bg-card p-3">
             <p className="px-2 pt-1 text-sm font-semibold">Commandes</p>
-            <LineChart data={chartData} xDataKey="date" aspectRatio="1.5 / 1" margin={{ top: 28, right: 22, bottom: 38, left: 22 }}>
-              <Grid horizontal vertical={false} />
-              <XAxis numTicks={4} />
-              <ChartTooltip rows={(point) => [{ label: 'Commandes', value: String(point.orders || 0), color: 'hsl(var(--muted-foreground))' }]} />
-              <Line dataKey="orders" stroke="hsl(var(--muted-foreground))" strokeWidth={2.5} showMarkers />
-            </LineChart>
+            {!loaded ? <Skeleton className="mt-3 aspect-[1.5/1] w-full" /> : (
+              <LineChart data={chartData} xDataKey="date" aspectRatio="1.5 / 1" margin={{ top: 28, right: 22, bottom: 38, left: 22 }}>
+                <Grid horizontal vertical={false} />
+                <XAxis numTicks={4} />
+                <ChartTooltip rows={(point) => [{ label: 'Commandes', value: String(point.orders || 0), color: 'hsl(var(--muted-foreground))' }]} />
+                <Line dataKey="orders" stroke="hsl(var(--muted-foreground))" strokeWidth={2.5} showMarkers />
+              </LineChart>
+            )}
           </div>
         </div>
       </Panel>
       <Panel title="Commandes">
-        {sales.length === 0 ? (
+        {!loaded ? <TableSkeleton rows={6} cols={6} /> : sales.length === 0 ? (
           <p className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">Aucune vente pour le moment.</p>
         ) : (
-          <div className="overflow-hidden rounded-lg border">
+          <div className="m-table max-w-full overflow-x-auto rounded-lg border">
             <table className="w-full text-left text-sm">
               <thead className="bg-muted/40 text-xs uppercase tracking-wide text-muted-foreground">
                 <tr>
                   <th className="px-4 py-3">Commande</th>
-                  <th className="px-4 py-3">Client</th>
-                  <th className="px-4 py-3">Date</th>
+                  <th className="m-hide px-4 py-3">Client</th>
+                  <th className="m-hide px-4 py-3">Date</th>
                   <th className="px-4 py-3">Montant</th>
                   <th className="px-4 py-3">Paiement</th>
                   <th className="px-4 py-3">Action</th>
@@ -165,16 +176,17 @@ export default function CommerceVentesPage() {
                     <td className="px-4 py-3">
                       <div className="font-medium">{sale.saleNumber}</div>
                       <div className="text-xs text-muted-foreground">{sale.lines?.length || 0} ligne(s)</div>
+                      <div className="mt-0.5 text-xs text-muted-foreground sm:hidden">{buyer(sale)} · {dateShort(sale.createdAt)}</div>
                       <div className="mt-1 flex flex-wrap gap-2 text-xs">
                         {sale.invoice?.pdfUrl && <a className="underline" href={sale.invoice.pdfUrl} target="_blank" rel="noreferrer">Facture</a>}
                         {sale.creditNote?.pdfUrl && <a className="underline" href={sale.creditNote.pdfUrl} target="_blank" rel="noreferrer">Avoir</a>}
                       </div>
                     </td>
-                    <td className="px-4 py-3">{buyer(sale)}</td>
-                    <td className="px-4 py-3">{dateShort(sale.createdAt)}</td>
+                    <td className="m-hide px-4 py-3">{buyer(sale)}</td>
+                    <td className="m-hide whitespace-nowrap px-4 py-3">{dateShort(sale.createdAt)}</td>
                     <td className="px-4 py-3">
-                      <div>{cents(sale.totalCents)}</div>
-                      <div className="text-xs text-muted-foreground">Stripe {cents(sale.stripeAmountCents)} · cartes {cents(sale.giftCardAmountCents)}</div>
+                      <div className="whitespace-nowrap">{cents(sale.totalCents)}</div>
+                      <div className="hidden text-xs text-muted-foreground sm:block">Stripe {cents(sale.stripeAmountCents)} · cartes {cents(sale.giftCardAmountCents)}</div>
                     </td>
                     <td className="px-4 py-3"><StatusBadge>{sale.paymentStatus}</StatusBadge></td>
                     <td className="px-4 py-3">
@@ -238,16 +250,24 @@ function salesChartData(sales: CommerceSale[]) {
   return [...groups.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([, value]) => value);
 }
 
-function distanceTrainingBasis(sale: CommerceSale) {
-  return (sale.lines || [])
-    .filter((line) => line.productSnapshot?.kind === 'DISTANCE_TRAINING')
-    .reduce((sum, line) => sum + (line.totalCents || 0), 0);
+/**
+ * LA CASE « COMMISSION » — le montant et sa règle (« 10 % TTC »), ou, pour
+ * une vente d'un type non coché dans la configuration du contrat, « Non
+ * assujetti » en rouge.
+ */
+function commissionValue(sale: CommerceSale): React.ReactNode {
+  const c = sale.commission as (CommerceSale['commission'] & { capReached?: boolean; capped?: boolean }) | null | undefined;
+  if (c?.capReached && !(c.amountCents > 0)) {
+    return <span className="text-amber-700" data-testid="sale-commission">Plafond atteint — non prélevée</span>;
+  }
+  if (!c || !c.subject || c.amountCents <= 0) {
+    return <span className="text-rose-600" data-testid="sale-commission">Non assujetti</span>;
+  }
+  const rate = Number(c.ratePercent).toLocaleString('fr-FR', { maximumFractionDigits: 2 });
+  return <span data-testid="sale-commission">{cents(c.amountCents)} <span className="font-normal text-muted-foreground">({rate} % {c.basis}{c.capped ? ', écrêtée au plafond' : ''})</span></span>;
 }
 
 function SaleDetailCard({ sale, onRefund }: { sale: CommerceSale; onRefund: () => void }) {
-  const basis = distanceTrainingBasis(sale);
-  const devCommission = Math.round(basis * 0.1);
-  const stripeCommission = Math.max(0, (sale.stripeAmountCents || 0) - (sale.totalCents || 0));
   return (
     <Panel title={`Detail ${sale.saleNumber}`}>
       <div className="grid gap-4 lg:grid-cols-3">
@@ -256,11 +276,16 @@ function SaleDetailCard({ sale, onRefund }: { sale: CommerceSale; onRefund: () =
         <Detail label="Paiement" value={statusLabel(sale.paymentStatus)} />
         <Detail label="Stripe encaisse" value={cents(sale.stripeAmountCents)} />
         <Detail label="Cartes cadeaux" value={cents(sale.giftCardAmountCents)} />
-        <Detail label="Commission dev estimee" value={cents(devCommission)} />
-        <Detail label="Commission Stripe" value={stripeCommission > 0 ? cents(stripeCommission) : 'Non fournie'} />
+        <Detail label="Commission" value={commissionValue(sale)} />
         <Detail label="Session Stripe" value={sale.stripe?.checkoutSessionId || 'Non renseigne'} />
         <Detail label="Payment intent" value={sale.stripe?.paymentIntentId || 'Non renseigne'} />
       </div>
+      {(sale.finalizeIssues?.length ?? 0) > 0 && (
+        <div className="mt-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900" data-testid="sale-issues">
+          <p className="font-semibold">À traiter — survenu après l’encaissement</p>
+          <ul className="mt-1 list-disc pl-5">{sale.finalizeIssues!.map((issue, i) => <li key={i}>{issue}</li>)}</ul>
+        </div>
+      )}
       <div className="mt-4 grid gap-3">
         <h3 className="text-sm font-semibold">Lignes vendues</h3>
         {(sale.lines || []).map((line, index) => (

@@ -7,12 +7,20 @@ import { asyncHandler } from '../utils/asyncHandler.js';
 import { ok, created } from '../utils/apiResponse.js';
 import { ROLES } from '../utils/constants.js';
 import { rateLimit } from '../middlewares/rateLimit.js';
+import { requireSiteOpenForPurchase } from '../middlewares/purchaseGate.middleware.js';
+import * as commissionPayment from '../services/commissionPayment.service.js';
+import { siteUrlFor } from '../utils/siteOrigin.js';
+import * as customerAgenda from '../services/customerAgenda.service.js';
 import * as commerce from '../services/commerce.service.js';
 import * as calendar from '../services/calendar.service.js';
+import * as sessions from '../services/formationSessions.service.js';
 
+import * as collections from '../services/serviceCollection.service.js';
 export const publicCommerceRoutes = Router();
 publicCommerceRoutes.get('/catalog', asyncHandler(async (_req, res) => ok(res, await commerce.listCatalog())));
-publicCommerceRoutes.get('/availability', asyncHandler(async (req, res) => ok(res, await calendar.listAvailability(req.query))));
+// Collections de prestations (rayons de la page « Prestations »), dans l'ordre choisi.
+publicCommerceRoutes.get('/collections', asyncHandler(async (_req, res) => ok(res, await collections.listPublicCollections())));
+publicCommerceRoutes.get('/availability', requireSiteOpenForPurchase, asyncHandler(async (req, res) => ok(res, await calendar.listAvailability(req.query))));
 publicCommerceRoutes.get('/videos/streamable/:shortcode/playback-url', asyncHandler(async (req, res) => {
   res.set('Cache-Control', 'no-store');
   ok(res, await commerce.getStreamableTemporaryPlayback(req.params.shortcode));
@@ -48,22 +56,40 @@ customerRoutes.post('/register', asyncHandler(async (req, res) => created(res, a
 customerRoutes.post('/login', customerLoginLimiter, asyncHandler(async (req, res) => ok(res, await commerce.loginCustomer(req.body.email, req.body.password))));
 customerRoutes.post('/email-verification/confirm', customerLoginLimiter, asyncHandler(async (req, res) => ok(res, await commerce.verifyCustomerEmail(req.body.code || req.body.token))));
 customerRoutes.post('/email-verification/request', authenticateCustomer, asyncHandler(async (req, res) => ok(res, await commerce.requestCustomerEmailVerification(req.customer._id))));
-customerRoutes.post('/password-reset/request', customerLoginLimiter, asyncHandler(async (req, res) => ok(res, await commerce.requestCustomerPasswordReset(req.body.email))));
+customerRoutes.post('/password-reset/request', customerLoginLimiter, asyncHandler(async (req, res) => ok(res, await commerce.requestCustomerPasswordReset(req.body.email, { siteUrl: await siteUrlFor(req) }))));
 customerRoutes.post('/password-reset/confirm', customerLoginLimiter, asyncHandler(async (req, res) => ok(res, await commerce.resetCustomerPassword(req.body))));
 customerRoutes.get('/me', authenticateCustomer, asyncHandler(async (req, res) => ok(res, req.customer)));
 customerRoutes.get('/cart', authenticateCustomer, asyncHandler(async (req, res) => ok(res, await commerce.getCustomerCart(req.customer._id))));
-customerRoutes.post('/cart/items', authenticateCustomer, asyncHandler(async (req, res) => ok(res, await commerce.addCartItem(req.customer._id, req.body))));
+customerRoutes.post('/cart/items', authenticateCustomer, requireSiteOpenForPurchase, asyncHandler(async (req, res) => ok(res, await commerce.addCartItem(req.customer._id, req.body))));
 customerRoutes.delete('/cart/items/:lineId', authenticateCustomer, asyncHandler(async (req, res) => ok(res, await commerce.removeCartItem(req.customer._id, req.params.lineId))));
-customerRoutes.post('/checkout', authenticateCustomer, asyncHandler(async (req, res) => created(res, await commerce.createCheckout(req.customer._id, req.body))));
+// Le retour après paiement se fait sur le site d'où vient la cliente (origine autorisée), jamais sur une adresse devinée.
+customerRoutes.post('/checkout', authenticateCustomer, requireSiteOpenForPurchase, asyncHandler(async (req, res) => created(res, await commerce.createCheckout(req.customer._id, { ...req.body, siteUrl: await siteUrlFor(req) }))));
+customerRoutes.post('/checkout/quick', authenticateCustomer, requireSiteOpenForPurchase, asyncHandler(async (req, res) => created(res, await commerce.createQuickCheckout(req.customer._id, { ...req.body, siteUrl: await siteUrlFor(req) }))));
+// La page de succès vérifie que le paiement est bien enregistré (et le finalise si le webhook tarde).
+customerRoutes.get('/checkout/status', authenticateCustomer, asyncHandler(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  ok(res, await commerce.getCustomerCheckoutStatus(req.customer._id, req.query.session_id, req.query.commande));
+}));
 customerRoutes.get('/orders', authenticateCustomer, asyncHandler(async (req, res) => ok(res, await commerce.listCustomerOrders(req.customer._id))));
 customerRoutes.get('/invoices', authenticateCustomer, asyncHandler(async (req, res) => ok(res, await commerce.listCustomerOrders(req.customer._id))));
 customerRoutes.get('/gift-cards', authenticateCustomer, asyncHandler(async (req, res) => ok(res, await commerce.listCustomerGiftCards(req.customer._id))));
+// Vérifier / ajouter un code : limité, un code ne se devine pas à coups d'essais.
+const giftCodeLimiter = rateLimit({ windowMs: 10 * 60 * 1000, max: 20, message: 'Trop d’essais de code. Réessayez dans quelques minutes.' });
+customerRoutes.post('/gift-cards/check', authenticateCustomer, giftCodeLimiter, asyncHandler(async (req, res) => ok(res, await commerce.checkCustomerGiftCard(req.customer._id, req.body))));
+customerRoutes.post('/gift-cards/wallet', authenticateCustomer, giftCodeLimiter, asyncHandler(async (req, res) => ok(res, await commerce.addGiftCardToWallet(req.customer._id, req.body))));
 customerRoutes.get('/refund-requests', authenticateCustomer, asyncHandler(async (req, res) => ok(res, await commerce.listCustomerRefundRequests(req.customer._id))));
 customerRoutes.post('/refund-requests', authenticateCustomer, asyncHandler(async (req, res) => created(res, await commerce.createRefundRequest(req.customer._id, req.body))));
 customerRoutes.get('/training-submissions', authenticateCustomer, asyncHandler(async (req, res) => ok(res, await commerce.listCustomerTrainingSubmissions(req.customer._id))));
 customerRoutes.post('/training-deliverables', authenticateCustomer, uploadTrainingDeliverable.single('file'), translateUploadErrors, asyncHandler(async (req, res) => created(res, await commerce.uploadCustomerTrainingDeliverable(req.customer._id, req.file))));
+customerRoutes.delete('/training-deliverables', authenticateCustomer, asyncHandler(async (req, res) => ok(res, await commerce.deleteCustomerTrainingDeliverable(req.customer._id, req.body?.url || req.query.url))));
 customerRoutes.post('/training-submissions', authenticateCustomer, asyncHandler(async (req, res) => created(res, await commerce.createTrainingSubmission(req.customer._id, req.body))));
 customerRoutes.post('/reviews', authenticateCustomer, asyncHandler(async (req, res) => created(res, await commerce.createReview(req.customer._id, req.body))));
+// L'agenda de la cliente : prochains rendez-vous / sessions, solde sur place, conditions d'annulation.
+customerRoutes.get('/appointments', authenticateCustomer, asyncHandler(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  ok(res, await customerAgenda.listCustomerAppointments(req.customer._id));
+}));
+customerRoutes.post('/appointments/:id/cancel', authenticateCustomer, rateLimit({ windowMs: 60_000, max: 6 }), asyncHandler(async (req, res) => ok(res, await customerAgenda.cancelCustomerAppointment(req.customer._id, req.params.id))));
 customerRoutes.get('/formations', authenticateCustomer, asyncHandler(async (req, res) => {
   ok(res, await commerce.listCustomerFormations(req.customer._id));
 }));
@@ -74,6 +100,18 @@ managerCommerceRoutes.get('/products', asyncHandler(async (_req, res) => ok(res,
 managerCommerceRoutes.post('/products', authorize(ROLES.ADMIN, ROLES.DEV), asyncHandler(async (req, res) => created(res, await commerce.upsertProduct(req.body))));
 managerCommerceRoutes.put('/products/:id', authorize(ROLES.ADMIN, ROLES.DEV), asyncHandler(async (req, res) => ok(res, await commerce.upsertProduct({ ...req.body, id: req.params.id }))));
 managerCommerceRoutes.delete('/products/:id', authorize(ROLES.ADMIN, ROLES.DEV), asyncHandler(async (req, res) => ok(res, await commerce.deleteProduct(req.params.id))));
+// Collections de prestations : liste, fiche, création, modification, ordre, suppression.
+managerCommerceRoutes.get('/collections', asyncHandler(async (_req, res) => ok(res, await collections.listCollections())));
+managerCommerceRoutes.put('/collections/order', authorize(ROLES.ADMIN, ROLES.DEV), asyncHandler(async (req, res) => ok(res, await collections.reorderCollections(req.body.ids))));
+managerCommerceRoutes.get('/collections/:id', asyncHandler(async (req, res) => ok(res, await collections.getCollection(req.params.id))));
+managerCommerceRoutes.post('/collections', authorize(ROLES.ADMIN, ROLES.DEV), asyncHandler(async (req, res) => created(res, await collections.saveCollection(req.body))));
+managerCommerceRoutes.put('/collections/:id', authorize(ROLES.ADMIN, ROLES.DEV), asyncHandler(async (req, res) => ok(res, await collections.saveCollection(req.body, req.params.id))));
+managerCommerceRoutes.delete('/collections/:id', authorize(ROLES.ADMIN, ROLES.DEV), asyncHandler(async (req, res) => ok(res, await collections.deleteCollection(req.params.id))));
+managerCommerceRoutes.put('/home-featured/:group', authorize(ROLES.ADMIN, ROLES.DEV), asyncHandler(async (req, res) => ok(res, await commerce.setHomeFeatured(req.params.group, req.body.productIds))));
+managerCommerceRoutes.post('/products/:id/sessions', authorize(ROLES.ADMIN, ROLES.DEV), asyncHandler(async (req, res) => created(res, await sessions.createSession(req.params.id, req.body))));
+managerCommerceRoutes.put('/products/:id/sessions/:sessionId', authorize(ROLES.ADMIN, ROLES.DEV), asyncHandler(async (req, res) => ok(res, await sessions.updateSession(req.params.id, req.params.sessionId, req.body))));
+managerCommerceRoutes.post('/products/:id/sessions/:sessionId/cancel', authorize(ROLES.ADMIN, ROLES.DEV), asyncHandler(async (req, res) => ok(res, await sessions.cancelSession(req.params.id, req.params.sessionId, req.body, req.user?._id || null))));
+managerCommerceRoutes.delete('/products/:id/sessions/:sessionId', authorize(ROLES.ADMIN, ROLES.DEV), asyncHandler(async (req, res) => ok(res, await sessions.deleteSession(req.params.id, req.params.sessionId))));
 managerCommerceRoutes.post('/videos/resolve-streamable', authorize(ROLES.ADMIN, ROLES.DEV), asyncHandler(async (req, res) => ok(res, await commerce.resolveStreamableVideo(req.body))));
 managerCommerceRoutes.post('/videos/resolve-drive', authorize(ROLES.ADMIN, ROLES.DEV), asyncHandler(async (req, res) => ok(res, await commerce.resolveGoogleDriveVideo(req.body))));
 managerCommerceRoutes.post('/training-files', authorize(ROLES.ADMIN, ROLES.DEV), uploadTrainingDeliverable.single('file'), translateUploadErrors, asyncHandler(async (req, res) => created(res, await commerce.uploadTrainingResourceFile(req.file))));
@@ -82,7 +120,13 @@ managerCommerceRoutes.post('/sales/:id/refund', authorize(ROLES.ADMIN, ROLES.DEV
 managerCommerceRoutes.get('/customers', asyncHandler(async (_req, res) => ok(res, await commerce.listManagerCustomers())));
 managerCommerceRoutes.get('/commissions', asyncHandler(async (_req, res) => ok(res, await commerce.listCommissions())));
 managerCommerceRoutes.post('/commissions/recalculate', authorize(ROLES.ADMIN, ROLES.DEV), asyncHandler(async (_req, res) => ok(res, await commerce.recalculateMonthlyCommissions())));
-managerCommerceRoutes.post('/commissions/:id/pay', authorize(ROLES.ADMIN, ROLES.DEV), asyncHandler(async (req, res) => ok(res, await commerce.markCommissionPaid(req.params.id, req.body))));
+managerCommerceRoutes.get('/commissions/summary', asyncHandler(async (_req, res) => ok(res, await commissionPayment.commissionSummary())));
+// Payer une commission = une page de paiement Stripe ; personne ne la « marque payée » à la main.
+managerCommerceRoutes.post('/commissions/:id/checkout', authorize(ROLES.ADMIN, ROLES.DEV), rateLimit({ windowMs: 60_000, max: 10 }), asyncHandler(async (req, res) => ok(res, await commissionPayment.openCommissionCheckout(req.params.id))));
+managerCommerceRoutes.post('/commissions/:id/sync', authorize(ROLES.ADMIN, ROLES.DEV), asyncHandler(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  ok(res, await commissionPayment.syncCommissionPayment(req.params.id));
+}));
 managerCommerceRoutes.get('/reviews', asyncHandler(async (_req, res) => ok(res, await commerce.listManagerReviews())));
 managerCommerceRoutes.post('/reviews/manual', authorize(ROLES.ADMIN, ROLES.DEV), asyncHandler(async (req, res) => created(res, await commerce.createManualReview(req.body, req.user?._id || null))));
 managerCommerceRoutes.post('/reviews/:id/moderate', authorize(ROLES.ADMIN, ROLES.DEV), asyncHandler(async (req, res) => ok(res, await commerce.moderateReview(req.params.id, req.body, req.user?._id || null))));
@@ -95,5 +139,6 @@ managerCommerceRoutes.get('/training-submissions', asyncHandler(async (_req, res
 managerCommerceRoutes.post('/training-submissions/:id/decision', authorize(ROLES.ADMIN, ROLES.DEV), asyncHandler(async (req, res) => ok(res, await commerce.decideTrainingSubmission(req.params.id, req.body, req.user?._id || null))));
 managerCommerceRoutes.get('/integrations', authorize(ROLES.DEV), asyncHandler(async (_req, res) => ok(res, await commerce.getInstituteIntegrations())));
 managerCommerceRoutes.put('/integrations', authorize(ROLES.DEV), asyncHandler(async (req, res) => ok(res, await commerce.saveInstituteIntegration(req.body))));
+managerCommerceRoutes.post('/integrations/test', authorize(ROLES.DEV), rateLimit({ windowMs: 60_000, max: 12 }), asyncHandler(async (req, res) => ok(res, await commerce.testInstituteIntegration(req.body?.provider))));
 
 export default managerCommerceRoutes;

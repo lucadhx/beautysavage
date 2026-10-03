@@ -2,7 +2,7 @@ import * as React from 'react';
 import { BrandLoader } from '@/components/ui/BrandLoader';
 import { motion } from 'framer-motion';
 import {
-  ReceiptText, Eye, Download, RefreshCw, Rocket, RotateCw, Wrench, FileText,
+  ReceiptText, Eye, Download, RefreshCw, Rocket, RotateCw, Wrench, FileText, Percent,
   Plus, CalendarClock, AlertTriangle,
 } from 'lucide-react';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -23,7 +23,7 @@ import type {
 } from '@/types';
 
 /** Icônes par type de facture — cohérentes avec le reste du manager (Lucide). */
-const ICON = { Rocket, RotateCw, Wrench, FileText } as const;
+const ICON = { Rocket, RotateCw, Wrench, FileText, Percent } as const;
 
 /**
  * Statut du contrat vu depuis la FACTURATION.
@@ -546,7 +546,7 @@ export default function FacturesPage() {
       {!isDev ? <PrestationsSection /> : null}
 
       {loading ? (
-        <BrandLoader />
+        <BrandLoader variant="list" />
       ) : groups.length === 0 ? (
         <EmptyState icon={ReceiptText} title="Aucune facture" description="Les factures apparaîtront ici après le premier paiement." />
       ) : (

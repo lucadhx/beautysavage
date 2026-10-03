@@ -87,7 +87,7 @@ export async function applyClientCompanyProfile(profile, source = 'SYNC', bridge
    * sur un site d'essai, et une facture d'essai partirait à son nom. Même
    * garde que pour l'entreprise développeur.
    */
-  if (value.environment !== config.env) {
+  if (value.environment !== config.panelWorld) {
     logger.warn(
       `[panel-bridge] Entreprise cliente ignorée : elle vise ${value.environment}, `
       + `ce projet est en ${config.env}.`,

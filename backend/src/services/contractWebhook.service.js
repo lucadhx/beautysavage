@@ -11,6 +11,7 @@ import * as paymentSvc from './payment.service.js';
 import * as subscriptionSvc from './subscription.service.js';
 import * as billingSvc from './billing.service.js';
 import { wakePendingActionsForContract } from './events/pendingActionWakeup.js';
+import { handleCommissionStripeEvent } from './commissionPayment.service.js';
 import {
   CONTRACT_STATUS as S,
   PAYMENT_TYPE,
@@ -171,6 +172,15 @@ async function processStripeEvent(evt, ctx = {}) {
    */
   const observedAt = Number.isFinite(evt.created) ? new Date(evt.created * 1000) : null;
   const meta = obj.metadata || {};
+  /**
+   * LES COMMISSIONS DE L'INSTITUT — leur session, leur paiement et leur facture
+   * portent `paymentType: COMMISSION`. Ils sont traités AVANT toute logique de
+   * contrat : sans cette porte, la facture émise après paiement serait typée
+   * « frais de lancement » et la commission ne serait jamais soldée.
+   */
+  if (meta.paymentType === 'COMMISSION' && meta.commissionId) {
+    return handleCommissionStripeEvent(type, obj);
+  }
   let contract = meta.contractId ? await Contract.findById(meta.contractId) : null;
   const mode = ctx.mode || resolveProviderEnvironment('STRIPE');
 

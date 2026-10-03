@@ -159,7 +159,7 @@ export default function MyCompanyPage() {
     { live: 'client-company' },
   );
 
-  if (loading) return <BrandLoader />;
+  if (loading) return <BrandLoader variant="form" />;
 
   const contact = data?.support?.contactEmail ?? null;
   /**

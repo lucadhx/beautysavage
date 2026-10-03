@@ -14,7 +14,7 @@ export default function CustomerPasswordResetPage() {
       const result = await customerApi.resetPassword({ token, password });
       setMessage(result.message);
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : 'Reinitialisation impossible');
+      setMessage(err instanceof Error ? err.message : 'Réinitialisation impossible');
     }
   }
 
@@ -22,13 +22,13 @@ export default function CustomerPasswordResetPage() {
     <section className="mx-auto min-h-screen max-w-md px-5 pb-24 pt-32 md:px-8">
       <h1 className="text-4xl font-semibold">Nouveau mot de passe</h1>
       <form onSubmit={submit} className="mt-8 rounded-lg border p-5 shadow-xl" style={{ borderColor: 'var(--v-border)', background: 'var(--v-surface)' }}>
-        {!token && <p className="text-sm" style={{ color: 'var(--v-muted-foreground)' }}>Lien de reinitialisation manquant.</p>}
+        {!token && <p className="text-sm" style={{ color: 'var(--v-muted-foreground)' }}>Lien de réinitialisation manquant.</p>}
         <label className="block text-sm font-medium">
           Mot de passe
           <input className="v-field mt-2 w-full rounded-md px-3 py-3" type="password" minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} />
         </label>
         <button disabled={!token} className="mt-6 w-full rounded-md px-5 py-3 font-semibold disabled:opacity-50" style={{ background: 'var(--v-primary)', color: 'var(--v-primary-foreground)' }}>
-          Mettre a jour
+          Mettre à jour
         </button>
         {message && <p className="mt-4 text-sm" style={{ color: 'var(--v-muted-foreground)' }}>{message}</p>}
         <Link to="/espace-client" className="mt-4 inline-flex text-sm font-semibold">Retour connexion</Link>

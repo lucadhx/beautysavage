@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Image as ImageIcon, Plus, Trash2 } from 'lucide-react';
+import { Award, Image as ImageIcon, MapPin } from 'lucide-react';
 import { BrandLoader } from '@/components/ui/BrandLoader';
 import { api } from '@/lib/api';
 import { useResource, useAction } from '@/hooks/useResource';
@@ -16,11 +16,8 @@ import {
   Input,
   Textarea,
   Field,
-  Button,
   } from '@/components/ui/primitives';
 import { ImageUpload } from '@/components/fields/ImageUpload';
-import { IconPicker } from '@/components/fields/IconPicker';
-import { KEY_FIGURE_LIMITS, limiteAtteinte } from '@/config/limits';
 import { resolvePreviewMediaUrl } from '@/lib/media';
 import { VitrineThemeScope } from '@/components/VitrineThemeScope';
 import { HeroBanner } from '@vitrine/components/HeroBanner';
@@ -42,7 +39,7 @@ export default function CompanyPage() {
 
   if (loading || !data) {
     return (
-      <BrandLoader />
+      <BrandLoader variant="form" />
     );
   }
 
@@ -65,11 +62,18 @@ export default function CompanyPage() {
             <Field label="Nom de l'entreprise">
               <Input value={data.name} onChange={(e) => update({ name: e.target.value })} />
             </Field>
-            <Field label="Slogan / accroche">
+            <Field label="Slogan / accroche" hint="Sous le nom, dans la bannière d'accueil de la vitrine.">
               <Input
                 value={data.tagline}
                 onChange={(e) => update({ tagline: e.target.value })}
-                placeholder="Institut de beaute et formations"
+                placeholder="Ongles, regard, prestations institut et formations beauté à Nice."
+              />
+            </Field>
+            <Field label="Accroche au-dessus du titre" className="sm:col-span-2" hint="La petite ligne en couleur au-dessus du nom, dans la bannière. Mise à jour en direct sur la vitrine.">
+              <Input
+                value={data.heroKicker ?? ''}
+                onChange={(e) => update({ heroKicker: e.target.value })}
+                placeholder="Le geste. La certification. L'institut."
               />
             </Field>
             <Field
@@ -86,12 +90,34 @@ export default function CompanyPage() {
           </CardContent>
         </Card>
 
-        {/* Chiffres clés */}
-        <ChiffresCles
-          figures={data.keyFigures ?? []}
-          onChange={(keyFigures) => update({ keyFigures })}
-        />
-
+        {/* Organisme de formation */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="inline-flex items-center gap-2"><Award className="h-5 w-5 text-muted-foreground" /> Organisme de formation</CardTitle>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Le numéro de déclaration d'activité (NDA) s'affiche en badge sur la page d'accueil, avec la mention légale
+              obligatoire. Laissez vide pour masquer le badge.
+            </p>
+          </CardHeader>
+          <CardContent className="grid gap-4 md:grid-cols-2">
+            <Field label="Numéro de déclaration d'activité" unit="NDA, 11 chiffres" icon={<Award />}>
+              <Input
+                value={data.trainingDeclaration?.number ?? ''}
+                inputMode="numeric"
+                maxLength={20}
+                onChange={(e) => update({ trainingDeclaration: { number: e.target.value, region: data.trainingDeclaration?.region ?? '' } })}
+                placeholder="93061262606"
+              />
+            </Field>
+            <Field label="Région de la préfecture" icon={<MapPin />} hint="Préfecture de région qui a enregistré la déclaration.">
+              <Input
+                value={data.trainingDeclaration?.region ?? ''}
+                onChange={(e) => update({ trainingDeclaration: { number: data.trainingDeclaration?.number ?? '', region: e.target.value } })}
+                placeholder="Provence-Alpes-Côte d'Azur"
+              />
+            </Field>
+          </CardContent>
+        </Card>
 
         {/* Logos */}
         <Card>
@@ -226,6 +252,7 @@ export default function CompanyPage() {
                 imageUrl={resolvePreviewMediaUrl(data.mediaResolution?.heroImage?.url ?? data.heroImage)}
                 name={data.name}
                 tagline={data.tagline}
+                kicker={data.heroKicker}
               />
               <p className="mt-1 text-xs text-muted-foreground">
                 Rendu par le composant de la vitrine : ce que vous voyez ici est ce qui sera affiché.
@@ -269,10 +296,12 @@ function ApercuBanniere({
   imageUrl,
   name,
   tagline,
+  kicker,
 }: {
   imageUrl: string | null;
   name: string;
   tagline?: string | null;
+  kicker?: string | null;
 }) {
   const cadre = React.useRef<HTMLDivElement>(null);
   const [echelle, setEchelle] = React.useState(0);
@@ -303,152 +332,10 @@ function ApercuBanniere({
               ['--hero-min-h-md' as string]: `${HAUTEUR_SIMULEE}px`,
             }}
           >
-            <HeroBanner imageUrl={imageUrl} name={name} tagline={tagline} animate={false} titleAs="p" />
+            <HeroBanner imageUrl={imageUrl} name={name} tagline={tagline} kicker={kicker || undefined} animate={false} titleAs="p" />
           </div>
         )}
       </VitrineThemeScope>
     </div>
-  );
-}
-
-/**
- * LES PRINCIPES DE L'ACCUEIL — quatre mots, et ce qu'ils veulent dire.
- *
- * ══ CE QUE CET ÉDITEUR PILOTE RÉELLEMENT ════════════════════════════════════
- *
- * La section « Principes » de la page d'accueil : une bande de tuiles
- * numérotées 01 à 04, chacune portant un mot (« Identité ») et la phrase qui
- * l'explique. Le champ s'appelle encore `keyFigures` en base — il portait des
- * CHIFFRES dans le moteur d'origine (« 10 000 m² de piste ») — et ce n'est
- * plus ce qu'il contient.
- *
- * ══ TROIS CONTRADICTIONS, TOUTES CORRIGÉES ══════════════════════════════════
- *
- * Cet écran a été le cas d'école du défaut que ferme `config/limits.ts` :
- *
- *   · il cachait « Ajouter » au TROISIÈME élément…
- *   · …pendant que le serveur en refusait plus de trois…
- *   · …alors que la graine en semait QUATRE et que la vitrine en dessine une
- *     grille de quatre.
- *
- * Le propriétaire ouvrait donc un écran DÉJÀ invalide, sans bouton pour s'en
- * sortir, et l'apprenait au clic sur « Enregistrer » — par un message anglais
- * de la bibliothèque de validation, parce que la contrainte de longueur du
- * libellé (40 caractères, la taille d'un « de piste ») n'avait jamais été
- * réécrite pour des phrases.
- *
- * ══ LA CONTRAINTE EST DITE AVANT, PLUS APRÈS ════════════════════════════════
- *
- * `maxLength` empêche de composer ce qui sera refusé ; le compteur rend ce
- * blocage lisible ; et le bouton « Ajouter » désactivé PORTE SA RAISON plutôt
- * que de disparaître — un bouton qui s'évapore fait chercher ce qu'on a cassé.
- *
- * ══ LE MOT RESTE UN TEXTE ══════════════════════════════════════════════════
- *
- * « 10 000 m² » n'est pas un nombre, et « Identité » encore moins. Forcer un
- * type numérique obligerait à ranger l'unité dans un second champ — donc à
- * décider ici comment on recolle les deux.
- */
-function ChiffresCles({
-  figures,
-  onChange,
-}: {
-  figures: NonNullable<Company['keyFigures']>;
-  onChange: (f: NonNullable<Company['keyFigures']>) => void;
-}) {
-  const maj = (i: number, patch: Partial<NonNullable<Company['keyFigures']>[number]>) =>
-    onChange(figures.map((f, j) => (i === j ? { ...f, ...patch } : f)));
-
-  const plein = figures.length >= KEY_FIGURE_LIMITS.maxItems;
-
-  return (
-    <Card>
-      <CardHeader className="flex flex-col items-start justify-between gap-3 space-y-0 sm:flex-row">
-        <div>
-          <CardTitle>Principes de l'accueil</CardTitle>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {KEY_FIGURE_LIMITS.maxItems} mots qui vous décrivent, chacun suivi de la phrase qui
-            l'explique — « Identité », « Expérience », « Technologie ». La page d'accueil les
-            affiche numérotés, en une bande. Laissez la liste vide pour masquer la section.
-          </p>
-        </div>
-        <Button
-          variant="outline"
-          size="sm"
-          className="shrink-0"
-          disabled={plein}
-          title={plein ? limiteAtteinte(KEY_FIGURE_LIMITS.maxItems, 'principes') : undefined}
-          onClick={() => onChange([...figures, {
-            value: '', label: '', icon: 'Sparkles', order: (figures.length + 1) * 10,
-          }])}
-        >
-          <Plus className="h-4 w-4" /> Ajouter
-        </Button>
-      </CardHeader>
-      <CardContent>
-        {figures.length === 0 ? (
-          /*
-            ÉTAT VIDE UTILE — il dit ce qui manque, ce que ça produit, et quoi
-            faire. L'ancien annonçait que « l'accueil affiche ceux qu'il déduit
-            des tracés et de la flotte » : une consolation FAUSSE depuis que la
-            section se masque quand la liste est vide.
-          */
-          <div className="rounded-md border border-dashed border-border px-4 py-6 text-center">
-            <p className="text-sm font-medium">Aucun principe</p>
-            <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
-              La section « Principes » n'apparaît pas sur la page d'accueil tant que cette liste
-              est vide. Ajoutez-en jusqu'à {KEY_FIGURE_LIMITS.maxItems}.
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {figures.map((f, i) => (
-              <div key={f._id ?? i} className="grid gap-3 sm:grid-cols-[10rem,1fr,auto,auto] sm:items-end">
-                <Field
-                  label="Le mot"
-                  count={(f.value ?? '').length}
-                  max={KEY_FIGURE_LIMITS.valueMax}
-                >
-                  <Input
-                    value={f.value ?? ''}
-                    maxLength={KEY_FIGURE_LIMITS.valueMax}
-                    onChange={(e) => maj(i, { value: e.target.value })}
-                    placeholder="Identité"
-                  />
-                </Field>
-                <Field
-                  label="Ce qu'il veut dire"
-                  count={(f.label ?? '').length}
-                  max={KEY_FIGURE_LIMITS.labelMax}
-                >
-                  <Input
-                    value={f.label ?? ''}
-                    maxLength={KEY_FIGURE_LIMITS.labelMax}
-                    onChange={(e) => maj(i, { label: e.target.value })}
-                    placeholder="Ce qui vous distingue, avant ce qui vous ressemble."
-                  />
-                </Field>
-                <Field label="Icône">
-                  <IconPicker value={f.icon ?? 'Sparkles'} onChange={(icon) => maj(i, { icon })} />
-                </Field>
-                <button
-                  type="button"
-                  onClick={() => onChange(figures.filter((_, j) => j !== i))}
-                  className="mb-1 rounded p-2 text-muted-foreground transition-colors hover:bg-red-50 hover:text-red-600"
-                  aria-label={`Retirer le principe ${i + 1}`}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              </div>
-            ))}
-            {plein && (
-              <p className="text-xs text-muted-foreground">
-                {limiteAtteinte(KEY_FIGURE_LIMITS.maxItems, 'principes')}
-              </p>
-            )}
-          </div>
-        )}
-      </CardContent>
-    </Card>
   );
 }

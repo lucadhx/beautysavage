@@ -7,8 +7,17 @@ import { CommerceSale } from '../models/CommerceSale.model.js';
 import { CommerceCommission } from '../models/CommerceCommission.model.js';
 import { Review } from '../models/Review.model.js';
 import { TrainingSubmission } from '../models/TrainingSubmission.model.js';
-import { CalendarEvent } from '../models/CalendarEvent.model.js';
 import { logger } from '../utils/logger.js';
+import { scoreEvaluationSubmission } from '../services/commerce.service.js';
+import {
+  DEMO_DELIVERABLE_IMAGES,
+  nextMonday,
+  placeDemoAppointment,
+  relocateDemoKeyedEvents,
+  relocateSeededSessions,
+  seedDenseCalendar,
+  seedPresentielSessions,
+} from './lib/demoCalendar.js';
 
 const STREAMABLE_URL = 'https://streamable.com/eff6ci';
 const STREAMABLE_SHORTCODE = 'eff6ci';
@@ -30,13 +39,6 @@ function minutes(value) {
   const h = Number(text.match(/(\d+)\s*h/)?.[1] || 0);
   const m = Number(text.match(/(\d+)\s*min/)?.[1] || 0);
   return h * 60 + m;
-}
-
-function nextWeek(dayOffset, hour, minute = 0, durationMinutes = 90) {
-  const startsAt = new Date();
-  startsAt.setDate(startsAt.getDate() + dayOffset);
-  startsAt.setHours(hour, minute, 0, 0);
-  return { startsAt, endsAt: new Date(startsAt.getTime() + durationMinutes * 60 * 1000) };
 }
 
 async function upsertCustomer(email, firstName, lastName, extra = {}) {
@@ -364,7 +366,9 @@ async function seedProducts() {
     price: { amountCents: 99000, currency: 'EUR' },
     coverUrl: cover('photo-1604654894610-df63bc536371'),
     training: { durationDays: 2, location: 'Institut BeautySavage - Nice', formalities: 'Materiel fourni, modele recommande jour 2.', cancellationPolicy: 'Report possible selon delai et disponibilites.' },
-    sessions: [{ ...nextWeek(8, 9, 30, 420), capacity: 6, reservedCount: 2, status: 'ACTIVE' }],
+    // Les sessions (et leurs inscrites) sont posees par `seedPresentielSessions`,
+    // sur des dates libres : voir scripts/lib/demoCalendar.js.
+    sessions: [],
     trailer: { title: 'Bande-annonce Prothesie ongulaire', provider: 'STREAMABLE', sourceUrl: STREAMABLE_URL, streamableShortcode: STREAMABLE_SHORTCODE, coverUrl: VIDEO_COVER_URL },
     whatsappGroup: { label: 'Groupe WhatsApp Prothesie ongulaire', url: 'https://chat.whatsapp.com/beautysavage-ongles-demo' },
     modules: modules('ongles'),
@@ -430,17 +434,19 @@ async function seedSalesAndProgress(client, products) {
       answersSnapshot: { q_desinfection: 'true', q_prepa: 'diagnostic', q_conseils: ['eau', 'entretien'] },
       deliverablesSnapshot: {
         liv_photo_face: {
-          before: { url: '/demo/livrables/brow-before.jpg', name: 'avant-brow.jpg', type: 'image/jpeg' },
-          after: { url: '/demo/livrables/brow-after.jpg', name: 'apres-brow.jpg', type: 'image/jpeg' },
+          before: { url: DEMO_DELIVERABLE_IMAGES.before, name: 'avant-brow.jpg', type: 'image/jpeg' },
+          after: { url: DEMO_DELIVERABLE_IMAGES.after, name: 'apres-brow.jpg', type: 'image/jpeg' },
         },
         liv_video_geste: { url: STREAMABLE_URL, name: 'video-geste.mp4', type: 'video/mp4', streamableShortcode: STREAMABLE_SHORTCODE },
         liv_galerie_modele: [
-          { url: '/demo/livrables/brow-gallery-1.jpg', name: 'resultat-1.jpg', type: 'image/jpeg' },
-          { url: '/demo/livrables/brow-gallery-2.jpg', name: 'resultat-2.jpg', type: 'image/jpeg' },
+          { url: DEMO_DELIVERABLE_IMAGES.gallery1, name: 'resultat-1.jpg', type: 'image/jpeg' },
+          { url: DEMO_DELIVERABLE_IMAGES.gallery2, name: 'resultat-2.jpg', type: 'image/jpeg' },
         ],
       },
       progressSnapshot: { completedModules: 2, totalModules: products.brow.modules.length },
-      scoreSnapshot: { totalPoints: 14, earnedPoints: 14, percent: 100, calculatedAt: new Date() },
+      // Le score est CALCULE par le vrai bareme : un score ecrit a la main sans
+      // detail affichait « 0 / 4 » sur chaque bonne reponse.
+      scoreSnapshot: scoreEvaluationSubmission(products.brow.evaluation, { q_desinfection: 'true', q_prepa: 'diagnostic', q_conseils: ['eau', 'entretien'] }),
     },
   }, { upsert: true, new: true });
 
@@ -452,12 +458,11 @@ async function seedSalesAndProgress(client, products) {
       answersSnapshot: { q_desinfection: 'true', q_prepa: 'photo_finale', q_conseils: ['eau'] },
       deliverablesSnapshot: {},
       progressSnapshot: { completedModules: 1, totalModules: products.cilFormation.modules.length },
-      scoreSnapshot: { totalPoints: 14, earnedPoints: 4, percent: 29, calculatedAt: new Date() },
+      scoreSnapshot: scoreEvaluationSubmission(products.cilFormation.evaluation, { q_desinfection: 'true', q_prepa: 'photo_finale', q_conseils: ['eau'] }),
       decision: { status: 'REJECTED', comment: 'Ajoutez des photos plus nettes et reprenez la question sur la preparation.', decidedAt: new Date(), decidedBy: null, certificateUrl: '' },
     },
   }, { upsert: true, new: true });
 
-  const appointment = nextWeek(3, 15, 0, 105);
   const saleService = await CommerceSale.findOneAndUpdate({ idempotencyKey: 'demo-client-mail-reservation-prestation' }, {
     $set: {
       saleNumber: 'BS-DEMO-CLIENT-RDV',
@@ -476,19 +481,7 @@ async function seedSalesAndProgress(client, products) {
     },
   }, { upsert: true, new: true });
 
-  await CalendarEvent.findOneAndUpdate({ source: { demoKey: 'client-mail-pose-gel-next-week' } }, {
-    $set: {
-      type: 'SERVICE_BOOKING',
-      title: 'Pose gel signature - Client Mail',
-      productId: products.ongles._id,
-      customerSnapshot: { name: 'Client Demo', email: client.email, phone: client.phone },
-      startsAt: appointment.startsAt,
-      endsAt: appointment.endsAt,
-      paymentSnapshot: { totalCents: products.ongles.price.amountCents, paidCents: 2000, depositCents: 2000, balanceDueCents: products.ongles.price.amountCents - 2000, currency: 'EUR' },
-      notes: `Reservation demo liee a ${saleService.saleNumber}.`,
-      source: { demoKey: 'client-mail-pose-gel-next-week' },
-    },
-  }, { upsert: true, new: true });
+  // Le rendez-vous lui-meme est pose par `placeDemoAppointment` (un samedi libre).
 }
 
 function monthBounds(offset) {
@@ -590,65 +583,6 @@ async function seedReviews(client) {
   }
 }
 
-function nextMonday() {
-  const date = new Date();
-  const day = date.getDay() || 7;
-  date.setDate(date.getDate() + (8 - day));
-  date.setHours(0, 0, 0, 0);
-  return date;
-}
-
-function at(base, week, day, hour, minute = 0, durationMinutes = 60) {
-  const startsAt = new Date(base);
-  startsAt.setDate(base.getDate() + week * 7 + day);
-  startsAt.setHours(hour, minute, 0, 0);
-  return { startsAt, endsAt: new Date(startsAt.getTime() + durationMinutes * 60 * 1000) };
-}
-
-async function seedDenseCalendar(client) {
-  const services = await CommerceProduct.find({ kind: 'SERVICE', status: 'PUBLISHED' }).sort({ boostRank: 1, title: 1 }).limit(20);
-  const trainings = await CommerceProduct.find({ kind: { $in: ['IN_PERSON_TRAINING', 'DISTANCE_TRAINING'] }, status: 'PUBLISHED' }).sort({ title: 1 }).limit(4);
-  const base = nextMonday();
-  await CalendarEvent.deleteMany({ 'source.demoPlanning': true });
-  let cursor = 0;
-  for (let week = 0; week < 8; week += 1) {
-    for (let day = 0; day < 5; day += 1) {
-      const slots = [
-        { hour: 9, duration: 120, training: false },
-        { hour: 11, duration: 60, training: false },
-        { hour: 14, duration: 120, training: day % 3 === 0 },
-        { hour: 16, duration: 120, training: day % 4 === 0 },
-      ];
-      for (const slot of slots) {
-        const catalogue = slot.training && trainings.length ? trainings : services;
-        const item = catalogue[cursor % catalogue.length];
-        const dates = at(base, week, day, slot.hour, 0, slot.duration);
-        const totalCents = item.price?.amountCents || 0;
-        const paidCents = Math.min(totalCents, slot.training ? 5000 : 2000);
-        await CalendarEvent.create({
-          type: slot.training ? 'FORMATION_SESSION' : 'SERVICE_BOOKING',
-          title: `${item.title} - ${client.firstName}`,
-          productId: item._id,
-          customerSnapshot: { name: `${client.firstName} ${client.lastName}`, email: client.email, phone: client.phone },
-          startsAt: dates.startsAt,
-          endsAt: dates.endsAt,
-          status: 'SCHEDULED',
-          paymentSnapshot: {
-            totalCents,
-            paidCents,
-            depositCents: paidCents,
-            balanceDueCents: Math.max(0, totalCents - paidCents),
-            currency: 'EUR',
-          },
-          notes: 'Reservation de demonstration seedee pour remplir le planning hebdomadaire.',
-          source: { demoPlanning: true, week, day, cursor },
-        });
-        cursor += 1;
-      }
-    }
-  }
-}
-
 async function main() {
   await connectDatabase();
   await seedThemeAndCompany();
@@ -659,7 +593,14 @@ async function main() {
   await seedSalesAndProgress(client, products);
   await seedCommissions();
   await seedReviews(client);
-  await seedDenseCalendar(client);
+  const base = nextMonday();
+  await seedPresentielSessions(base);
+  // Une base déjà importée porte d'autres fiches présentielles : on les écarte aussi.
+  await relocateSeededSessions();
+  await placeDemoAppointment(client, base);
+  await relocateDemoKeyedEvents();
+  const planning = await seedDenseCalendar(client, base);
+  logger.info(`Planning demo : ${planning.created} rendez-vous poses, ${planning.skipped} creneaux laisses libres (deja occupes).`);
   logger.success('Seed demo BeautySavage complet termine');
   await disconnectDatabase();
 }

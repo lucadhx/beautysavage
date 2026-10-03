@@ -26,6 +26,9 @@ const calendarEventSchema = new mongoose.Schema(
     saleId: { type: mongoose.Schema.Types.ObjectId, ref: 'CommerceSale', default: null, index: true },
     lineId: { type: String, default: '' },
     customerSnapshot: {
+      // Sans ce champ déclaré, Mongoose jetait l'identifiant du client : le
+      // rendez-vous ne savait plus à qui écrire (confirmation, annulation).
+      customerId: { type: String, default: '' },
       name: { type: String, default: '' },
       email: { type: String, default: '' },
       phone: { type: String, default: '' },

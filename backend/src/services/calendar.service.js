@@ -2,8 +2,10 @@ import mongoose from 'mongoose';
 import { BookingSchedule } from '../models/BookingSchedule.model.js';
 import { CalendarEvent } from '../models/CalendarEvent.model.js';
 import { CommerceProduct } from '../models/CommerceProduct.model.js';
+import { CommerceSale } from '../models/CommerceSale.model.js';
 import { ApiError } from '../utils/ApiError.js';
 import { emitAndDispatch } from './events/domainEvent.service.js';
+import { emitAppointmentBooked, ensureCustomerForBooking } from './commerceCustomer.service.js';
 
 const DEFAULT_WEEKLY = [
   { weekday: 1, enabled: true, ranges: [{ start: '09:00', end: '12:00' }, { start: '14:00', end: '18:00' }] },
@@ -22,7 +24,7 @@ function asDate(value, label) {
 }
 
 function assertRange(startsAt, endsAt) {
-  if (endsAt <= startsAt) throw ApiError.badRequest('La fin doit etre apres le debut');
+  if (endsAt <= startsAt) throw ApiError.badRequest('La fin doit être après le début');
 }
 
 function publicEvent(event, extra = {}) {
@@ -46,6 +48,25 @@ function publicEvent(event, extra = {}) {
   };
 }
 
+/**
+ * Les plages réelles d'une session : un bloc par jour. Une session d'avant
+ * (sans `days`) n'a qu'un bloc, de son début à sa fin.
+ */
+export function sessionBlocks(session) {
+  const days = (session?.days || []).filter((d) => d?.startsAt && d?.endsAt);
+  if (days.length) return days.map((d) => ({ startsAt: new Date(d.startsAt), endsAt: new Date(d.endsAt) }));
+  return session?.startsAt && session?.endsAt ? [{ startsAt: new Date(session.startsAt), endsAt: new Date(session.endsAt) }] : [];
+}
+
+/** Identifiant d'événement d'une session (préfixe commun à tous ses jours). */
+export function sessionEventId(productId, sessionId) {
+  return `${productId}:${sessionId}`;
+}
+
+function sameSession(eventId, ignoreId) {
+  return Boolean(ignoreId) && (eventId === ignoreId || String(eventId).startsWith(`${ignoreId}:`));
+}
+
 async function generatedFormationEvents(from, to) {
   const products = await CommerceProduct.find({
     kind: 'IN_PERSON_TRAINING',
@@ -54,31 +75,41 @@ async function generatedFormationEvents(from, to) {
   }).lean();
   return products.flatMap((product) => (product.sessions || [])
     .filter((session) => session.startsAt && session.endsAt && new Date(session.startsAt) < to && new Date(session.endsAt) > from)
-    .map((session) => ({
-      id: `${product._id}:${session._id}`,
-      type: 'FORMATION_SESSION',
-      title: product.title,
-      productId: String(product._id),
-      saleId: null,
-      lineId: '',
-      customerSnapshot: {},
-      startsAt: session.startsAt,
-      endsAt: session.endsAt,
-      timezone: 'Europe/Paris',
-      status: session.status === 'CANCELLED' ? 'CANCELLED' : 'SCHEDULED',
-      paymentSnapshot: {
-        totalCents: product.price?.amountCents || 0,
-        paidCents: 0,
-        depositCents: 0,
-        balanceDueCents: product.price?.amountCents || 0,
-        currency: 'EUR',
-      },
-      notes: `${session.reservedCount || 0}/${session.capacity || 0} inscrit(s)`,
-      cancellation: { reason: session.cancellationReason || '' },
-      source: { generatedFrom: 'commerceProduct.sessions', sessionId: String(session._id) },
-      capacity: session.capacity || 0,
-      reservedCount: session.reservedCount || 0,
-    })));
+    .flatMap((session) => {
+      const blocks = sessionBlocks(session);
+      return blocks
+        .map((block, index) => ({ block, index }))
+        .filter(({ block }) => block.startsAt < to && block.endsAt > from)
+        .map(({ block, index }) => ({
+          id: blocks.length > 1 ? `${sessionEventId(product._id, session._id)}:${index + 1}` : sessionEventId(product._id, session._id),
+          type: 'FORMATION_SESSION',
+          title: blocks.length > 1 ? `${product.title} · jour ${index + 1}/${blocks.length}` : product.title,
+          productId: String(product._id),
+          saleId: null,
+          lineId: '',
+          customerSnapshot: {},
+          startsAt: block.startsAt,
+          endsAt: block.endsAt,
+          timezone: 'Europe/Paris',
+          status: session.status === 'CANCELLED' ? 'CANCELLED' : 'SCHEDULED',
+          paymentSnapshot: {
+            totalCents: product.price?.amountCents || 0,
+            paidCents: 0,
+            depositCents: 0,
+            balanceDueCents: product.price?.amountCents || 0,
+            currency: 'EUR',
+          },
+          notes: `${session.reservedCount || 0}/${session.capacity || 0} inscrit(s)`,
+          cancellation: { reason: session.cancellationReason || '' },
+          source: { generatedFrom: 'commerceProduct.sessions', sessionId: String(session._id), dayIndex: index + 1, dayCount: blocks.length },
+          capacity: session.capacity || 0,
+          reservedCount: session.reservedCount || 0,
+          sessionId: String(session._id),
+          dayIndex: index + 1,
+          dayCount: blocks.length,
+          location: product.training?.location || '',
+        }));
+    }));
 }
 
 export async function getSchedule() {
@@ -120,15 +151,38 @@ export async function listEvents(query = {}) {
   return [...stored.map(publicEvent), ...generated].sort((a, b) => new Date(a.startsAt) - new Date(b.startsAt));
 }
 
-function minutesOf(value) {
+export function minutesOf(value) {
   const [h, m] = String(value || '00:00').split(':').map(Number);
   return (Number.isFinite(h) ? h : 0) * 60 + (Number.isFinite(m) ? m : 0);
 }
 
-function setMinutesOfDay(day, minutes) {
-  const d = new Date(day);
-  d.setHours(Math.floor(minutes / 60), minutes % 60, 0, 0);
-  return d;
+/**
+ * L'HEURE DE L'INSTITUT, PAS CELLE DU SERVEUR.
+ *
+ * Les horaires d'ouverture (« 09:00 - 12:00 ») sont des heures de PARIS. Le
+ * calcul utilisait l'heure locale du processus : juste sur le poste de
+ * développement, fausse sur le serveur (UTC), où le premier créneau d'un matin
+ * tombait à 11 h, heure de Paris, et le dernier après la fermeture. Tout est
+ * désormais calculé dans le fuseau du planning (`schedule.timezone`).
+ */
+function zonedParts(date, timeZone) {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
+    timeZone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+  }).formatToParts(date).map((part) => [part.type, part.value]));
+  return { year: Number(parts.year), month: Number(parts.month), day: Number(parts.day), hour: Number(parts.hour), minute: Number(parts.minute) };
+}
+
+/** Heure murale (jour du calendrier + minutes depuis minuit) dans `timeZone` -> instant UTC. */
+export function zonedWallTime(year, month, day, minutes, timeZone) {
+  const guess = Date.UTC(year, month - 1, day, Math.floor(minutes / 60), minutes % 60);
+  let instant = guess;
+  // Deux passes : la seconde corrige un changement d'heure (été / hiver) le jour même.
+  for (let pass = 0; pass < 2; pass += 1) {
+    const p = zonedParts(new Date(instant), timeZone);
+    const offset = Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute) - instant;
+    instant = guess - offset;
+  }
+  return new Date(instant);
 }
 
 export async function listAvailability(query = {}) {
@@ -138,21 +192,27 @@ export async function listAvailability(query = {}) {
   const durationMinutes = Math.max(5, Number(query.durationMinutes || 60));
   const bufferAfterMinutes = Math.max(0, Number(query.bufferAfterMinutes || 0));
   const schedule = await getSchedule();
+  const timeZone = schedule.timezone || 'Europe/Paris';
   const step = Math.max(5, Number(schedule.slotStepMinutes || 15));
   const events = await listEvents({ from: from.toISOString(), to: to.toISOString() });
   const busy = events.filter((event) => event.status !== 'CANCELLED')
     .map((event) => ({ startsAt: new Date(event.startsAt), endsAt: new Date(event.endsAt) }));
 
   const slots = [];
-  for (let cursor = new Date(from); cursor < to; cursor.setDate(cursor.getDate() + 1)) {
-    const weekday = cursor.getDay() || 7;
-    const dayRule = (schedule.weeklyHours || []).find((day) => day.weekday === weekday);
+  const first = zonedParts(from, timeZone);
+  const days = Math.ceil((to.getTime() - from.getTime()) / 86400_000) + 1;
+  for (let offset = 0; offset <= days; offset += 1) {
+    // Le jour du CALENDRIER de l'institut, calculé sans fuseau pour ne jamais sauter un jour.
+    const calendarDay = new Date(Date.UTC(first.year, first.month - 1, first.day + offset));
+    const [year, month, day] = [calendarDay.getUTCFullYear(), calendarDay.getUTCMonth() + 1, calendarDay.getUTCDate()];
+    const weekday = calendarDay.getUTCDay() || 7;
+    const dayRule = (schedule.weeklyHours || []).find((rule) => rule.weekday === weekday);
     if (!dayRule?.enabled) continue;
     for (const range of dayRule.ranges || []) {
       const startMinute = minutesOf(range.start);
       const endMinute = minutesOf(range.end);
       for (let minute = startMinute; minute + durationMinutes <= endMinute; minute += step) {
-        const startsAt = setMinutesOfDay(cursor, minute);
+        const startsAt = zonedWallTime(year, month, day, minute, timeZone);
         const endsAt = new Date(startsAt.getTime() + (durationMinutes + bufferAfterMinutes) * 60_000);
         if (startsAt < from || endsAt > to) continue;
         const overlap = busy.some((event) => startsAt < event.endsAt && endsAt > event.startsAt);
@@ -179,7 +239,7 @@ export async function assertNoOverlap({ startsAt, endsAt, ignoreId = null, ignor
   if (ignoreId && mongoose.isValidObjectId(ignoreId)) query._id = { $ne: ignoreId };
   const conflict = await CalendarEvent.findOne(query).lean();
   if (conflict) {
-    throw ApiError.conflict('Ce creneau chevauche deja un evenement du calendrier', {
+    throw ApiError.conflict('Ce créneau chevauche déjà un événement du calendrier', {
       code: 'CALENDAR_OVERLAP',
       conflict: publicEvent(conflict),
     });
@@ -188,11 +248,11 @@ export async function assertNoOverlap({ startsAt, endsAt, ignoreId = null, ignor
   const ignoredProduct = ignoreProductId ? String(ignoreProductId) : null;
   const generatedConflict = generated.find((event) => (
     event.status !== 'CANCELLED'
-    && (!ignoreId || event.id !== ignoreId)
+    && !sameSession(event.id, ignoreId)
     && (!ignoredProduct || String(event.productId) !== ignoredProduct)
   ));
   if (generatedConflict) {
-    throw ApiError.conflict('Ce creneau chevauche deja une session de formation', {
+    throw ApiError.conflict('Ce créneau chevauche déjà une session de formation', {
       code: 'CALENDAR_OVERLAP',
       conflict: generatedConflict,
     });
@@ -201,18 +261,51 @@ export async function assertNoOverlap({ startsAt, endsAt, ignoreId = null, ignor
 
 export async function createEvent(payload) {
   const startsAt = asDate(payload.startsAt, 'Debut');
+  /*
+    Réservation d'une prestation sans heure de fin : le créneau court sur la
+    durée de la fiche prestation, à partir de l'heure choisie.
+  */
+  if (!payload.endsAt && payload.productId && (payload.type || 'MANUAL_BLOCK') === 'SERVICE_BOOKING') {
+    const product = await CommerceProduct.findById(payload.productId).select('durationMinutes').lean();
+    const minutes = Math.max(5, Number(product?.durationMinutes || 60));
+    payload = { ...payload, endsAt: new Date(startsAt.getTime() + minutes * 60_000).toISOString() };
+  }
   const endsAt = asDate(payload.endsAt, 'Fin');
   assertRange(startsAt, endsAt);
   await assertNoOverlap({ startsAt, endsAt });
+  const type = payload.type || 'MANUAL_BLOCK';
   const totalCents = Number(payload.paymentSnapshot?.totalCents || 0);
   const paidCents = Number(payload.paymentSnapshot?.paidCents || payload.paymentSnapshot?.depositCents || 0);
+
+  /**
+   * RÉSERVATION MANUELLE : l'adresse saisie désigne un compte client, créé
+   * s'il n'existe pas. C'est ce qui donne un propriétaire au rendez-vous — son
+   * espace client, sa confirmation, et plus tard son message d'annulation.
+   */
+  const snapshot = { ...(payload.customerSnapshot || {}) };
+  let accountCreated = false;
+  if (type === 'SERVICE_BOOKING' && snapshot.email) {
+    const { customer, created } = await ensureCustomerForBooking({
+      email: snapshot.email,
+      name: snapshot.name,
+      phone: snapshot.phone,
+    });
+    if (customer) {
+      accountCreated = created;
+      snapshot.customerId = String(customer._id);
+      snapshot.email = customer.email;
+      snapshot.name = snapshot.name || [customer.firstName, customer.lastName].filter(Boolean).join(' ') || customer.email;
+      snapshot.phone = snapshot.phone || customer.phone || '';
+    }
+  }
+
   const event = await CalendarEvent.create({
-    type: payload.type || 'MANUAL_BLOCK',
-    title: payload.title || (payload.type === 'MANUAL_BLOCK' ? 'Blocage manuel' : 'Rendez-vous'),
+    type,
+    title: payload.title || (type === 'MANUAL_BLOCK' ? 'Blocage manuel' : 'Rendez-vous'),
     productId: payload.productId || null,
     saleId: payload.saleId || null,
     lineId: payload.lineId || '',
-    customerSnapshot: payload.customerSnapshot || {},
+    customerSnapshot: snapshot,
     startsAt,
     endsAt,
     status: payload.status || 'SCHEDULED',
@@ -228,12 +321,81 @@ export async function createEvent(payload) {
     notes: payload.notes || '',
     source: payload.source || {},
   });
-  return publicEvent(event.toObject());
+  await emitAppointmentBooked(event, { origin: 'MANAGER' });
+  return publicEvent(event.toObject(), { customerAccountCreated: accountCreated });
+}
+
+/**
+ * LA FICHE D'UNE SESSION DE FORMATION — ce que l'institut doit savoir en
+ * cliquant dessus dans le planning : qui vient, combien de places restent, où.
+ *
+ * Les inscrites sont les lignes PAYÉES qui visent cette session précise ; le
+ * compteur de la fiche formation n'est affiché qu'à côté, pour que l'écart
+ * éventuel (inscription saisie à la main) reste visible au lieu d'être masqué.
+ */
+export async function getFormationSession(productId, sessionId) {
+  if (!mongoose.isValidObjectId(productId) || !mongoose.isValidObjectId(sessionId)) {
+    throw ApiError.badRequest('Session de formation invalide');
+  }
+  const product = await CommerceProduct.findById(productId).lean();
+  const session = product?.sessions?.find((item) => String(item._id) === String(sessionId));
+  if (!product || !session) throw ApiError.notFound('Session de formation introuvable');
+
+  const sales = await CommerceSale.find({
+    paymentStatus: 'PAID',
+    lines: { $elemMatch: { productId: product._id, sessionId: session._id } },
+  })
+    .populate('customerId', 'email firstName lastName phone')
+    .sort({ finalizedAt: 1, createdAt: 1 })
+    .lean();
+
+  const participants = sales.flatMap((sale) => (sale.lines || [])
+    .filter((line) => String(line.productId) === String(product._id) && String(line.sessionId) === String(session._id))
+    .map((line) => {
+      const customer = sale.customerId && typeof sale.customerId === 'object' ? sale.customerId : null;
+      return {
+        customerId: customer ? String(customer._id) : String(sale.customerId || ''),
+        name: customer ? [customer.firstName, customer.lastName].filter(Boolean).join(' ') || customer.email : 'Cliente',
+        email: customer?.email || '',
+        phone: customer?.phone || '',
+        seats: Number(line.quantity || 1),
+        paidCents: Number(line.totalCents || 0),
+        saleId: String(sale._id),
+        saleNumber: sale.saleNumber,
+        registeredAt: sale.finalizedAt || sale.createdAt,
+      };
+    }));
+
+  const seatsTaken = participants.reduce((sum, row) => sum + row.seats, 0);
+  return {
+    product: {
+      id: String(product._id),
+      title: product.title,
+      kind: product.kind,
+      priceCents: product.price?.amountCents || 0,
+      location: product.training?.location || '',
+      durationDays: product.training?.durationDays || null,
+      formalities: product.training?.formalities || '',
+    },
+    session: {
+      id: String(session._id),
+      startsAt: session.startsAt,
+      endsAt: session.endsAt,
+      status: session.status,
+      capacity: Number(session.capacity || 0),
+      reservedCount: Number(session.reservedCount || 0),
+      cancellationReason: session.cancellationReason || '',
+    },
+    participants,
+    seatsTaken,
+    seatsLeft: Math.max(0, Number(session.capacity || 0) - Math.max(seatsTaken, Number(session.reservedCount || 0))),
+    revenueCents: participants.reduce((sum, row) => sum + row.paidCents, 0),
+  };
 }
 
 export async function updateEvent(id, payload) {
   const event = await CalendarEvent.findById(id);
-  if (!event) throw ApiError.notFound('Evenement introuvable');
+  if (!event) throw ApiError.notFound('Événement introuvable');
   const startsAt = payload.startsAt ? asDate(payload.startsAt, 'Debut') : event.startsAt;
   const endsAt = payload.endsAt ? asDate(payload.endsAt, 'Fin') : event.endsAt;
   assertRange(startsAt, endsAt);
@@ -241,7 +403,10 @@ export async function updateEvent(id, payload) {
   event.title = payload.title ?? event.title;
   event.startsAt = startsAt;
   event.endsAt = endsAt;
-  event.customerSnapshot = payload.customerSnapshot ?? event.customerSnapshot;
+  if (payload.productId !== undefined) event.productId = payload.productId || null;
+  // Fusion, pas remplacement : le lien au compte client (`customerId`) reste.
+  if (payload.customerSnapshot) event.customerSnapshot = { ...(event.customerSnapshot || {}), ...payload.customerSnapshot };
+  event.markModified('customerSnapshot');
   event.notes = payload.notes ?? event.notes;
   if (payload.paymentSnapshot) {
     const totalCents = Number(payload.paymentSnapshot.totalCents ?? event.paymentSnapshot.totalCents ?? 0);
@@ -260,7 +425,7 @@ export async function updateEvent(id, payload) {
 
 export async function cancelEvent(id, payload = {}) {
   const event = await CalendarEvent.findById(id);
-  if (!event) throw ApiError.notFound('Evenement introuvable');
+  if (!event) throw ApiError.notFound('Événement introuvable');
   event.status = 'CANCELLED';
   event.cancellation = {
     reason: String(payload.reason || '').trim(),
@@ -293,7 +458,7 @@ export async function cancelEvent(id, payload = {}) {
 
 export async function recordBalancePayment(id, payload = {}) {
   const event = await CalendarEvent.findById(id);
-  if (!event) throw ApiError.notFound('Evenement introuvable');
+  if (!event) throw ApiError.notFound('Événement introuvable');
   const amount = Number(payload.amountCents || 0);
   if (!Number.isFinite(amount) || amount <= 0) throw ApiError.badRequest('Montant invalide');
   const balancePaidCents = Number(event.paymentSnapshot.balancePaidCents || 0) + amount;

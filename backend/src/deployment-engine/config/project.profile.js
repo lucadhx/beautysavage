@@ -152,7 +152,9 @@ export function serviceName(host) {
  * La valeur DOIT rester >= au plafond de la politique media (voir
  * `mediaPolicy.js`), marge multipart comprise. Un test de derive le verifie.
  */
-export const HTTP_MAX_BODY_MB = 20;
+// 130 : les livrables de formation (vidéo du geste) montent jusqu'à 120 Mo —
+// voir TRAINING_DELIVERABLE_MAX_BYTES. À 20, Nginx les refusait en 413 avant Node.
+export const HTTP_MAX_BODY_MB = 130;
 
 export const BUILD_STAGING_PREFIX = `${PROJECT_SLUG}-build-`;
 

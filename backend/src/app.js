@@ -11,6 +11,7 @@ import { notFoundHandler, errorHandler } from './middlewares/error.middleware.js
 import { requireServiceReady } from './middlewares/readiness.middleware.js';
 import { describeReadiness } from './services/lifecycle/readiness.service.js';
 import { scheduleOrphanSweep } from './services/storage.service.js';
+import { logger } from './utils/logger.js';
 import { installerMessagesDeValidationFrancais } from './utils/validationFr.js';
 
 /**
@@ -29,6 +30,39 @@ export function createApp() {
   // l'IP client réelle (X-Forwarded-For) — indispensable au rate-limiting.
   app.set('trust proxy', 1);
   app.disable('x-powered-by');
+
+  /**
+   * ── LES PAGES DE LA VITRINE, RENDUES AVEC LEUR RÉFÉRENCEMENT ─────────────
+   *
+   * nginx n'envoie ici que les adresses de page de l'hôte PUBLIC (bloc
+   * `@page_render`, en-tête `X-Seo-Render`) : les fichiers réels restent
+   * servis par nginx. On rend la coquille de la vitrine, enrichie de ses
+   * balises, données structurées et contenu lisible (voir services/seo).
+   *
+   * AVANT helmet, délibérément : sa politique de sécurité de contenu est faite
+   * pour une API ; posée sur la vitrine, elle bloquerait ses polices et ses
+   * scripts. Et avant la garde de disponibilité : sans base, on répond 502 et
+   * nginx sert la coquille statique — le site ne tombe jamais à cause du SEO.
+   */
+  app.use(async (req, res, next) => {
+    if (req.get('x-seo-render') !== '1' || (req.method !== 'GET' && req.method !== 'HEAD')) return next();
+    // Un « fichier » que nginx n'a pas trouvé : un 404 franc, pas une page HTML.
+    if (/\.[a-z0-9]{2,5}$/i.test(req.path)) return res.status(404).type('text/plain').send('Not found');
+    try {
+      const { renderVitrinePage } = await import('./services/seo/seo.service.js');
+      const page = await renderVitrinePage(req.originalUrl, { originFallback: `${req.protocol}://${req.get('host')}` });
+      if (!page) return res.status(502).type('text/plain').send('Coquille de la vitrine introuvable');
+      res.status(page.status);
+      res.set('Content-Type', 'text/html; charset=utf-8');
+      res.set('Cache-Control', 'no-cache');
+      if (page.robots.startsWith('noindex')) res.set('X-Robots-Tag', page.robots);
+      if (page.status === 503) res.set('Retry-After', '3600');
+      return res.send(page.html);
+    } catch (err) {
+      logger.error('[seo] rendu de page impossible', err?.message);
+      return res.status(502).type('text/plain').send('Rendu indisponible');
+    }
+  });
 
   app.use(
     helmet({
@@ -222,6 +256,14 @@ export function createApp() {
    * dont `/sitemap.xml` ne rend pas du XML.
    */
   app.get('/sitemap.xml', (req, res, next) => publicController.sitemap(req, res, next));
+  /**
+   * robots.txt et llms.txt — produits depuis les données, comme le plan du site.
+   * Le domaine, les adresses privées et les offres viennent de la base : un
+   * fichier statique ne pouvait pas les connaître (il annonçait le plan du site
+   * d'un autre domaine).
+   */
+  app.get('/robots.txt', (req, res, next) => publicController.robots(req, res, next));
+  app.get('/llms.txt', (req, res, next) => publicController.llms(req, res, next));
 
   // Après toute mutation réussie (création/màj/suppression), programme un
   // balayage anti-orphelins débattu : les fichiers upload devenus non référencés
@@ -230,7 +272,11 @@ export function createApp() {
   app.use((req, res, next) => {
     if (req.method !== 'GET' && req.method !== 'HEAD') {
       res.on('finish', () => {
-        if (res.statusCode >= 200 && res.statusCode < 300) scheduleOrphanSweep();
+        if (res.statusCode >= 200 && res.statusCode < 300) {
+          scheduleOrphanSweep();
+          // Toute écriture peut changer une page : titre, prix, avis, horaires.
+          import('./services/seo/seo.service.js').then((m) => m.invalidateSeoCache()).catch(() => {});
+        }
       });
     }
     next();

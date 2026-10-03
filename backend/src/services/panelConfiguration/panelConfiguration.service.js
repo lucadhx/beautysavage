@@ -54,7 +54,7 @@ export async function applyCompanyProfile(profile, source = 'SYNC') {
   // L'environnement doit concorder. Une entreprise de production n'a rien à
   // faire dans un projet de recette : mentions légales, domaines et contacts
   // réels s'afficheraient sur un site de test.
-  if (value.environment !== config.env) {
+  if (value.environment !== config.panelWorld) {
     logger.warn(
       `[panel-bridge] Configuration d'entreprise ignorée : elle vise ${value.environment}, ce projet est en ${config.env}.`
     );

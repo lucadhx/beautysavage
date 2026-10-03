@@ -51,6 +51,8 @@ export const SIGNER_ROLE_VALUES = Object.values(SIGNER_ROLE);
 export const PAYMENT_TYPE = Object.freeze({
   LAUNCH_FEE: 'LAUNCH_FEE',
   SUBSCRIPTION: 'SUBSCRIPTION',
+  /** Les commissions mensuelles reversées à la plateforme (une facture par mois). */
+  COMMISSION: 'COMMISSION',
 });
 export const PAYMENT_TYPE_VALUES = Object.values(PAYMENT_TYPE);
 

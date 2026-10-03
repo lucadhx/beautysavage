@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { api } from '@/lib/api';
 import { Modal } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/primitives';
+import { CardsSkeleton } from '@/components/ui/Skeleton';
 import {
   CommercePageFrame,
   Metric,
@@ -12,11 +13,14 @@ import {
   type CommerceProduct,
   type CommerceSale,
 } from './CommerceShared';
+import { FeaturedStrip, SearchInput, matchesSearch } from './HomeFeaturedPanel';
 
 export default function CommercePrestationsPage() {
   const [products, setProducts] = React.useState<CommerceProduct[]>([]);
   const [sales, setSales] = React.useState<CommerceSale[]>([]);
   const [error, setError] = React.useState('');
+  const [loaded, setLoaded] = React.useState(false);
+  const [query, setQuery] = React.useState('');
   const [deleteTarget, setDeleteTarget] = React.useState<CommerceProduct | null>(null);
   const [deleting, setDeleting] = React.useState(false);
 
@@ -25,6 +29,7 @@ export default function CommercePrestationsPage() {
       .then(([productList, saleList]) => {
         setProducts(productList as CommerceProduct[]);
         setSales(saleList as CommerceSale[]);
+        setLoaded(true);
       })
       .catch((err) => setError(err instanceof Error ? err.message : 'Chargement impossible'));
   }, []);
@@ -58,13 +63,17 @@ export default function CommercePrestationsPage() {
       actions={<Link to="/commerce/prestations/nouveau" className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground">Nouvelle prestation</Link>}
     >
       {error && <p className="rounded-md border border-destructive/30 p-3 text-sm text-destructive">{error}</p>}
-      <div className="grid gap-4 md:grid-cols-3">
+      {!loaded && !error ? <CardsSkeleton /> : <div className="grid gap-4 md:grid-cols-3">
         <Metric label="Prestations catalogue" value={prestations.length} />
         <Metric label="Prestations vendues" value={prestationLines.length} />
         <Metric label="CA prestations" value={cents(revenue)} />
-      </div>
+      </div>}
+      <FeaturedStrip group="SERVICE" products={prestations} loading={!loaded && !error} />
       <Panel title="Prestations">
-        <ProductTable products={prestations} editBase="/commerce/prestations" onDelete={setDeleteTarget} />
+        <div className="mb-3">
+          <SearchInput value={query} onChange={setQuery} placeholder="Rechercher une prestation…" testId="list-search" />
+        </div>
+        <ProductTable products={prestations.filter((p) => matchesSearch(p, query))} emptyText={query ? 'Aucun résultat pour cette recherche.' : undefined} loading={!loaded && !error} editBase="/commerce/prestations" onDelete={setDeleteTarget} />
       </Panel>
       <Modal open={Boolean(deleteTarget)} onClose={() => !deleting && setDeleteTarget(null)} title="Supprimer cette prestation" className="max-w-lg">
         <div className="grid gap-4">

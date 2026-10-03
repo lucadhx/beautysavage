@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { api } from '@/lib/api';
 import { CustomSelect } from '@/components/ui/CustomSelect';
+import { CardsSkeleton, Skeleton } from '@/components/ui/Skeleton';
 import {
   CommercePageFrame,
   Metric,
@@ -29,6 +30,8 @@ export default function CommerceVentePage() {
   const [stripeMode, setStripeMode] = React.useState<'TEST' | 'PROD'>('TEST');
   const [brevoMode, setBrevoMode] = React.useState<'TEST' | 'PROD'>('TEST');
   const [message, setMessage] = React.useState('');
+  const [loaded, setLoaded] = React.useState(false);
+  const [integrationsLoaded, setIntegrationsLoaded] = React.useState(false);
 
   const refresh = React.useCallback(() => {
     Promise.all([api.commerceProducts(), api.commerceSales()])
@@ -36,10 +39,12 @@ export default function CommerceVentePage() {
         setProducts(productList as CommerceProduct[]);
         setSales(saleList as CommerceSale[]);
       })
-      .catch((err) => setMessage(err instanceof Error ? err.message : 'Chargement impossible'));
+      .catch((err) => setMessage(err instanceof Error ? err.message : 'Chargement impossible'))
+      .finally(() => setLoaded(true));
     api.commerceIntegrations()
       .then((list) => setIntegrations(list as Integration[]))
-      .catch(() => setIntegrations([]));
+      .catch(() => setIntegrations([]))
+      .finally(() => setIntegrationsLoaded(true));
   }, []);
 
   React.useEffect(refresh, [refresh]);
@@ -81,11 +86,13 @@ export default function CommerceVentePage() {
       description="Boutique, cartes cadeaux, paiements et e-mails envoyes par l'institut."
     >
       {message && <p className="rounded-md border p-3 text-sm text-muted-foreground">{message}</p>}
-      <div className="grid gap-4 md:grid-cols-3">
-        <Metric label="Articles vendables" value={sellable.length} />
-        <Metric label="Ventes payees" value={paidSales.length} />
-        <Metric label="CA encaisse" value={cents(revenue)} />
-      </div>
+      {!loaded ? <CardsSkeleton count={3} /> : (
+        <div className="grid gap-4 md:grid-cols-3">
+          <Metric label="Articles vendables" value={sellable.length} />
+          <Metric label="Ventes payees" value={paidSales.length} />
+          <Metric label="CA encaisse" value={cents(revenue)} />
+        </div>
+      )}
       <ProductForm
         title="Ajouter un article boutique ou une carte cadeau"
         allowedKinds={['PRODUCT', 'GIFT_CARD']}
@@ -93,7 +100,7 @@ export default function CommerceVentePage() {
         onSaved={refresh}
       />
       <Panel title="Catalogue vente">
-        <ProductTable products={sellable} />
+        <ProductTable products={sellable} loading={!loaded} />
       </Panel>
       <div className="grid gap-4 lg:grid-cols-2">
         <Panel title="Paiement institut">
@@ -115,7 +122,9 @@ export default function CommerceVentePage() {
         </Panel>
       </div>
       <Panel title="Etat des connexions institut">
-        {integrations.length === 0 ? (
+        {!integrationsLoaded ? (
+          <div className="grid gap-2">{[0, 1].map((i) => <Skeleton key={i} className="h-14 w-full" />)}</div>
+        ) : integrations.length === 0 ? (
           <p className="text-sm text-muted-foreground">Aucune connexion institut configuree pour le moment.</p>
         ) : (
           <div className="grid gap-2">

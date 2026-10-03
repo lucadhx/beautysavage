@@ -1,16 +1,27 @@
 import * as React from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { AlertCircle, ArrowLeft, CalendarDays, CheckCircle2, Clock, Euro, Eye, FastForward, FileText, GripVertical, Loader2, Maximize, MessageCircle, Minimize, Pause, Play, Plus, Rewind, Save, Shield, Trash2, Users, Video, Volume2, VolumeX } from 'lucide-react';
+import { AlertCircle, AlignLeft, ArrowLeft, CalendarDays, CalendarX, CheckCircle2, ClipboardList, Clock, Euro, Eye, FileText, Film, Layers, Link2, ListOrdered, Loader2, MapPin, MessageCircle, Plus, Tag, Timer, Trash2, Type, Unlock, Video } from 'lucide-react';
+import { DragHandle, SortableList } from '@/components/ui/Sortable';
 import { api, uploadCommerceTrainingFile } from '@/lib/api';
 import { ImageUpload } from '@/components/fields/ImageUpload';
-import { useCompany } from '@/context/CompanyContext';
 import { Button, Card, CardContent, Field, Input, SegmentedControl, Switch, Textarea } from '@/components/ui/primitives';
 import { CustomSelect } from '@/components/ui/CustomSelect';
 import { ConfirmDialog, Modal } from '@/components/ui/dialog';
 import { Dropdown } from '@/components/base/dropdown/dropdown';
-import { CommercePageFrame, KIND_LABEL, StatusBadge, cents, type CommerceProduct, type ProductKind } from './CommerceShared';
+import { CommercePageFrame, KIND_LABEL, PromotionStateBadge, cents, type CommerceProduct, type ProductKind } from './CommerceShared';
+import { ToneSection, toneTabClass, type EditorTone } from './editorTones';
+import { OptionsManager } from './OptionsManager';
+import { ProductSeoSection } from './ProductSeoSection';
+import { PublicationStatusWidget } from './PublicationStatusWidget';
+import { FormSkeleton } from '@/components/ui/Skeleton';
+import { CustomVideoPlayer } from '@/components/CustomVideoPlayer';
+import { SessionsPlanner, type PlannerSession } from './SessionsPlanner';
+import { FormationHoursTab, formationDayTemplate } from './FormationHoursTab';
+import { FloatingSaveWidget } from '@/components/ui/FloatingSaveWidget';
+import { useFloatingSave } from '@/hooks/useFloatingSave';
+import { useGuardedNavigate } from '@/components/LeaveGuard';
 
-type TabId = 'infos' | 'modules' | 'sessions' | 'promotion' | 'boost' | 'options' | 'evaluation';
+type TabId = 'infos' | 'horaires' | 'modules' | 'sessions' | 'promotion' | 'options' | 'evaluation';
 
 const EMPTY: Partial<CommerceProduct> = {
   title: '',
@@ -124,14 +135,14 @@ export default function CommerceFormationEditPage() {
   const [product, setProduct] = React.useState<Partial<CommerceProduct>>(EMPTY);
   const [tab, setTab] = React.useState<TabId>('infos');
   const [message, setMessage] = React.useState('');
-  const [saving, setSaving] = React.useState(false);
+  const [loaded, setLoaded] = React.useState(false);
   const [pendingKind, setPendingKind] = React.useState<ProductKind | null>(null);
 
   React.useEffect(() => {
     if (creation) return;
     api.commerceProducts().then((items) => {
       const found = (items as CommerceProduct[]).find((item) => item._id === id);
-      if (found) setProduct({ ...EMPTY, ...found });
+      if (found) { setProduct({ ...EMPTY, ...found }); setLoaded(true); }
       else setMessage('Formation introuvable.');
     }).catch((err) => setMessage(err instanceof Error ? err.message : 'Chargement impossible'));
   }, [creation, id]);
@@ -139,24 +150,33 @@ export default function CommerceFormationEditPage() {
   const kind = (product.kind || 'DISTANCE_TRAINING') as ProductKind;
   const distanciel = kind === 'DISTANCE_TRAINING';
   const tabs = [
-    { id: 'infos', label: 'Informations' },
-    distanciel ? { id: 'modules', label: 'Modules pedagogiques' } : { id: 'sessions', label: 'Planning sessions' },
-    { id: 'promotion', label: 'Promotion' },
-    { id: 'boost', label: 'Boost' },
-    { id: 'options', label: 'Options' },
-    { id: 'evaluation', label: 'Evaluation finale' },
-  ] satisfies { id: TabId; label: string }[];
+    { id: 'infos', label: 'Informations', tone: 'infos' },
+    ...(distanciel ? [] : [{ id: 'horaires' as const, label: 'Horaires', tone: 'sessions' as const }]),
+    distanciel ? { id: 'modules', label: 'Modules pédagogiques', tone: 'modules' } : { id: 'sessions', label: 'Planning des sessions', tone: 'sessions' },
+    { id: 'promotion', label: 'Promotion', tone: 'promotion' },
+    { id: 'options', label: 'Options', tone: 'options' },
+    { id: 'evaluation', label: 'Évaluation finale', tone: 'evaluation' },
+  ] satisfies { id: TabId; label: string; tone: EditorTone }[];
 
   const patch = (path: string, value: unknown) => setProduct((p) => writePath(p as Record<string, unknown>, path, value) as Partial<CommerceProduct>);
   const array = (path: keyof CommerceProduct) => (product[path] as Record<string, unknown>[] | undefined) ?? [];
   const setArray = (path: keyof CommerceProduct, rows: Record<string, unknown>[]) => patch(String(path), rows);
+  // Les sessions arrivent du serveur après chaque opération : on les pose sans toucher au reste.
+  const onSessions = React.useCallback((rows: PlannerSession[]) => setProduct((p) => ({ ...p, sessions: rows })), []);
 
-  async function save() {
-    setSaving(true);
-    setMessage('');
-    try {
+  /**
+   * ENREGISTREMENT FLOTTANT — comme les autres écrans d'édition du Manager :
+   * « Enregistré » tant que rien n'a bougé, « Enregistrer » dès la première
+   * modification, et la garde « Quitter sans enregistrer ? » entre les deux.
+   * Les sessions sont hors comparaison : elles s'enregistrent d'elles-mêmes.
+   */
+  const { state: saveState, save } = useFloatingSave<Partial<CommerceProduct>>(
+    creation || loaded ? product : null,
+    async () => {
+      const { sessions: _sessions, ...rest } = product;
+      void _sessions;
       const saved = await api.saveCommerceProduct({
-        ...product,
+        ...rest,
         options: normalizeCommerceOptions(array('options')),
         modules: normalizeModulesForSave(array('modules')),
         id: creation ? undefined : id,
@@ -164,26 +184,30 @@ export default function CommerceFormationEditPage() {
         distanceDeliveryMode: distanciel ? readPath(product, 'training.accessMode', 'IMMEDIATE') : null,
         requiresLegalWaiver: distanciel,
       });
-      setProduct({ ...EMPTY, ...(saved as CommerceProduct) });
-      setMessage('Formation enregistree.');
+      const next = { ...EMPTY, ...(saved as CommerceProduct) };
+      setProduct(next);
+      setMessage('');
       if (creation) navigate(`/commerce/formations/${(saved as CommerceProduct)._id}`, { replace: true });
-    } catch (err) {
-      setMessage(err instanceof Error ? err.message : 'Sauvegarde impossible');
-    } finally {
-      setSaving(false);
-    }
+      return next;
+    },
+    (a, b) => JSON.stringify({ ...a, sessions: undefined }) === JSON.stringify({ ...b, sessions: undefined }),
+  );
+  const leave = useGuardedNavigate();
+
+  // Fiche existante encore en chargement : contenu fantôme, pas un formulaire vide.
+  if (!creation && !loaded && !message) {
+    return (
+      <CommercePageFrame title="Chargement de la fiche…" description="Récupération de la fiche et de ses réglages.">
+        <FormSkeleton fields={6} />
+      </CommercePageFrame>
+    );
   }
 
   return (
     <CommercePageFrame
       title={creation ? 'Nouvelle formation' : product.title || 'Formation'}
-      description="Preparez la fiche vendue sur la vitrine : informations, contenu, dates, offres, options et evaluation."
-      actions={(
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" onClick={() => navigate('/commerce/formations')}><ArrowLeft className="h-4 w-4" /> Retour</Button>
-          <Button onClick={save} loading={saving}><Save className="h-4 w-4" /> Enregistrer</Button>
-        </div>
-      )}
+      description="Préparez la fiche vendue sur la vitrine : informations, contenu, dates, offres, options et évaluation."
+      actions={<Button variant="outline" onClick={() => leave('/commerce/formations')}><ArrowLeft className="h-4 w-4" /> Retour</Button>}
     >
       {message && <p className="rounded-md border p-3 text-sm text-muted-foreground">{message}</p>}
       <div className="flex gap-2 overflow-x-auto rounded-lg border bg-card p-2">
@@ -192,7 +216,7 @@ export default function CommerceFormationEditPage() {
             key={item.id}
             type="button"
             onClick={() => setTab(item.id)}
-            className={`shrink-0 rounded-md px-3 py-2 text-sm font-medium ${tab === item.id ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'}`}
+            className={`shrink-0 rounded-md px-3 py-2 text-sm font-medium ${toneTabClass(item.tone, tab === item.id)}`}
           >
             {item.label}
           </button>
@@ -200,11 +224,10 @@ export default function CommerceFormationEditPage() {
       </div>
 
       {tab === 'infos' && (
-        <Card>
-          <CardContent className="grid gap-5">
+        <ToneSection tone="infos" title="Informations" description="Ce que la vitrine affiche sur la fiche formation.">
             <div className="grid gap-4 md:grid-cols-2">
-              <Field label="Nom de la formation"><Input value={product.title || ''} onChange={(e) => patch('title', e.target.value)} /></Field>
-              <Field label="Type">
+              <Field label="Nom de la formation" icon={<Tag />}><Input value={product.title || ''} onChange={(e) => patch('title', e.target.value)} /></Field>
+              <Field label="Type de formation" icon={<Layers />}>
                 <SegmentedControl
                   value={kind}
                   onChange={(v) => {
@@ -214,27 +237,15 @@ export default function CommerceFormationEditPage() {
                   }}
                   options={[
                     { value: 'DISTANCE_TRAINING', label: 'Distanciel' },
-                    { value: 'IN_PERSON_TRAINING', label: 'Presentiel' },
+                    { value: 'IN_PERSON_TRAINING', label: 'Présentiel' },
                   ]}
                 />
               </Field>
-              <Field label="Statut">
-                <CustomSelect
-                  value={String(product.status || 'DRAFT')}
-                  onChange={(value) => patch('status', value)}
-                  options={[
-                    { value: 'DRAFT', label: 'Brouillon', description: 'Invisible tant que la fiche n est pas prete.' },
-                    { value: 'PUBLISHED', label: 'Publiee', description: 'Visible sur la vitrine.' },
-                    { value: 'DISABLED', label: 'Desactivee', description: 'Masquee temporairement.' },
-                    { value: 'ARCHIVED', label: 'Archivee', description: 'Conservee pour historique.' },
-                  ]}
-                />
-              </Field>
-              <Field label="Prix TTC"><Input type="number" min="0" step="0.01" value={(product.price?.amountCents || 0) / 100} onChange={(e) => patch('price.amountCents', Math.round(Number(e.target.value || 0) * 100))} /></Field>
+              <Field label="Prix TTC" unit="€" icon={<Euro />}><Input type="number" min="0" step="0.01" value={(product.price?.amountCents || 0) / 100} onChange={(e) => patch('price.amountCents', Math.round(Number(e.target.value || 0) * 100))} /></Field>
               <CoverImageField value={product.coverUrl || ''} onChange={(url) => patch('coverUrl', url)} />
             </div>
-            <Field label="Description courte"><Input value={product.subtitle || ''} onChange={(e) => patch('subtitle', e.target.value)} /></Field>
-            <RichTextLite label="Description longue" value={product.description || ''} onChange={(value) => patch('description', value)} />
+            <Field label="Description courte" icon={<AlignLeft />} hint="Une phrase, affichée sur les cartes du catalogue."><Input value={product.subtitle || ''} onChange={(e) => patch('subtitle', e.target.value)} /></Field>
+            <RichTextLite label="Description détaillée" value={product.description || ''} onChange={(value) => patch('description', value)} />
             <div className="grid gap-4 md:grid-cols-2">
               <TrailerResourceCard
                 titleValue={readPath(product, 'trailer.title', '')}
@@ -245,7 +256,7 @@ export default function CommerceFormationEditPage() {
               <ResourceLinkCard
                 icon={<MessageCircle className="h-5 w-5" />}
                 title="Groupe WhatsApp"
-                description="Lien d accompagnement transmis aux clientes inscrites."
+                description="Lien d'accompagnement transmis aux clientes inscrites."
                 titleValue={readPath(product, 'whatsappGroup.title', '')}
                 urlValue={readPath(product, 'whatsappGroup.url', '')}
                 onTitle={(value) => patch('whatsappGroup.title', value)}
@@ -254,52 +265,61 @@ export default function CommerceFormationEditPage() {
             </div>
             {distanciel ? (
               <div className="grid gap-4 md:grid-cols-2">
-                <Field label="Mode de delivrance">
+                <Field label="Mode de délivrance" icon={<Unlock />}>
                   <CustomSelect
                     value={readPath(product, 'training.accessMode', 'IMMEDIATE')}
                     onChange={(value) => patch('training.accessMode', value)}
                     options={[
-                      { value: 'IMMEDIATE', label: 'Acces immediat', description: 'La cliente accede au contenu apres paiement.' },
-                      { value: 'MANUAL', label: 'Delivrance manuelle', description: 'L institut ouvre l acces apres verification.' },
+                      { value: 'IMMEDIATE', label: 'Accès immédiat', description: 'La cliente accède au contenu après paiement.' },
+                      { value: 'MANUAL', label: 'Délivrance manuelle', description: "L'institut ouvre l'accès après vérification." },
                     ]}
                   />
                 </Field>
                 <p className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">
-                  Les clientes savent clairement quand leur formation sera disponible apres achat.
+                  Les clientes savent clairement quand leur formation sera disponible après l'achat.
                 </p>
               </div>
             ) : (
               <div className="grid gap-4 md:grid-cols-2">
-                <Field label="Duree en jours"><Input type="number" min="1" value={readPath(product, 'training.durationDays', 1)} onChange={(e) => patch('training.durationDays', Number(e.target.value || 1))} /></Field>
-                <Field label="Lieu"><Input value={readPath(product, 'training.location', '')} onChange={(e) => patch('training.location', e.target.value)} /></Field>
-                <Field label="Formalites"><Textarea value={readPath(product, 'training.formalities', '')} onChange={(e) => patch('training.formalities', e.target.value)} /></Field>
-                <Field label="Politique d'annulation"><Textarea value={readPath(product, 'training.cancellationPolicy', '')} onChange={(e) => patch('training.cancellationPolicy', e.target.value)} /></Field>
+                <Field label="Durée" unit="jours" icon={<Clock />}><Input type="number" min="1" value={readPath(product, 'training.durationDays', 1)} onChange={(e) => patch('training.durationDays', Number(e.target.value || 1))} /></Field>
+                <Field label="Lieu" icon={<MapPin />} hint="Adresse affichée sur la fiche de la formation."><Input value={readPath(product, 'training.location', '')} onChange={(e) => patch('training.location', e.target.value)} /></Field>
+                <Field label="Formalités" icon={<ClipboardList />} hint="Ce que la stagiaire doit prévoir ou apporter."><Textarea value={readPath(product, 'training.formalities', '')} onChange={(e) => patch('training.formalities', e.target.value)} /></Field>
+                <Field label="Politique d'annulation" icon={<CalendarX />}><Textarea value={readPath(product, 'training.cancellationPolicy', '')} onChange={(e) => patch('training.cancellationPolicy', e.target.value)} /></Field>
               </div>
             )}
-            <Repeater title="FAQ" rows={array('faq')} onChange={(rows) => setArray('faq', rows)} empty={{ question: '', answer: '' }} fields={[['question', 'Question'], ['answer', 'Reponse']]} />
+            <ToneSection tone="faq" level="nested" title="FAQ" description="Affichée sous la fiche, dans « Questions fréquentes ». Faites glisser la poignée pour changer l'ordre.">
+              <Repeater title="Questions" rows={array('faq')} onChange={(rows) => setArray('faq', rows)} empty={{ question: '', answer: '' }} fields={[['question', 'Question'], ['answer', 'Réponse']]} multilineKeys={['answer']} />
+            </ToneSection>
             <PreviewCard product={product} />
-          </CardContent>
-        </Card>
+            <ProductSeoSection productId={creation ? null : id} seo={product.seo} onChange={(seo) => patch('seo', seo)} />
+        </ToneSection>
       )}
 
       {tab === 'modules' && distanciel && (
-        <Card><CardContent>
-          <ModulesEditor rows={array('modules')} onChange={(rows) => setArray('modules', rows)} />
-        </CardContent></Card>
+        <ModulesEditor rows={array('modules')} onChange={(rows) => setArray('modules', rows)} />
+      )}
+
+      {tab === 'horaires' && !distanciel && (
+        <FormationHoursTab
+          training={product.training as Record<string, unknown> | undefined}
+          onChange={({ durationDays, dayHours }) => setProduct((p) => ({ ...p, training: { ...((p.training as Record<string, unknown>) || {}), durationDays, dayHours } }) as Partial<CommerceProduct>)}
+        />
       )}
 
       {tab === 'sessions' && !distanciel && (
-        <Card><CardContent>
-          <TrainingSessionsPlanner rows={array('sessions')} onChange={(rows) => setArray('sessions', rows)} />
-        </CardContent></Card>
+        <ToneSection tone="sessions" title="Planning des sessions" description="Dates, horaires, places et inscrites de chaque session en présentiel.">
+          <SessionsPlanner
+            productId={creation ? null : id || null}
+            sessions={array('sessions') as unknown as PlannerSession[]}
+            dayTemplate={formationDayTemplate(product.training as Record<string, unknown> | undefined)}
+            onSessions={onSessions}
+          />
+        </ToneSection>
       )}
 
       {tab === 'promotion' && <PromotionTab product={product} patch={patch} />}
-      {tab === 'boost' && <BoostTab product={product} patch={patch} />}
       {tab === 'options' && (
-        <Card><CardContent>
-          <OptionsEditor rows={array('options')} onChange={(rows) => setArray('options', rows)} />
-        </CardContent></Card>
+        <OptionsManager rows={array('options')} onChange={(rows) => setArray('options', rows)} subject="la formation" />
       )}
       {tab === 'evaluation' && <EvaluationTabV2 product={product} patch={patch} />}
       <ConfirmDialog
@@ -315,6 +335,7 @@ export default function CommerceFormationEditPage() {
           setPendingKind(null);
         }}
       />
+      <FloatingSaveWidget state={saveState} onSave={save} before={creation || loaded ? <PublicationStatusWidget value={product.status} onChange={(status) => patch('status', status)} /> : null} />
     </CommercePageFrame>
   );
 }
@@ -346,11 +367,14 @@ function Repeater({
         <Button type="button" variant="outline" onClick={() => onChange([...rows, structuredClone(empty)])}><Plus className="h-4 w-4" /> Ajouter</Button>
       </div>
       {rows.length === 0 && <p className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">Aucune ligne pour le moment.</p>}
-      {rows.map((row, index) => (
-        <div key={index} className="grid gap-3 rounded-lg border p-4">
+      <SortableList
+        items={rows}
+        onChange={onChange}
+        renderItem={(row, { itemProps, handleProps, remove, index }) => (
+        <div {...itemProps} className="grid gap-3 rounded-lg border bg-card p-4" data-testid="repeater-row">
           <div className="flex items-center justify-between">
-            <span className="inline-flex items-center gap-2 text-sm font-semibold"><GripVertical className="h-4 w-4 text-muted-foreground" /> #{index + 1}</span>
-            <Button type="button" size="sm" variant="ghost" onClick={() => onChange(rows.filter((_, i) => i !== index))}><Trash2 className="h-4 w-4" /> Retirer</Button>
+            <span className="inline-flex items-center gap-1 text-sm font-semibold"><DragHandle label={`Déplacer la ligne ${index + 1}`} {...handleProps} /> #{index + 1}</span>
+            <Button type="button" size="sm" variant="ghost" onClick={remove}><Trash2 className="h-4 w-4" /> Retirer</Button>
           </div>
           <div className="grid gap-3 md:grid-cols-2">
             {fields.map(([key, label]) => (
@@ -366,252 +390,10 @@ function Repeater({
             ))}
           </div>
         </div>
-      ))}
+        )}
+      />
     </section>
   );
-}
-
-function TrainingSessionsPlanner({
-  rows,
-  onChange,
-}: {
-  rows: Record<string, unknown>[];
-  onChange: (rows: Record<string, unknown>[]) => void;
-}) {
-  const sessions = rows.map(normalizeSessionRow);
-  const [selectedIndex, setSelectedIndex] = React.useState<number | null>(sessions.length ? 0 : null);
-  const selected = selectedIndex === null ? null : sessions[selectedIndex] || null;
-  const update = (index: number, patch: Record<string, unknown>) => {
-    const next = [...sessions];
-    next[index] = { ...next[index], ...patch };
-    onChange(next);
-  };
-  const add = () => {
-    const start = nextRoundedDate();
-    const session = {
-      id: uid('session'),
-      startsAt: start.toISOString(),
-      endsAt: new Date(start.getTime() + 7 * 60 * 60 * 1000).toISOString(),
-      capacity: 6,
-      reservedCount: 0,
-      status: 'ACTIVE',
-      cancellationReason: '',
-      refundPolicy: 'Remboursement selon les conditions de la formation.',
-    };
-    onChange([...sessions, session]);
-    setSelectedIndex(sessions.length);
-  };
-  const remove = (index: number) => {
-    onChange(sessions.filter((_, i) => i !== index));
-    setSelectedIndex(null);
-  };
-  const overlap = selectedIndex === null ? false : hasSessionOverlap(sessions, selectedIndex);
-  return (
-    <section className="grid gap-5">
-      <div className="rounded-lg border bg-primary/5 p-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h2 className="inline-flex items-center gap-2 text-lg font-semibold"><CalendarDays className="h-5 w-5" /> Planning des sessions</h2>
-            <p className="mt-1 text-sm text-muted-foreground">Cliquez une session, ajustez la date, les horaires et la capacite. Les chevauchements sont signales avant enregistrement.</p>
-          </div>
-          <Button type="button" variant="outline" onClick={add}><Plus className="h-4 w-4" /> Ajouter une session</Button>
-        </div>
-      </div>
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(340px,0.9fr)]">
-        <div className="rounded-lg border bg-card">
-          <div className="border-b bg-muted/40 px-4 py-3">
-            <h3 className="font-semibold">Calendrier</h3>
-          </div>
-          {sessions.length === 0 ? (
-            <p className="m-4 rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">Aucune session planifiee.</p>
-          ) : (
-            <div className="grid gap-3 p-4 md:grid-cols-2">
-              {sessions.map((session, index) => {
-                const start = new Date(String(session.startsAt));
-                const end = new Date(String(session.endsAt));
-                const active = selectedIndex === index;
-                const full = Number(session.capacity || 0) <= Number(session.reservedCount || 0);
-                return (
-                  <button
-                    key={String(session.id || index)}
-                    type="button"
-                    draggable
-                    onDragStart={(event) => event.dataTransfer.setData('text/plain', String(index))}
-                    onDragOver={(event) => event.preventDefault()}
-                    onDrop={(event) => {
-                      event.preventDefault();
-                      const from = Number(event.dataTransfer.getData('text/plain'));
-                      onChange(moveTo(sessions, from, index));
-                      setSelectedIndex(index);
-                    }}
-                    onClick={() => setSelectedIndex(index)}
-                    className={`rounded-lg border p-4 text-left transition ${active ? 'border-primary bg-primary/10' : 'bg-background hover:bg-muted/40'}`}
-                  >
-                    <span className="flex items-center justify-between gap-3">
-                      <span className="inline-flex items-center gap-2 font-semibold"><GripVertical className="h-4 w-4 text-muted-foreground" /> {formatSessionDay(start)}</span>
-                      <StatusBadge>{String(session.status || 'ACTIVE')}</StatusBadge>
-                    </span>
-                    <span className="mt-3 flex items-center gap-2 text-sm text-muted-foreground"><Clock className="h-4 w-4" /> {formatTime(start)} - {formatTime(end)}</span>
-                    <span className="mt-2 flex items-center gap-2 text-sm text-muted-foreground"><Users className="h-4 w-4" /> {Number(session.reservedCount || 0)} / {Number(session.capacity || 0)} inscrites</span>
-                    {full && <span className="mt-3 inline-flex rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-800">Complete</span>}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
-        <div className="rounded-lg border bg-card">
-          <div className="border-b bg-muted/40 px-4 py-3">
-            <h3 className="font-semibold">Configuration</h3>
-          </div>
-          {!selected || selectedIndex === null ? (
-            <p className="p-4 text-sm text-muted-foreground">Selectionnez une session pour la modifier.</p>
-          ) : (
-            <div className="grid gap-4 p-4">
-              {overlap && (
-                <p className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-                  Cette session chevauche une autre session. Ajustez les horaires avant de publier.
-                </p>
-              )}
-              <div className="grid gap-3 md:grid-cols-2">
-                <Field label="Jour">
-                  <Input
-                    type="date"
-                    value={toDateInput(selected.startsAt)}
-                    onChange={(event) => update(selectedIndex, shiftSessionDate(selected, event.target.value))}
-                  />
-                </Field>
-                <Field label="Statut">
-                  <CustomSelect
-                    value={String(selected.status || 'ACTIVE')}
-                    onChange={(value) => update(selectedIndex, { status: value })}
-                    options={[
-                      { value: 'ACTIVE', label: 'Ouverte', description: 'Visible et reservable.' },
-                      { value: 'FULL', label: 'Complete', description: 'Visible sans nouvelle reservation.' },
-                      { value: 'CANCELLED', label: 'Annulee', description: 'Annulation avec suivi remboursement.' },
-                      { value: 'BLOCKED', label: 'Bloquee', description: 'Non disponible temporairement.' },
-                    ]}
-                  />
-                </Field>
-                <Field label="Heure de debut">
-                  <Input type="time" value={toTimeInput(selected.startsAt)} onChange={(event) => update(selectedIndex, shiftSessionStart(selected, event.target.value))} />
-                </Field>
-                <Field label="Heure de fin">
-                  <Input type="time" value={toTimeInput(selected.endsAt)} onChange={(event) => update(selectedIndex, { endsAt: combineDateTime(selected.startsAt, event.target.value).toISOString() })} />
-                </Field>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {[3, 4, 7, 14].map((hours) => (
-                  <Button key={hours} type="button" variant="outline" size="sm" onClick={() => update(selectedIndex, { endsAt: new Date(new Date(String(selected.startsAt)).getTime() + hours * 60 * 60 * 1000).toISOString() })}>
-                    {hours}h
-                  </Button>
-                ))}
-              </div>
-              <div className="grid gap-3 md:grid-cols-2">
-                <Field label="Places disponibles">
-                  <Input type="number" min="1" value={Number(selected.capacity || 1)} onChange={(event) => update(selectedIndex, { capacity: Number(event.target.value || 1) })} />
-                </Field>
-                <Field label="Deja inscrites">
-                  <Input type="number" min="0" value={Number(selected.reservedCount || 0)} onChange={(event) => update(selectedIndex, { reservedCount: Number(event.target.value || 0) })} />
-                </Field>
-              </div>
-              {String(selected.status || '') === 'CANCELLED' && (
-                <div className="grid gap-3 rounded-lg border bg-red-50 p-4">
-                  <Field label="Motif transmis aux clientes">
-                    <Textarea value={String(selected.cancellationReason || '')} onChange={(event) => update(selectedIndex, { cancellationReason: event.target.value })} />
-                  </Field>
-                  <Field label="Remboursement / report">
-                    <Textarea value={String(selected.refundPolicy || '')} onChange={(event) => update(selectedIndex, { refundPolicy: event.target.value })} />
-                  </Field>
-                </div>
-              )}
-              <Button type="button" variant="destructive" onClick={() => remove(selectedIndex)}><Trash2 className="h-4 w-4" /> Supprimer cette session</Button>
-            </div>
-          )}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function normalizeSessionRow(row: Record<string, unknown>): Record<string, unknown> {
-  const start = validDate(row.startsAt) || nextRoundedDate();
-  const end = validDate(row.endsAt) || new Date(start.getTime() + 7 * 60 * 60 * 1000);
-  return {
-    id: String(row.id || uid('session')),
-    ...row,
-    startsAt: start.toISOString(),
-    endsAt: end > start ? end.toISOString() : new Date(start.getTime() + 60 * 60 * 1000).toISOString(),
-    capacity: Number(row.capacity || 1),
-    reservedCount: Number(row.reservedCount || 0),
-    status: String(row.status || 'ACTIVE'),
-  };
-}
-
-function validDate(value: unknown) {
-  const date = value ? new Date(String(value)) : null;
-  return date && Number.isFinite(date.getTime()) ? date : null;
-}
-
-function nextRoundedDate() {
-  const date = new Date();
-  date.setDate(date.getDate() + 7);
-  date.setHours(9, 0, 0, 0);
-  return date;
-}
-
-function toDateInput(value: unknown) {
-  const date = validDate(value) || new Date();
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-}
-
-function toTimeInput(value: unknown) {
-  const date = validDate(value) || new Date();
-  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
-}
-
-function combineDateTime(anchor: unknown, time: string) {
-  const date = validDate(anchor) || new Date();
-  const [hours, minutes] = time.split(':').map((part) => Number(part || 0));
-  date.setHours(hours || 0, minutes || 0, 0, 0);
-  return date;
-}
-
-function shiftSessionDate(session: Record<string, unknown>, dateValue: string) {
-  const start = validDate(session.startsAt) || new Date();
-  const end = validDate(session.endsAt) || new Date(start.getTime() + 60 * 60 * 1000);
-  const duration = end.getTime() - start.getTime();
-  const [year, month, day] = dateValue.split('-').map(Number);
-  start.setFullYear(year, (month || 1) - 1, day || 1);
-  return { startsAt: start.toISOString(), endsAt: new Date(start.getTime() + duration).toISOString() };
-}
-
-function shiftSessionStart(session: Record<string, unknown>, time: string) {
-  const previousStart = validDate(session.startsAt) || new Date();
-  const previousEnd = validDate(session.endsAt) || new Date(previousStart.getTime() + 60 * 60 * 1000);
-  const duration = previousEnd.getTime() - previousStart.getTime();
-  const nextStart = combineDateTime(previousStart, time);
-  return { startsAt: nextStart.toISOString(), endsAt: new Date(nextStart.getTime() + duration).toISOString() };
-}
-
-function formatSessionDay(date: Date) {
-  return new Intl.DateTimeFormat('fr-FR', { weekday: 'short', day: '2-digit', month: 'short' }).format(date);
-}
-
-function formatTime(date: Date) {
-  return new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit' }).format(date);
-}
-
-function hasSessionOverlap(rows: Record<string, unknown>[], currentIndex: number) {
-  const current = rows[currentIndex];
-  const start = validDate(current?.startsAt)?.getTime() || 0;
-  const end = validDate(current?.endsAt)?.getTime() || 0;
-  return rows.some((row, index) => {
-    if (index === currentIndex) return false;
-    const otherStart = validDate(row.startsAt)?.getTime() || 0;
-    const otherEnd = validDate(row.endsAt)?.getTime() || 0;
-    return start < otherEnd && end > otherStart;
-  });
 }
 
 function RichTextLite({
@@ -651,7 +433,8 @@ function RichTextLite({
           contentEditable
           role="textbox"
           aria-multiline="true"
-          className="min-h-44 px-4 py-3 text-sm leading-7 outline-none empty:before:text-muted-foreground empty:before:content-['Write_something...']"
+          data-placeholder="Rédigez la description…"
+          className="min-h-44 px-4 py-3 text-sm leading-7 outline-none empty:before:text-muted-foreground empty:before:content-[attr(data-placeholder)]"
           onInput={() => onChange(editorRef.current?.innerHTML || '')}
         />
       </div>
@@ -664,13 +447,13 @@ function CoverImageField({ value, onChange }: { value: string; onChange: (url: s
     <div className="grid gap-3 rounded-xl border border-primary/20 bg-primary/5 p-4 md:col-span-2">
       <div>
         <LabelLike>Image de couverture</LabelLike>
-        <p className="mt-1 text-xs text-muted-foreground">Visuel principal de la fiche. Les sources sont disponibles via le bouton de remplacement.</p>
+        <p className="mt-1 text-xs text-muted-foreground">Visuel principal de la fiche. Le bouton ouvre le choix : appareil, URL ou bibliothèque.</p>
       </div>
       <ImageUpload
         value={value}
         mediaType="commerce-cover"
         aspect="aspect-[16/10]"
-        hint="Couverture catalogue formation/prestation."
+        hint="Couverture de la fiche dans le catalogue."
         onChange={(url) => onChange(url)}
       />
       {value && (
@@ -727,7 +510,7 @@ function ModulesEditor({
           <section className="grid gap-4">
             <EditorBreadcrumb items={[{ label: 'Formation', onClick: () => setModuleIndex(null) }, { label: 'Modules', onClick: () => setModuleIndex(null) }, { label: String(module.title || `Module ${moduleIndex + 1}`), onClick: () => setResourceEdit(null) }]} />
             <Button type="button" variant="outline" className="justify-self-start" onClick={() => setResourceEdit(null)}><ArrowLeft className="h-4 w-4" /> Retour au module</Button>
-            <p className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">Element introuvable.</p>
+            <p className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">Élément introuvable.</p>
           </section>
         );
       }
@@ -738,18 +521,23 @@ function ModulesEditor({
               { label: 'Formation', onClick: () => { setResourceEdit(null); setModuleIndex(null); } },
               { label: 'Modules', onClick: () => { setResourceEdit(null); setModuleIndex(null); } },
               { label: String(module.title || `Module ${moduleIndex + 1}`), onClick: () => setResourceEdit(null) },
-              { label: resourceEdit.kind === 'video' ? 'Videos' : 'Fichiers', onClick: () => setResourceEdit(null) },
-              { label: String(row.title || `${resourceEdit.kind === 'video' ? 'Video' : 'Fichier'} ${resourceEdit.index + 1}`) },
+              { label: resourceEdit.kind === 'video' ? 'Vidéos' : 'Fichiers', onClick: () => setResourceEdit(null) },
+              { label: String(row.title || `${resourceEdit.kind === 'video' ? 'Vidéo' : 'Fichier'} ${resourceEdit.index + 1}`) },
             ]}
           />
           <Button type="button" variant="outline" className="justify-self-start" onClick={() => setResourceEdit(null)}><ArrowLeft className="h-4 w-4" /> Retour au module</Button>
-          <section className="grid gap-4 rounded-lg border bg-card p-4">
+          <ToneSection
+            tone={resourceEdit.kind === 'video' ? 'video' : 'file'}
+            icon={resourceEdit.kind === 'video' ? <Video className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
+            title={String(row.title || `${resourceEdit.kind === 'video' ? 'Vidéo' : 'Fichier'} ${resourceEdit.index + 1}`)}
+            description={resourceEdit.kind === 'video' ? `Vidéo du module « ${String(module.title || `Module ${moduleIndex + 1}`)} »` : `Fichier du module « ${String(module.title || `Module ${moduleIndex + 1}`)} »`}
+          >
             {resourceEdit.kind === 'video' ? (
               <VideoResourceEditor row={row} index={resourceEdit.index} onChange={updateResource} onRemove={removeResource} />
             ) : (
               <FileResourceEditor row={row} index={resourceEdit.index} onChange={updateResource} onRemove={removeResource} />
             )}
-          </section>
+          </ToneSection>
         </section>
       );
     }
@@ -765,19 +553,19 @@ function ModulesEditor({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <Button type="button" variant="outline" onClick={() => { setResourceEdit(null); setModuleIndex(null); }}><ArrowLeft className="h-4 w-4" /> Retour aux modules</Button>
         </div>
-        <div className="grid gap-3 rounded-lg border bg-card p-4">
+        <ToneSection tone="module" title={String(module.title || `Module ${moduleIndex + 1}`)} description="Titre, ordre et présentation du module.">
           <div className="grid gap-3 md:grid-cols-2">
-            <Field label="Titre du module"><Input value={String(module.title || '')} onChange={(e) => updateModule(moduleIndex, { title: e.target.value })} /></Field>
-            <Field label="Ordre"><Input type="number" min="1" value={Number(module.order || moduleIndex + 1)} onChange={(e) => updateModule(moduleIndex, { order: Number(e.target.value || moduleIndex + 1) })} /></Field>
-            <Field label="Description" className="md:col-span-2"><Textarea value={String(module.description || '')} onChange={(e) => updateModule(moduleIndex, { description: e.target.value })} /></Field>
+            <Field label="Titre du module" icon={<Tag />}><Input value={String(module.title || '')} onChange={(e) => updateModule(moduleIndex, { title: e.target.value })} /></Field>
+            <Field label="Ordre d'affichage" icon={<ListOrdered />}><Input type="number" min="1" value={Number(module.order || moduleIndex + 1)} onChange={(e) => updateModule(moduleIndex, { order: Number(e.target.value || moduleIndex + 1) })} /></Field>
+            <Field label="Description" icon={<AlignLeft />} className="md:col-span-2"><Textarea value={String(module.description || '')} onChange={(e) => updateModule(moduleIndex, { description: e.target.value })} /></Field>
           </div>
-        </div>
+        </ToneSection>
         <ResourceList
           kind="video"
-          title="Videos"
+          title="Vidéos"
           rows={videos}
           empty={{ id: uid('video'), title: '', description: '', sourceUrl: '', mp4Url: '', resolvedAt: '', order: videos.length + 1 }}
-          path={['Formation', 'Modules', String(module.title || `Module ${moduleIndex + 1}`), 'Videos']}
+          path={['Formation', 'Modules', String(module.title || `Module ${moduleIndex + 1}`), 'Vidéos']}
           onChange={(next) => updateModule(moduleIndex, { videos: next })}
           onEdit={(index) => setResourceEdit({ kind: 'video', index })}
         />
@@ -794,57 +582,54 @@ function ModulesEditor({
     );
   }
   return (
-    <section className="grid gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-semibold">Modules pedagogiques</h2>
-          <p className="text-sm text-muted-foreground">Liste des modules. Entrez dans un module pour gerer ses videos et fichiers.</p>
-        </div>
+    <ToneSection
+      tone="modules"
+      title="Modules pédagogiques"
+      description="Liste des modules. Entrez dans un module pour gérer ses vidéos et fichiers ; faites glisser la poignée pour changer l'ordre."
+      actions={(
         <Button type="button" variant="outline" onClick={addModule}>
           <Plus className="h-4 w-4" /> Ajouter un module
         </Button>
-      </div>
-      {modules.length === 0 && <p className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">Aucun module. Ajoutez votre premier module pedagogique.</p>}
+      )}
+    >
+      {modules.length === 0 && <p className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">Aucun module. Ajoutez votre premier module pédagogique.</p>}
       {modules.length > 0 && (
-        <div className="max-w-full overflow-x-auto rounded-lg border">
+        <div className="m-table max-w-full overflow-x-auto rounded-lg border bg-card">
           <table className="min-w-[720px] w-full text-left text-sm">
             <thead className="bg-muted/40 text-xs uppercase tracking-wide text-muted-foreground">
               <tr>
+                <th className="w-12 px-2 py-3"><span className="sr-only">Déplacer</span></th>
                 <th className="px-4 py-3">Module</th>
-                <th className="px-4 py-3">Videos</th>
-                <th className="px-4 py-3">Fichiers</th>
-                <th className="px-4 py-3">Ordre</th>
+                <th className="m-hide px-4 py-3">Vidéos</th>
+                <th className="m-hide px-4 py-3">Fichiers</th>
+                <th className="m-hide px-4 py-3">Ordre</th>
                 <th className="px-4 py-3 text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {modules.map((item, index) => (
-                <tr
-                  key={String(item.id || index)}
-                  className="border-t"
-                  draggable
-                  onDragStart={(event) => event.dataTransfer.setData('text/plain', String(index))}
-                  onDragOver={(event) => event.preventDefault()}
-                  onDrop={(event) => {
-                    event.preventDefault();
-                    const from = Number(event.dataTransfer.getData('text/plain'));
-                    onChange(moveTo(modules, from, index));
-                  }}
-                >
+              <SortableList
+                items={modules}
+                onChange={(next) => onChange(next.map((m, i) => ({ ...m, order: i + 1 })))}
+                renderItem={(item, { itemProps, handleProps, index }) => (
+                <tr {...itemProps} className="border-t bg-card" data-testid="module-row">
+                  <td className="w-px px-2 py-2"><DragHandle label={`Déplacer le module ${index + 1}`} {...handleProps} /></td>
                   <td className="px-4 py-3">
-                    <div className="flex items-center gap-2 font-medium"><GripVertical className="h-4 w-4 text-muted-foreground" /> {String(item.title || `Module ${index + 1}`)}</div>
+                    <div className="font-medium">{String(item.title || `Module ${index + 1}`)}</div>
                     <div className="line-clamp-1 text-xs text-muted-foreground">{String(item.description || '')}</div>
+                    <div className="mt-0.5 text-xs text-muted-foreground sm:hidden">
+                      {Array.isArray(item.videos) ? item.videos.length : 0} vidéo(s) · {Array.isArray(item.files) ? item.files.length : 0} fichier(s)
+                    </div>
                   </td>
-                  <td className="px-4 py-3">{Array.isArray(item.videos) ? item.videos.length : 0}</td>
-                  <td className="px-4 py-3">{Array.isArray(item.files) ? item.files.length : 0}</td>
-                  <td className="px-4 py-3">{Number(item.order || index + 1)}</td>
+                  <td className="m-hide px-4 py-3">{Array.isArray(item.videos) ? item.videos.length : 0}</td>
+                  <td className="m-hide px-4 py-3">{Array.isArray(item.files) ? item.files.length : 0}</td>
+                  <td className="m-hide px-4 py-3">{Number(item.order || index + 1)}</td>
                   <td className="px-4 py-3 text-right">
                     <Dropdown.Root>
                       <Dropdown.DotsButton aria-label={`Actions module ${index + 1}`} />
                       <Dropdown.Popover className="w-48">
                         <Dropdown.Menu>
                           <Dropdown.Section>
-                            <Dropdown.Item onAction={() => setModuleIndex(index)}>Editer</Dropdown.Item>
+                            <Dropdown.Item onAction={() => setModuleIndex(index)}>Modifier</Dropdown.Item>
                             <Dropdown.Item destructive onAction={() => onChange(modules.filter((_, i) => i !== index))}>Supprimer</Dropdown.Item>
                           </Dropdown.Section>
                         </Dropdown.Menu>
@@ -852,12 +637,13 @@ function ModulesEditor({
                     </Dropdown.Root>
                   </td>
                 </tr>
-              ))}
+                )}
+              />
             </tbody>
           </table>
         </div>
       )}
-    </section>
+    </ToneSection>
   );
 }
 
@@ -905,8 +691,8 @@ function ResourceList({
     const row = rows[editingIndex];
     return (
       <section className="grid gap-4 rounded-lg border bg-card p-4">
-        <EditorBreadcrumb items={[...path.map((label) => ({ label })), { label: String(row.title || `${kind === 'video' ? 'Video' : 'Fichier'} ${editingIndex + 1}`) }]} />
-        <Button type="button" variant="outline" className="justify-self-start" onClick={() => setEditingIndex(null)}><ArrowLeft className="h-4 w-4" /> Retour a la liste</Button>
+        <EditorBreadcrumb items={[...path.map((label) => ({ label })), { label: String(row.title || `${kind === 'video' ? 'Vidéo' : 'Fichier'} ${editingIndex + 1}`) }]} />
+        <Button type="button" variant="outline" className="justify-self-start" onClick={() => setEditingIndex(null)}><ArrowLeft className="h-4 w-4" /> Retour à la liste</Button>
         {kind === 'video' ? (
           <VideoResourceEditor row={row} index={editingIndex} onChange={(patch) => update(editingIndex, patch)} onRemove={() => { onChange(rows.filter((_, i) => i !== editingIndex)); setEditingIndex(null); }} />
         ) : (
@@ -916,42 +702,37 @@ function ResourceList({
     );
   }
   return (
-    <section className="grid gap-3">
-      <div className="flex items-center justify-between gap-3">
-        <h3 className="inline-flex items-center gap-2 font-semibold">{kind === 'video' ? <Video className="h-4 w-4" /> : <FileText className="h-4 w-4" />} {title}</h3>
-        <Button type="button" size="sm" variant="outline" onClick={() => { onChange([...rows, structuredClone(empty)]); (onEdit || setEditingIndex)(rows.length); }}><Plus className="h-4 w-4" /> Ajouter</Button>
-      </div>
-      {rows.length === 0 && <p className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">Aucun item.</p>}
+    <ToneSection
+      tone={kind === 'video' ? 'video' : 'file'}
+      level="nested"
+      icon={kind === 'video' ? <Video className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
+      title={`${title} (${rows.length})`}
+      actions={<Button type="button" size="sm" variant="outline" onClick={() => { onChange([...rows, structuredClone(empty)]); (onEdit || setEditingIndex)(rows.length); }}><Plus className="h-4 w-4" /> Ajouter</Button>}
+    >
+      {rows.length === 0 && <p className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">Aucun élément pour le moment.</p>}
       {rows.length > 0 && (
-        <div className="max-w-full overflow-x-auto rounded-lg border">
+        <div className="m-table max-w-full overflow-x-auto rounded-lg border bg-card">
           <table className="min-w-[620px] w-full text-left text-sm">
             <thead className="bg-muted/40 text-xs uppercase tracking-wide text-muted-foreground">
-              <tr><th className="px-4 py-3">Titre</th><th className="px-4 py-3">Source</th><th className="px-4 py-3">Ordre</th><th className="px-4 py-3 text-right">Actions</th></tr>
+              <tr><th className="w-12 px-2 py-3"><span className="sr-only">Déplacer</span></th><th className="px-4 py-3">Titre</th><th className="m-hide px-4 py-3">Source</th><th className="m-hide px-4 py-3">Ordre</th><th className="px-4 py-3 text-right">Actions</th></tr>
             </thead>
             <tbody>
-              {rows.map((row, index) => (
-                <tr
-                  key={String(row.id || index)}
-                  className="border-t"
-                  draggable
-                  onDragStart={(event) => event.dataTransfer.setData('text/plain', String(index))}
-                  onDragOver={(event) => event.preventDefault()}
-                  onDrop={(event) => {
-                    event.preventDefault();
-                    const from = Number(event.dataTransfer.getData('text/plain'));
-                    onChange(moveTo(rows, from, index));
-                  }}
-                >
-                  <td className="px-4 py-3 font-medium"><span className="inline-flex items-center gap-2"><GripVertical className="h-4 w-4 text-muted-foreground" /> {String(row.title || `${kind === 'video' ? 'Video' : 'Fichier'} ${index + 1}`)}</span></td>
-                  <td className="max-w-xs truncate px-4 py-3 text-muted-foreground">{String(row.sourceUrl || row.url || row.fileId || '')}</td>
-                  <td className="px-4 py-3">{Number(row.order || index + 1)}</td>
+              <SortableList
+                items={rows}
+                onChange={(next) => onChange(next.map((r, i) => ({ ...r, order: i + 1 })))}
+                renderItem={(row, { itemProps, handleProps, index }) => (
+                <tr {...itemProps} className="border-t bg-card" data-testid="resource-row">
+                  <td className="w-px px-2 py-2"><DragHandle label={`Déplacer ${kind === 'video' ? 'la vidéo' : 'le fichier'} ${index + 1}`} {...handleProps} /></td>
+                  <td className="px-4 py-3 font-medium">{String(row.title || `${kind === 'video' ? 'Vidéo' : 'Fichier'} ${index + 1}`)}</td>
+                  <td className="m-hide max-w-xs truncate px-4 py-3 text-muted-foreground">{String(row.sourceUrl || row.url || row.fileId || '')}</td>
+                  <td className="m-hide px-4 py-3">{Number(row.order || index + 1)}</td>
                   <td className="px-4 py-3 text-right">
                     <Dropdown.Root>
-                      <Dropdown.DotsButton aria-label={`Actions ${kind === 'video' ? 'video' : 'fichier'} ${index + 1}`} />
+                      <Dropdown.DotsButton aria-label={`Actions ${kind === 'video' ? 'vidéo' : 'fichier'} ${index + 1}`} />
                       <Dropdown.Popover className="w-48">
                         <Dropdown.Menu>
                           <Dropdown.Section>
-                            <Dropdown.Item onAction={() => (onEdit || setEditingIndex)(index)}>Editer</Dropdown.Item>
+                            <Dropdown.Item onAction={() => (onEdit || setEditingIndex)(index)}>Modifier</Dropdown.Item>
                             <Dropdown.Item destructive onAction={() => onChange(rows.filter((_, i) => i !== index))}>Supprimer</Dropdown.Item>
                           </Dropdown.Section>
                         </Dropdown.Menu>
@@ -959,12 +740,13 @@ function ResourceList({
                     </Dropdown.Root>
                   </td>
                 </tr>
-              ))}
+                )}
+              />
             </tbody>
           </table>
         </div>
       )}
-    </section>
+    </ToneSection>
   );
 }
 
@@ -1014,7 +796,7 @@ function VideoResourceEditor({
       });
       setImported(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Validation de la video impossible');
+      setError(err instanceof Error ? err.message : 'Validation de la vidéo impossible');
     } finally {
       setResolving(false);
     }
@@ -1023,34 +805,34 @@ function VideoResourceEditor({
   return (
     <div className="grid gap-3 rounded-lg border bg-background p-4">
       <div className="flex items-center justify-between gap-3">
-        <strong>Video {index + 1}</strong>
+        <strong>Vidéo {index + 1}</strong>
         <Button type="button" size="sm" variant="ghost" onClick={onRemove}><Trash2 className="h-4 w-4" /> Retirer</Button>
       </div>
       <div className="grid gap-3 md:grid-cols-2">
-        <Field label="Titre"><Input value={String(row.title || '')} onChange={(e) => onChange({ title: e.target.value })} /></Field>
+        <Field label="Titre de la vidéo" icon={<Type />}><Input value={String(row.title || '')} onChange={(e) => onChange({ title: e.target.value })} /></Field>
         <div className="flex items-end">
           <Button type="button" variant="outline" onClick={() => { setDraftUrl(String(row.sourceUrl || row.url || '')); setError(''); setImported(false); setVideoModal(true); }}>
-            <Video className="h-4 w-4" /> {canPreview ? 'Remplacer la video' : 'Ajouter la video'}
+            <Video className="h-4 w-4" /> {canPreview ? 'Remplacer la vidéo' : 'Ajouter la vidéo'}
           </Button>
         </div>
-        <Field label="Description" className="md:col-span-2"><Textarea value={String(row.description || '')} onChange={(e) => onChange({ description: e.target.value })} /></Field>
+        <Field label="Description" icon={<AlignLeft />} className="md:col-span-2"><Textarea value={String(row.description || '')} onChange={(e) => onChange({ description: e.target.value })} /></Field>
         <div className="md:col-span-2">
           <CoverImageField value={String(row.coverUrl || '')} onChange={(url) => onChange({ coverUrl: url })} />
         </div>
       </div>
-      {canPreview && <p className="inline-flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700"><CheckCircle2 className="h-4 w-4" /> Video importee. Elle sera chargee au moment de la lecture.</p>}
-      {canPreview && <CustomVideoPlayer shortcode={shortcode} title={String(row.title || `Video ${index + 1}`)} />}
+      {canPreview && <p className="inline-flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700"><CheckCircle2 className="h-4 w-4" /> Vidéo importée. Elle sera chargée au moment de la lecture.</p>}
+      {canPreview && <CustomVideoPlayer shortcode={shortcode} title={String(row.title || `Vidéo ${index + 1}`)} />}
       <Modal
         open={videoModal}
         onClose={() => !resolving && setVideoModal(false)}
-        title={canPreview ? 'Remplacer la video' : 'Ajouter la video'}
+        title={canPreview ? 'Remplacer la vidéo' : 'Ajouter la vidéo'}
         description="Collez uniquement une URL Streamable publique."
         className="max-w-2xl"
         busy={resolving}
       >
         <div className="grid gap-4">
           {!resolving && !imported && (
-            <Field label="URL Streamable">
+            <Field label="URL Streamable" icon={<Link2 />}>
               <Input value={draftUrl} onChange={(e) => setDraftUrl(e.target.value)} placeholder="https://streamable.com/mrr2f4" />
             </Field>
           )}
@@ -1058,7 +840,7 @@ function VideoResourceEditor({
             <div className="rounded-lg border bg-muted/20 p-5">
               <div className="flex items-center gap-3 text-sm font-semibold">
                 <Loader2 className="h-5 w-5 animate-spin" />
-                Preparation de la video
+                Préparation de la vidéo
               </div>
               <div className="mt-4 h-2 overflow-hidden rounded-full bg-muted">
                 <div className="h-full w-2/3 animate-pulse rounded-full bg-primary" />
@@ -1068,8 +850,8 @@ function VideoResourceEditor({
           {error && <p className="inline-flex items-center gap-2 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700"><AlertCircle className="h-4 w-4" /> {error}</p>}
           {imported && (
             <div className="grid gap-4">
-              <p className="inline-flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700"><CheckCircle2 className="h-4 w-4" /> Video importee</p>
-              <CustomVideoPlayer shortcode={String(row.streamableShortcode || '')} title={String(row.title || `Video ${index + 1}`)} />
+              <p className="inline-flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700"><CheckCircle2 className="h-4 w-4" /> Vidéo importée</p>
+              <CustomVideoPlayer shortcode={String(row.streamableShortcode || '')} title={String(row.title || `Vidéo ${index + 1}`)} />
             </div>
           )}
           <div className="flex justify-end gap-2">
@@ -1133,17 +915,17 @@ function FileResourceEditor({
         <Button type="button" size="sm" variant="ghost" onClick={onRemove}><Trash2 className="h-4 w-4" /> Retirer</Button>
       </div>
       <div className="grid gap-3 md:grid-cols-2">
-        <Field label="Titre"><Input value={String(row.title || '')} onChange={(e) => onChange({ title: e.target.value })} /></Field>
+        <Field label="Titre du fichier" icon={<Type />}><Input value={String(row.title || '')} onChange={(e) => onChange({ title: e.target.value })} /></Field>
         <div className="flex items-end">
           <Button type="button" variant="outline" onClick={() => { setError(''); setFile(null); setModalOpen(true); }}>
             <FileText className="h-4 w-4" /> {hasFile ? 'Remplacer le fichier' : 'Importer le fichier'}
           </Button>
         </div>
-        <Field label="Description" className="md:col-span-2"><Textarea value={String(row.description || '')} onChange={(e) => onChange({ description: e.target.value })} /></Field>
+        <Field label="Description" icon={<AlignLeft />} className="md:col-span-2"><Textarea value={String(row.description || '')} onChange={(e) => onChange({ description: e.target.value })} /></Field>
       </div>
       {hasFile && (
         <div className="rounded-md border bg-muted/20 p-3 text-sm">
-          <p className="font-semibold">{String(row.fileName || row.title || 'Fichier importe')}</p>
+          <p className="font-semibold">{String(row.fileName || row.title || 'Fichier importé')}</p>
           <a href={String(row.url)} target="_blank" rel="noreferrer" className="mt-1 inline-block break-all text-xs text-muted-foreground underline">
             Ouvrir le fichier
           </a>
@@ -1171,8 +953,8 @@ function FileResourceEditor({
           >
             <span>
               <FileText className="mx-auto h-8 w-8 text-muted-foreground" />
-              <span className="mt-3 block font-semibold">{file ? file.name : 'Drag and drop or import'}</span>
-              <span className="mt-1 block text-xs text-muted-foreground">PDF, image, video ou document de support.</span>
+              <span className="mt-3 block font-semibold">{file ? file.name : 'Glissez un fichier ici ou importez-le'}</span>
+              <span className="mt-1 block text-xs text-muted-foreground">PDF, image, vidéo ou document de support.</span>
             </span>
           </button>
           <input ref={inputRef} type="file" className="hidden" onChange={(event) => setFile(event.target.files?.[0] || null)} />
@@ -1183,280 +965,6 @@ function FileResourceEditor({
           </div>
         </div>
       </Modal>
-    </div>
-  );
-}
-
-function CustomVideoPlayer({ shortcode, title }: { shortcode?: string; title: string }) {
-  const ref = React.useRef<HTMLVideoElement | null>(null);
-  const shellRef = React.useRef<HTMLDivElement | null>(null);
-  const { company } = useCompany();
-  const [src, setSrc] = React.useState('');
-  const [loadingSource, setLoadingSource] = React.useState(Boolean(shortcode));
-  const [sourceError, setSourceError] = React.useState('');
-  const [playing, setPlaying] = React.useState(false);
-  const [progress, setProgress] = React.useState(0);
-  const [duration, setDuration] = React.useState(0);
-  const [current, setCurrent] = React.useState(0);
-  const [volume, setVolume] = React.useState(0.9);
-  const [muted, setMuted] = React.useState(false);
-  const [speed, setSpeed] = React.useState('1');
-  const [fullscreen, setFullscreen] = React.useState(false);
-  const [volumeOpen, setVolumeOpen] = React.useState(false);
-  const [speedOpen, setSpeedOpen] = React.useState(false);
-  const companyName = company?.name?.trim() || 'BeautySavage';
-
-  React.useEffect(() => {
-    let alive = true;
-    if (!shortcode) {
-      setSrc('');
-      setLoadingSource(false);
-      return () => { alive = false; };
-    }
-    setLoadingSource(true);
-    setSourceError('');
-    api.streamablePlaybackUrl(shortcode)
-      .then((resolved) => {
-        if (!alive) return;
-        setSrc(resolved.playbackUrl);
-      })
-      .catch((err) => {
-        if (!alive) return;
-        setSourceError(err instanceof Error ? err.message : 'Source video Streamable introuvable');
-        setSrc('');
-      })
-      .finally(() => {
-        if (alive) setLoadingSource(false);
-    });
-    return () => { alive = false; };
-  }, [shortcode]);
-
-  React.useEffect(() => {
-    const video = ref.current;
-    if (!video) return;
-    video.volume = volume;
-    video.muted = muted;
-  }, [muted, volume]);
-
-  React.useEffect(() => {
-    const video = ref.current;
-    if (!video) return;
-    video.playbackRate = Number(speed || 1);
-  }, [speed, src]);
-
-  React.useEffect(() => {
-    let frame = 0;
-    const tick = () => {
-      const video = ref.current;
-      if (video && !video.paused) {
-        setCurrent(video.currentTime || 0);
-        setProgress(video.duration ? (video.currentTime / video.duration) * 100 : 0);
-        frame = window.requestAnimationFrame(tick);
-      }
-    };
-    if (playing) frame = window.requestAnimationFrame(tick);
-    return () => {
-      if (frame) window.cancelAnimationFrame(frame);
-    };
-  }, [playing]);
-
-  React.useEffect(() => {
-    const onFullscreen = () => setFullscreen(Boolean(document.fullscreenElement));
-    document.addEventListener('fullscreenchange', onFullscreen);
-    return () => document.removeEventListener('fullscreenchange', onFullscreen);
-  }, []);
-
-  React.useEffect(() => {
-    const close = (event: MouseEvent) => {
-      if (!shellRef.current?.contains(event.target as Node)) {
-        setVolumeOpen(false);
-        setSpeedOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', close);
-    return () => document.removeEventListener('mousedown', close);
-  }, []);
-
-  const toggle = () => {
-    const video = ref.current;
-    if (!video || !src) return;
-    if (video.paused) void video.play();
-    else video.pause();
-  };
-  const seek = (delta: number) => {
-    const video = ref.current;
-    if (!video) return;
-    video.currentTime = Math.max(0, Math.min(video.duration || 0, video.currentTime + delta));
-    setCurrent(video.currentTime || 0);
-    setProgress(video.duration ? (video.currentTime / video.duration) * 100 : 0);
-  };
-  const toggleFullscreen = async () => {
-    if (!shellRef.current) return;
-    if (document.fullscreenElement) await document.exitFullscreen().catch(() => {});
-    else await shellRef.current.requestFullscreen().catch(() => {});
-  };
-  const handleVideoError = React.useCallback(() => {
-    setSourceError('Streamable a refuse ce flux temporaire. Cliquez sur recharger la source pour en demander une nouvelle.');
-    setSrc('');
-  }, []);
-  const reloadTemporarySource = React.useCallback(() => {
-    if (!shortcode) return;
-    setLoadingSource(true);
-    setSourceError('');
-    api.streamablePlaybackUrl(shortcode)
-      .then((resolved) => setSrc(resolved.playbackUrl))
-      .catch((err) => {
-        setSrc('');
-        setSourceError(err instanceof Error ? err.message : 'Source video Streamable introuvable');
-      })
-      .finally(() => setLoadingSource(false));
-  }, [shortcode]);
-  const formatTime = (value: number) => {
-    const minutes = Math.floor(value / 60);
-    const seconds = Math.floor(value % 60);
-    return `${minutes}:${String(seconds).padStart(2, '0')}`;
-  };
-  return (
-    <div
-      ref={shellRef}
-      className="overflow-hidden rounded-lg border bg-black text-white shadow-sm"
-      onContextMenu={(event) => event.preventDefault()}
-    >
-      <div className="relative aspect-video w-full bg-black">
-        {loadingSource && <div className="absolute inset-0 grid place-items-center text-sm text-white/70"><Loader2 className="mr-2 inline h-4 w-4 animate-spin" /> Chargement de la video</div>}
-        {!loadingSource && sourceError && !src && (
-          <div className="absolute inset-0 grid place-items-center p-4 text-center text-sm text-red-200">
-            <div className="grid gap-3">
-              <span>{sourceError}</span>
-              {shortcode && (
-                <button type="button" onClick={reloadTemporarySource} className="justify-self-center rounded-md border border-white/30 px-3 py-1.5 text-xs font-semibold text-white hover:bg-white/10">
-                  Recharger la video
-                </button>
-              )}
-            </div>
-          </div>
-        )}
-        {src && (
-          <video
-            ref={ref}
-            src={src}
-            className="h-full w-full bg-black object-contain"
-            playsInline
-            preload="metadata"
-            controls={false}
-            controlsList="nodownload noplaybackrate noremoteplayback"
-            disablePictureInPicture
-            onPlay={() => setPlaying(true)}
-            onPause={() => setPlaying(false)}
-            onLoadedMetadata={(event) => setDuration(event.currentTarget.duration || 0)}
-            onError={handleVideoError}
-            onTimeUpdate={(event) => {
-              const video = event.currentTarget;
-              setCurrent(video.currentTime || 0);
-              setProgress(video.duration ? (video.currentTime / video.duration) * 100 : 0);
-            }}
-          />
-        )}
-        {src && (
-          <button
-            type="button"
-            onClick={toggle}
-            aria-label={playing ? 'Mettre en pause' : 'Lire'}
-            className="absolute inset-0 z-10 cursor-pointer bg-transparent"
-          />
-        )}
-        <div className="pointer-events-none absolute left-3 top-3 z-20 inline-flex items-center gap-2 rounded-full bg-black/45 px-3 py-1 text-xs font-semibold text-white/85 backdrop-blur">
-          <Shield className="h-3.5 w-3.5 text-primary" />
-          <span>{companyName}</span>
-        </div>
-      </div>
-      <div className="grid gap-3 border-t border-white/10 bg-gradient-to-r from-primary/35 via-black to-primary/20 p-3">
-        <input
-          type="range"
-          min="0"
-          max="1000"
-          value={Math.round(progress * 10)}
-          onChange={(event) => {
-            const video = ref.current;
-            const next = Number(event.target.value) / 10;
-            setProgress(next);
-            if (video && duration) {
-              video.currentTime = (next / 100) * duration;
-              setCurrent(video.currentTime || 0);
-            }
-          }}
-          className="h-2 w-full cursor-pointer accent-primary"
-          aria-label="Progression video"
-        />
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex min-w-0 items-center gap-2">
-            <button type="button" onClick={toggle} disabled={!src || loadingSource} className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-primary text-primary-foreground shadow disabled:opacity-50" aria-label={playing ? 'Pause' : 'Lecture'}>
-            {playing ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-          </button>
-            <button type="button" onClick={() => seek(-10)} disabled={!src} className="hidden h-9 w-9 items-center justify-center rounded-md text-white/85 hover:bg-white/10 disabled:opacity-40 sm:inline-flex" aria-label="Reculer de 10 secondes">
-              <Rewind className="h-4 w-4" />
-            </button>
-            <button type="button" onClick={() => seek(10)} disabled={!src} className="hidden h-9 w-9 items-center justify-center rounded-md text-white/85 hover:bg-white/10 disabled:opacity-40 sm:inline-flex" aria-label="Avancer de 10 secondes">
-              <FastForward className="h-4 w-4" />
-            </button>
-            <span className="hidden text-xs tabular-nums text-white/75 sm:inline">{formatTime(current)} / {formatTime(duration)}</span>
-          </div>
-          <p className="min-w-0 flex-1 truncate px-1 text-xs font-semibold sm:text-sm">{title}</p>
-          <div className="flex shrink-0 items-center gap-1 sm:gap-2">
-            <div className="relative">
-              <button type="button" onClick={() => { setVolumeOpen((value) => !value); setSpeedOpen(false); }} disabled={!src} className="inline-flex h-9 w-9 items-center justify-center rounded-md text-white/85 hover:bg-white/10 disabled:opacity-40" aria-label={muted ? 'Activer le son' : 'Regler le son'}>
-              {muted || volume === 0 ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
-            </button>
-              {volumeOpen && (
-                <div className="absolute bottom-11 right-0 z-30 rounded-lg border border-white/15 bg-black/90 p-3 shadow-xl">
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    value={Math.round(volume * 100)}
-                    onChange={(event) => {
-                      const next = Number(event.target.value) / 100;
-                      setVolume(next);
-                      setMuted(next === 0);
-                    }}
-                    className="w-28 accent-primary"
-                    aria-label="Volume"
-                  />
-                  <button type="button" className="mt-2 w-full rounded px-2 py-1 text-xs hover:bg-white/10" onClick={() => setMuted((value) => !value)}>
-                    {muted ? 'Activer' : 'Couper'}
-                  </button>
-                </div>
-              )}
-            </div>
-            <div className="relative">
-              <button type="button" onClick={() => { setSpeedOpen((value) => !value); setVolumeOpen(false); }} disabled={!src} className="inline-flex h-9 min-w-9 items-center justify-center rounded-md px-2 text-xs font-semibold text-white/85 hover:bg-white/10 disabled:opacity-40" aria-label="Vitesse">
-                {speed}x
-              </button>
-              {speedOpen && (
-                <div className="absolute bottom-11 right-0 z-30 min-w-28 rounded-lg border border-white/15 bg-black/90 p-1 shadow-xl">
-                  {['0.75', '1', '1.25', '1.5', '2'].map((value) => (
-                    <button
-                      key={value}
-                      type="button"
-                      className="flex w-full items-center justify-between gap-3 rounded px-3 py-2 text-left text-xs hover:bg-white/10"
-                      onClick={() => {
-                        setSpeed(value);
-                        setSpeedOpen(false);
-                      }}
-                    >
-                      <span>{value}x</span>
-                      {speed === value && <CheckCircle2 className="h-3.5 w-3.5 text-primary" />}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-            <button type="button" onClick={toggleFullscreen} disabled={!src} className="inline-flex h-9 w-9 items-center justify-center rounded-md text-white/85 hover:bg-white/10 disabled:opacity-40" aria-label={fullscreen ? 'Quitter le plein ecran' : 'Plein ecran'}>
-              {fullscreen ? <Minimize className="h-4 w-4" /> : <Maximize className="h-4 w-4" />}
-            </button>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }
@@ -1479,19 +987,10 @@ function ResourceLinkCard({
   onUrl: (value: string) => void;
 }) {
   return (
-    <div className="rounded-lg border bg-card p-4">
-      <div className="mb-4 flex items-start gap-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">{icon}</div>
-        <div>
-          <h3 className="font-semibold">{title}</h3>
-          <p className="text-sm text-muted-foreground">{description}</p>
-        </div>
-      </div>
-      <div className="grid gap-3">
-        <Field label="Titre affiche"><Input value={titleValue} onChange={(e) => onTitle(e.target.value)} /></Field>
-        <Field label="Lien"><Input value={urlValue} onChange={(e) => onUrl(e.target.value)} placeholder="https://..." /></Field>
-      </div>
-    </div>
+    <ToneSection tone="social" level="nested" icon={icon} title={title} description={description}>
+      <Field label="Titre affiché" icon={<Type />}><Input value={titleValue} onChange={(e) => onTitle(e.target.value)} /></Field>
+      <Field label="Lien" icon={<Link2 />}><Input value={urlValue} onChange={(e) => onUrl(e.target.value)} placeholder="https://…" /></Field>
+    </ToneSection>
   );
 }
 
@@ -1537,20 +1036,13 @@ function TrailerResourceCard({
   }
 
   return (
-    <div className="rounded-lg border bg-card p-4">
-      <div className="mb-4 flex items-start gap-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary"><Video className="h-5 w-5" /></div>
-        <div>
-          <h3 className="font-semibold">Bande-annonce</h3>
-          <p className="text-sm text-muted-foreground">Video Streamable visible sur la fiche formation.</p>
-        </div>
-      </div>
+    <ToneSection tone="video" level="nested" icon={<Video className="h-4 w-4" />} title="Bande-annonce" description="Vidéo Streamable visible sur la fiche formation.">
       <div className="grid gap-3">
-        <Field label="Titre affiche"><Input value={titleValue} onChange={(e) => onPatch({ title: e.target.value })} /></Field>
+        <Field label="Titre affiché" icon={<Film />}><Input value={titleValue} onChange={(e) => onPatch({ title: e.target.value })} /></Field>
         <Button type="button" variant="outline" onClick={() => { setDraftUrl(sourceUrl || ''); setError(''); setImported(false); setModalOpen(true); }}>
           <Video className="h-4 w-4" /> {shortcode ? 'Remplacer la bande-annonce' : 'Ajouter la bande-annonce'}
         </Button>
-        {shortcode && <p className="inline-flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700"><CheckCircle2 className="h-4 w-4" /> Bande-annonce importee.</p>}
+        {shortcode && <p className="inline-flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700"><CheckCircle2 className="h-4 w-4" /> Bande-annonce importée.</p>}
         {shortcode && <CustomVideoPlayer shortcode={shortcode} title={titleValue || 'Bande-annonce'} />}
       </div>
       <Modal
@@ -1563,7 +1055,7 @@ function TrailerResourceCard({
       >
         <div className="grid gap-4">
           {!resolving && !imported && (
-            <Field label="URL Streamable">
+            <Field label="URL Streamable" icon={<Link2 />}>
               <Input value={draftUrl} onChange={(e) => setDraftUrl(e.target.value)} placeholder="https://streamable.com/mrr2f4" />
             </Field>
           )}
@@ -1571,7 +1063,7 @@ function TrailerResourceCard({
             <div className="rounded-lg border bg-muted/20 p-5">
               <div className="flex items-center gap-3 text-sm font-semibold">
                 <Loader2 className="h-5 w-5 animate-spin" />
-                Preparation de la video
+                Préparation de la vidéo
               </div>
               <div className="mt-4 h-2 overflow-hidden rounded-full bg-muted">
                 <div className="h-full w-2/3 animate-pulse rounded-full bg-primary" />
@@ -1579,74 +1071,14 @@ function TrailerResourceCard({
             </div>
           )}
           {error && <p className="inline-flex items-center gap-2 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700"><AlertCircle className="h-4 w-4" /> {error}</p>}
-          {imported && <p className="inline-flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700"><CheckCircle2 className="h-4 w-4" /> Bande-annonce importee</p>}
+          {imported && <p className="inline-flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700"><CheckCircle2 className="h-4 w-4" /> Bande-annonce importée</p>}
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => setModalOpen(false)} disabled={resolving}>{imported ? 'OK' : 'Annuler'}</Button>
             {!imported && <Button type="button" onClick={resolve} loading={resolving}>Valider</Button>}
           </div>
         </div>
       </Modal>
-    </div>
-  );
-}
-
-function OptionsEditor({
-  rows,
-  onChange,
-}: {
-  rows: Record<string, unknown>[];
-  onChange: (rows: Record<string, unknown>[]) => void;
-}) {
-  const update = (index: number, patch: Record<string, unknown>) => {
-    const next = [...rows];
-    next[index] = { ...next[index], ...patch };
-    onChange(next);
-  };
-  return (
-    <section className="grid gap-3">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-semibold">Options vendables</h2>
-          <p className="text-sm text-muted-foreground">Ajoutez seulement ce que la cliente comprend : nom, supplement, description.</p>
-        </div>
-        <Button type="button" variant="outline" onClick={() => onChange([...rows, { label: '', description: '', priceCents: 0, active: true }])}>
-          <Plus className="h-4 w-4" /> Ajouter une option
-        </Button>
-      </div>
-      {rows.length === 0 && <p className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">Aucune option pour le moment.</p>}
-      {rows.map((row, index) => (
-        <div key={index} className="grid gap-4 rounded-lg border p-4">
-          <div className="flex items-center justify-between gap-3">
-            <strong>Option {index + 1}</strong>
-            <Button type="button" size="sm" variant="ghost" onClick={() => onChange(rows.filter((_, i) => i !== index))}><Trash2 className="h-4 w-4" /> Retirer</Button>
-          </div>
-          <div className="grid gap-3 lg:grid-cols-[1fr_150px_auto]">
-            <Field label="Nom">
-              <Input value={String(row.label ?? '')} onChange={(e) => update(index, { label: e.target.value })} placeholder="Kit support, coaching, materiel..." />
-            </Field>
-            <Field label="Prix">
-              <div className="flex h-10 items-center rounded-md border bg-background px-3">
-                <Input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={Number(row.priceCents || 0) / 100}
-                  onChange={(e) => update(index, { priceCents: Math.round(Number(e.target.value || 0) * 100) })}
-                  className="h-8 border-0 px-0 focus-visible:ring-0"
-                />
-                <Euro className="h-4 w-4 text-muted-foreground" />
-              </div>
-            </Field>
-            <div className="flex items-end pb-2">
-              <Switch checked={row.active !== false} onChange={(active) => update(index, { active })} label="Option active" />
-            </div>
-            <Field label="Description" className="lg:col-span-3">
-              <Textarea value={String(row.description ?? '')} onChange={(e) => update(index, { description: e.target.value })} />
-            </Field>
-          </div>
-        </div>
-      ))}
-    </section>
+    </ToneSection>
   );
 }
 
@@ -1657,10 +1089,9 @@ function PromotionTab({ product, patch }: { product: Partial<CommerceProduct>; p
   const base = product.price?.amountCents || 0;
   const reduction = enabled ? Math.min(base, type === 'PERCENT' ? Math.round(base * value / 100) : Math.round(value * 100)) : 0;
   return (
-    <Card><CardContent className="grid gap-4">
-      <div className="flex items-center justify-between"><h2 className="text-lg font-semibold">Promotion</h2><Switch checked={enabled} onChange={(v) => patch('promotion.enabled', v)} label="Activer la promotion" /></div>
+    <ToneSection tone="promotion" title="Promotion" description="Remise visible sur la vitrine pendant une période précise." actions={<Switch checked={enabled} onChange={(v) => patch('promotion.enabled', v)} label="Activer la promotion" />}>
       <div className="grid gap-4 md:grid-cols-4">
-        <Field label="Type">
+        <Field label="Type de remise">
           <CustomSelect
             value={String(type)}
             onChange={(value) => patch('promotion.type', value)}
@@ -1670,26 +1101,13 @@ function PromotionTab({ product, patch }: { product: Partial<CommerceProduct>; p
             ]}
           />
         </Field>
-        <Field label={type === 'PERCENT' ? 'Pourcentage' : 'Montant EUR'}><Input type="number" min="0" value={value} onChange={(e) => patch('promotion.value', Number(e.target.value || 0))} /></Field>
-        <Field label="Debut"><Input type="date" value={readPath(product, 'promotion.startsAt', '')} onChange={(e) => patch('promotion.startsAt', e.target.value)} /></Field>
-        <Field label="Fin"><Input type="date" value={readPath(product, 'promotion.endsAt', '')} onChange={(e) => patch('promotion.endsAt', e.target.value)} /></Field>
+        <Field label="Remise" unit={type === 'PERCENT' ? '%' : '€'}><Input type="number" min="0" value={value} onChange={(e) => patch('promotion.value', Number(e.target.value || 0))} /></Field>
+        <Field label="Début" icon={<CalendarDays />}><Input type="date" value={readPath(product, 'promotion.startsAt', '')} onChange={(e) => patch('promotion.startsAt', e.target.value)} /></Field>
+        <Field label="Fin" icon={<CalendarDays />}><Input type="date" value={readPath(product, 'promotion.endsAt', '')} onChange={(e) => patch('promotion.endsAt', e.target.value)} /></Field>
       </div>
-      <p className="rounded-md border bg-muted/30 p-3 text-sm">Prix catalogue {cents(base)} · reduction {cents(reduction)} · prix final {cents(base - reduction)}</p>
-    </CardContent></Card>
-  );
-}
-
-function BoostTab({ product, patch }: { product: Partial<CommerceProduct>; patch: (path: string, value: unknown) => void }) {
-  return (
-    <Card><CardContent className="grid gap-4">
-      <Field label="Rang de mise en avant (1 a 3)">
-        <Input type="number" min="1" max="3" value={product.boostRank ?? ''} onChange={(e) => patch('boostRank', e.target.value ? Number(e.target.value) : null)} />
-      </Field>
-      <p className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">
-        Le manager empêche les doublons lors du classement global : maximum trois formations mises en avant. Les ventes conservent leur snapshot meme si le boost change.
-      </p>
-      <PreviewCard product={product} />
-    </CardContent></Card>
+      <p className="rounded-md border bg-card p-3 text-sm">Prix catalogue {cents(base)} · réduction {cents(reduction)} · prix final {cents(base - reduction)}</p>
+      <PromotionStateBadge promo={product.promotion} />
+    </ToneSection>
   );
 }
 
@@ -1722,11 +1140,12 @@ function normalizeEvaluationSections(rows: Record<string, unknown>[]) {
           points: 1,
         }]
         : [];
+    // « Ouverte / repliée » n'existe plus : c'était un état d'affichage de
+    // l'éditeur, sans effet pour la cliente, et il ne faisait que brouiller.
     return {
       id: section.id || uid('sec'),
       title: section.title || `Section ${index + 1}`,
       description: section.description || '',
-      collapsed: Boolean(section.collapsed),
       items,
     };
   });
@@ -1749,6 +1168,46 @@ function questionOptions(item: Record<string, unknown>) {
     .map((label) => ({ id: uid('a'), label, correct: false }));
 }
 
+/** Les types de question — en français, et chacun sa couleur. */
+const QUESTION_TYPES: Record<string, { label: string; hint: string; className: string }> = {
+  TRUE_FALSE: { label: 'Vrai / Faux', hint: 'Une affirmation : la cliente répond vrai ou faux.', className: 'border-sky-300 bg-sky-100 text-sky-900' },
+  SINGLE: { label: 'Une seule bonne réponse', hint: 'Plusieurs propositions, une seule est juste.', className: 'border-violet-300 bg-violet-100 text-violet-900' },
+  MULTIPLE: { label: 'Plusieurs bonnes réponses', hint: 'Plusieurs propositions, il faut cocher toutes les justes.', className: 'border-amber-300 bg-amber-100 text-amber-900' },
+};
+
+function QuestionTypeBadge({ type }: { type: unknown }) {
+  const meta = QUESTION_TYPES[String(type || 'SINGLE')] || QUESTION_TYPES.SINGLE;
+  return <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${meta.className}`} data-testid="question-type-badge">{meta.label}</span>;
+}
+
+/**
+ * LE SCHÉMA DU QUESTIONNAIRE — ce qu'est une section, avant d'en créer une.
+ * `current` met en relief l'étage où l'on se trouve.
+ */
+function QuestionnaireSchema({ current }: { current: 'sections' | 'questions' | 'answers' }) {
+  const steps = [
+    { key: 'root', title: 'Questionnaire', text: "L'évaluation finale de la formation" },
+    { key: 'sections', title: 'Sections', text: 'Les thématiques : hygiène, technique, conseil…' },
+    { key: 'questions', title: 'Questions', text: 'Ce qui est demandé dans chaque thématique' },
+    { key: 'answers', title: 'Réponses', text: 'Les propositions, dont la ou les bonnes' },
+  ];
+  return (
+    <ol className="grid gap-2 sm:grid-cols-4" aria-label="Structure du questionnaire" data-testid="questionnaire-schema">
+      {steps.map((step, index) => {
+        const active = step.key === current;
+        return (
+          <li key={step.key} className={`relative rounded-lg border p-3 ${active ? 'border-indigo-400 bg-indigo-50 ring-2 ring-indigo-200 dark:bg-indigo-950/40' : 'bg-card'}`}>
+            <span className={`mb-1 inline-grid h-6 w-6 place-items-center rounded-full text-xs font-bold ${active ? 'bg-indigo-600 text-white' : 'bg-muted text-muted-foreground'}`}>{index + 1}</span>
+            <p className="text-sm font-semibold">{step.title}</p>
+            <p className="text-xs text-muted-foreground">{step.text}</p>
+            {index < steps.length - 1 && <span className="absolute -right-2 top-1/2 hidden -translate-y-1/2 text-muted-foreground sm:block" aria-hidden="true">›</span>}
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
 function EvaluationTabV2({
   product,
   patch,
@@ -1760,26 +1219,19 @@ function EvaluationTabV2({
   const sections = normalizeEvaluationSections(readPath<Record<string, unknown>[]>(product, 'evaluation.sections', []));
   const deliverables = readPath<Record<string, unknown>[]>(product, 'evaluation.deliverables', []);
   return (
-    <Card><CardContent className="grid gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-semibold">Evaluation finale</h2>
-          <p className="mt-1 text-sm text-muted-foreground">Definition versionnee avec livrables et questionnaire par sections.</p>
-        </div>
-        <Switch checked={readPath(product, 'evaluation.enabled', false)} onChange={(v) => patch('evaluation.enabled', v)} label="Activer l'evaluation" />
-      </div>
-      <div className="grid gap-4 lg:grid-cols-[220px_1fr]">
-        <Field label="Version">
-          <Input type="number" min="1" value={readPath(product, 'evaluation.version', 1)} onChange={(e) => patch('evaluation.version', Number(e.target.value || 1))} />
-        </Field>
-        <div className="rounded-lg border bg-muted/20 p-3">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="text-sm font-semibold">Resultat visible cliente</p>
-              <p className="text-xs text-muted-foreground">Si actif, la cliente voit son score apres soumission. Les corrections restent reservees au manager.</p>
-            </div>
-            <Switch checked={readPath(product, 'evaluation.showScoreToCustomer', false)} onChange={(v) => patch('evaluation.showScoreToCustomer', v)} label="Afficher le score au client" />
+    <ToneSection
+      tone="evaluation"
+      title="Évaluation finale"
+      description="Questionnaire par sections et livrables demandés à la cliente."
+      actions={<Switch checked={readPath(product, 'evaluation.enabled', false)} onChange={(v) => patch('evaluation.enabled', v)} label="Activer l'évaluation" />}
+    >
+      <div className="rounded-lg border bg-card p-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-semibold">Résultat visible par la cliente</p>
+            <p className="text-xs text-muted-foreground">Si actif, la cliente voit son score après l'envoi. Les corrections restent réservées au manager.</p>
           </div>
+          <Switch checked={readPath(product, 'evaluation.showScoreToCustomer', false)} onChange={(v) => patch('evaluation.showScoreToCustomer', v)} label="Afficher le score à la cliente" />
         </div>
       </div>
       <SegmentedControl
@@ -1793,12 +1245,14 @@ function EvaluationTabV2({
       {subtab === 'questionnaire' ? (
         <QuestionnaireEditor sections={sections} onChange={(rows) => patch('evaluation.sections', rows)} />
       ) : (
-        <DeliverablesEditor rows={deliverables} onChange={(rows) => patch('evaluation.deliverables', rows)} />
+        <ToneSection tone="deliverable" level="nested" title="Livrables demandés" description="Photos avant/après, vidéos et galeries attendues au final, avec des contraintes visibles côté cliente. Faites glisser la poignée pour changer l'ordre.">
+          <DeliverablesEditor rows={deliverables} onChange={(rows) => patch('evaluation.deliverables', rows)} />
+        </ToneSection>
       )}
-      <p className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">
-        Les bonnes reponses ne sont jamais envoyees au client. Le score visible est optionnel et calcule sans exposer la correction.
+      <p className="rounded-md border bg-card p-3 text-sm text-muted-foreground">
+        Les bonnes réponses ne sont jamais envoyées à la cliente. Le score visible est optionnel et calculé sans exposer la correction.
       </p>
-    </CardContent></Card>
+    </ToneSection>
   );
 }
 
@@ -1816,32 +1270,34 @@ function QuestionnaireEditor({
     next[index] = { ...next[index], ...patch };
     onChange(next);
   };
-  const updateItems = (sectionIndex: number, items: Record<string, unknown>[]) => updateSection(sectionIndex, { items });
+  const updateItems = (index: number, items: Record<string, unknown>[]) => updateSection(index, { items });
   const addSection = () => {
-    onChange([...sections, { id: uid('sec'), title: `Section ${sections.length + 1}`, description: '', collapsed: false, items: [] }]);
+    onChange([...sections, { id: uid('sec'), title: `Section ${sections.length + 1}`, description: '', items: [] }]);
     setSectionIndex(sections.length);
     setQuestionIndex(null);
   };
   const selectedSection = sectionIndex !== null ? sections[sectionIndex] : null;
   const selectedItems = selectedSection && Array.isArray(selectedSection.items) ? selectedSection.items as Record<string, unknown>[] : [];
   const selectedQuestion = questionIndex !== null ? selectedItems[questionIndex] : null;
+  const pointsOf = (items: Record<string, unknown>[]) => items.reduce((sum, item) => sum + Number(item.points || 0), 0);
 
   if (selectedSection && selectedQuestion && sectionIndex !== null && questionIndex !== null) {
     return (
       <section className="grid gap-4">
         <EditorBreadcrumb
           items={[
-            { label: 'Evaluation', onClick: () => { setSectionIndex(null); setQuestionIndex(null); } },
+            { label: 'Questionnaire', onClick: () => { setSectionIndex(null); setQuestionIndex(null); } },
             { label: String(selectedSection.title || `Section ${sectionIndex + 1}`), onClick: () => setQuestionIndex(null) },
-            { label: String(selectedQuestion.label || `Question ${questionIndex + 1}`) },
+            { label: `Question ${questionIndex + 1}` },
           ]}
         />
         <Button type="button" variant="outline" className="justify-self-start" onClick={() => setQuestionIndex(null)}>
-          <ArrowLeft className="h-4 w-4" /> Retour aux questions
+          <ArrowLeft className="h-4 w-4" /> Retour à la section
         </Button>
         <QuestionItemEditor
           item={selectedQuestion}
           index={questionIndex}
+          sectionTitle={String(selectedSection.title || `Section ${sectionIndex + 1}`)}
           onRemove={() => {
             updateItems(sectionIndex, selectedItems.filter((_, i) => i !== questionIndex));
             setQuestionIndex(null);
@@ -1857,118 +1313,156 @@ function QuestionnaireEditor({
   }
 
   if (selectedSection && sectionIndex !== null) {
+    const moveItem = (from: number, to: number) => updateItems(sectionIndex, moveTo(selectedItems, from, to));
     return (
-      <section className="grid gap-4">
+      <section className="grid gap-4" data-testid="section-editor">
         <EditorBreadcrumb
           items={[
-            { label: 'Evaluation', onClick: () => { setSectionIndex(null); setQuestionIndex(null); } },
+            { label: 'Questionnaire', onClick: () => { setSectionIndex(null); setQuestionIndex(null); } },
             { label: String(selectedSection.title || `Section ${sectionIndex + 1}`) },
           ]}
         />
         <Button type="button" variant="outline" className="justify-self-start" onClick={() => setSectionIndex(null)}>
           <ArrowLeft className="h-4 w-4" /> Retour aux sections
         </Button>
-        <div className="rounded-lg border bg-card p-4">
-          <div className="grid gap-3 lg:grid-cols-2">
-            <Field label="Titre de section">
-              <Input value={String(selectedSection.title || '')} onChange={(event) => updateSection(sectionIndex, { title: event.target.value })} />
-            </Field>
-            <div className="flex items-end gap-3">
-              <Switch checked={!Boolean(selectedSection.collapsed)} onChange={(value) => updateSection(sectionIndex, { collapsed: !value })} label="Section ouverte" />
-              <span className="pb-1 text-sm text-muted-foreground">Ouverte dans l'editeur</span>
-            </div>
-            <Field label="Description / consignes" className="lg:col-span-2">
-              <Textarea value={String(selectedSection.description || '')} onChange={(event) => updateSection(sectionIndex, { description: event.target.value })} />
-            </Field>
-          </div>
-        </div>
-        <div className="rounded-lg border bg-card">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b p-4">
-            <div>
-              <h3 className="text-base font-semibold">Questions</h3>
-              <p className="text-sm text-muted-foreground">Chaque question s'edite sur son propre etage.</p>
-            </div>
+        <QuestionnaireSchema current="questions" />
+        <ToneSection tone="infos" title="1. Informations de la section" description="Le titre et les consignes que la cliente lit avant de répondre.">
+          <Field label="Titre de la section" unit="la thématique" icon={<Tag />}>
+            <Input className="h-12 text-base font-semibold" value={String(selectedSection.title || '')} onChange={(event) => updateSection(sectionIndex, { title: event.target.value })} placeholder="Hygiène et préparation" />
+          </Field>
+          <Field label="Consignes affichées à la cliente" icon={<ClipboardList />}>
+            <Textarea className="min-h-24" value={String(selectedSection.description || '')} onChange={(event) => updateSection(sectionIndex, { description: event.target.value })} placeholder="Répondez selon le protocole vu dans le module 1." />
+          </Field>
+        </ToneSection>
+        <ToneSection
+          tone="modules"
+          title={`2. Contenu : ${selectedItems.length} question(s) · ${pointsOf(selectedItems)} point(s)`}
+          description="Chaque question s'édite sur sa propre page. Faites glisser la poignée pour changer l'ordre : c'est celui que voit la cliente."
+          actions={(
             <Button
               type="button"
-              variant="outline"
               onClick={() => {
-                updateItems(sectionIndex, [...selectedItems, { id: uid('q'), type: 'SINGLE', label: `Question ${selectedItems.length + 1}`, prompt: '', required: true, points: 1, options: [{ id: uid('a'), label: 'Reponse 1', correct: true }, { id: uid('a'), label: 'Reponse 2', correct: false }], correctOptionIds: [] }]);
+                updateItems(sectionIndex, [...selectedItems, { id: uid('q'), type: 'SINGLE', label: `Question ${selectedItems.length + 1}`, prompt: '', required: true, points: 1, options: [{ id: uid('a'), label: 'Réponse 1', correct: true }, { id: uid('a'), label: 'Réponse 2', correct: false }], correctOptionIds: [] }]);
                 setQuestionIndex(selectedItems.length);
               }}
             >
               <Plus className="h-4 w-4" /> Ajouter une question
             </Button>
-          </div>
+          )}
+        >
           {selectedItems.length === 0 ? (
-            <p className="m-4 rounded-md border border-dashed p-4 text-sm text-muted-foreground">Aucune question dans cette section.</p>
+            <p className="rounded-md border border-dashed bg-card p-4 text-sm text-muted-foreground">Aucune question dans cette section.</p>
           ) : (
-            <div className="max-w-full overflow-x-auto">
-              <table className="min-w-[760px] w-full text-left text-sm">
+            <div className="m-table max-w-full overflow-x-auto rounded-lg border bg-card">
+              <table className="w-full min-w-[720px] text-left text-sm">
                 <thead className="bg-muted/40 text-xs uppercase tracking-wide text-muted-foreground">
-                  <tr><th className="px-4 py-3">Question</th><th className="px-4 py-3">Type</th><th className="px-4 py-3">Points</th><th className="px-4 py-3">Obligatoire</th><th className="px-4 py-3">Actions</th></tr>
+                  <tr><th className="w-20 px-2 py-3">#</th><th className="px-4 py-3">Question</th><th className="m-hide px-4 py-3">Type</th><th className="m-hide px-4 py-3">Points</th><th className="m-hide px-4 py-3">Statut</th><th className="px-4 py-3 text-right">Actions</th></tr>
                 </thead>
                 <tbody>
-                  {selectedItems.map((item, index) => (
-                    <tr key={String(item.id || index)} className="border-t">
-                      <td className="px-4 py-3 font-medium">{String(item.label || `Question ${index + 1}`)}</td>
-                      <td className="px-4 py-3 text-muted-foreground">{String(item.type || 'SINGLE')}</td>
-                      <td className="px-4 py-3">{Number(item.points || 0)}</td>
-                      <td className="px-4 py-3">{item.required === false ? 'Non' : 'Oui'}</td>
+                  <SortableList
+                    items={selectedItems}
+                    onChange={(next) => updateItems(sectionIndex, next)}
+                    renderItem={(item, { itemProps, handleProps, index }) => (
+                    <tr {...itemProps} className="border-t bg-card" data-testid="question-row">
+                      <td className="w-px whitespace-nowrap px-2 py-2 text-muted-foreground"><span className="inline-flex items-center gap-1"><DragHandle label={`Déplacer la question ${index + 1}`} {...handleProps} />{index + 1}</span></td>
                       <td className="px-4 py-3">
-                        <div className="flex flex-wrap gap-1">
-                          <Button type="button" size="sm" variant="outline" onClick={() => setQuestionIndex(index)}>Editer</Button>
-                        <Button type="button" size="icon" variant="ghost" aria-label="Supprimer" onClick={() => updateItems(sectionIndex, selectedItems.filter((_, i) => i !== index))}><Trash2 className="h-4 w-4" /></Button>
+                        <div className="font-medium">{String(item.label || `Question ${index + 1}`)}</div>
+                        {Boolean(item.prompt) && <div className="max-w-sm truncate text-xs text-muted-foreground">{String(item.prompt)}</div>}
+                        <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground sm:hidden">
+                          <QuestionTypeBadge type={item.type} /> {Number(item.points || 0)} pt(s){item.required === false ? ' · facultative' : ''}
                         </div>
                       </td>
+                      <td className="m-hide px-4 py-3"><QuestionTypeBadge type={item.type} /></td>
+                      <td className="m-hide whitespace-nowrap px-4 py-3">{Number(item.points || 0)} pt(s)</td>
+                      <td className="m-hide px-4 py-3">
+                        <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${item.required === false ? 'border-slate-300 bg-slate-100 text-slate-700' : 'border-rose-300 bg-rose-100 text-rose-900'}`}>
+                          {item.required === false ? 'Facultative' : 'Obligatoire'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <Dropdown.Root>
+                          <Dropdown.DotsButton aria-label={`Actions question ${index + 1}`} />
+                          <Dropdown.Popover className="w-48">
+                            <Dropdown.Menu>
+                              <Dropdown.Section>
+                                <Dropdown.Item onAction={() => setQuestionIndex(index)}>Modifier</Dropdown.Item>
+                                {index > 0 && <Dropdown.Item onAction={() => moveItem(index, index - 1)}>Monter</Dropdown.Item>}
+                                {index < selectedItems.length - 1 && <Dropdown.Item onAction={() => moveItem(index, index + 1)}>Descendre</Dropdown.Item>}
+                                <Dropdown.Item destructive onAction={() => updateItems(sectionIndex, selectedItems.filter((_, i) => i !== index))}>Supprimer</Dropdown.Item>
+                              </Dropdown.Section>
+                            </Dropdown.Menu>
+                          </Dropdown.Popover>
+                        </Dropdown.Root>
+                      </td>
                     </tr>
-                  ))}
+                    )}
+                  />
                 </tbody>
               </table>
             </div>
           )}
-        </div>
+        </ToneSection>
       </section>
     );
   }
 
   return (
-    <section className="grid gap-4">
+    <section className="grid gap-4" data-testid="sections-list">
+      <QuestionnaireSchema current="sections" />
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h3 className="text-base font-semibold">Questionnaire final</h3>
-          <p className="text-sm text-muted-foreground">Structure a etages : sections, puis questions, puis reponses.</p>
-        </div>
-        <Button type="button" variant="outline" onClick={addSection}>
-          <Plus className="h-4 w-4" /> Ajouter une section
-        </Button>
+        <p className="max-w-2xl text-sm text-muted-foreground">
+          Une <strong>section</strong> regroupe les questions d'une même thématique. La cliente les parcourt dans cet ordre (faites glisser la poignée pour le changer), et le score est calculé sur l'ensemble.
+        </p>
+        <Button type="button" onClick={addSection}><Plus className="h-4 w-4" /> Ajouter une section</Button>
       </div>
-      {sections.length === 0 && <p className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">Aucune section. Ajoutez une premiere section puis ses questions.</p>}
-      {sections.length > 0 && (
-        <div className="max-w-full overflow-x-auto rounded-lg border">
-          <table className="min-w-[760px] w-full text-left text-sm">
+      {sections.length === 0 ? (
+        <p className="rounded-md border border-dashed bg-card p-4 text-sm text-muted-foreground">Aucune section. Ajoutez une première thématique, puis ses questions.</p>
+      ) : (
+        <div className="m-table max-w-full overflow-x-auto rounded-lg border bg-card">
+          <table className="w-full min-w-[680px] text-left text-sm">
             <thead className="bg-muted/40 text-xs uppercase tracking-wide text-muted-foreground">
-              <tr><th className="px-4 py-3">Section</th><th className="px-4 py-3">Questions</th><th className="px-4 py-3">Etat</th><th className="px-4 py-3">Actions</th></tr>
+              <tr><th className="w-20 px-2 py-3">#</th><th className="px-4 py-3">Section (thématique)</th><th className="m-hide px-4 py-3">Questions</th><th className="m-hide px-4 py-3">Points</th><th className="px-4 py-3 text-right">Actions</th></tr>
             </thead>
             <tbody>
-              {sections.map((section, index) => {
-        const items = Array.isArray(section.items) ? section.items as Record<string, unknown>[] : [];
-        return (
-                  <tr key={String(section.id || index)} className="border-t">
+              <SortableList
+                items={sections}
+                onChange={onChange}
+                renderItem={(section, { itemProps, handleProps, index }) => {
+                const items = Array.isArray(section.items) ? section.items as Record<string, unknown>[] : [];
+                return (
+                  <tr {...itemProps} className="border-t bg-card" data-testid="section-row">
+                    <td className="w-px whitespace-nowrap px-2 py-2 text-muted-foreground"><span className="inline-flex items-center gap-1"><DragHandle label={`Déplacer la section ${index + 1}`} {...handleProps} />{index + 1}</span></td>
                     <td className="px-4 py-3">
                       <div className="font-medium">{String(section.title || `Section ${index + 1}`)}</div>
                       {Boolean(section.description) && <div className="max-w-md truncate text-xs text-muted-foreground">{String(section.description)}</div>}
+                      <div className="mt-0.5 text-xs text-muted-foreground sm:hidden">{items.length} question(s) · {pointsOf(items)} pt(s)</div>
                     </td>
-                    <td className="px-4 py-3">{items.length}</td>
-                    <td className="px-4 py-3">{section.collapsed ? 'Repliee' : 'Ouverte'}</td>
-                    <td className="px-4 py-3">
+                    <td className="m-hide px-4 py-3">
                       <div className="flex flex-wrap gap-1">
-                        <Button type="button" size="sm" variant="outline" onClick={() => { setSectionIndex(index); setQuestionIndex(null); }}>Editer</Button>
-                        <Button type="button" size="icon" variant="ghost" aria-label="Supprimer" onClick={() => onChange(sections.filter((_, i) => i !== index))}><Trash2 className="h-4 w-4" /></Button>
+                        {items.length === 0 ? <span className="text-xs text-muted-foreground">Aucune</span> : items.slice(0, 3).map((item, i) => <QuestionTypeBadge key={i} type={item.type} />)}
+                        {items.length > 3 && <span className="text-xs text-muted-foreground">+{items.length - 3}</span>}
                       </div>
                     </td>
+                    <td className="m-hide whitespace-nowrap px-4 py-3">{pointsOf(items)} pt(s)</td>
+                    <td className="px-4 py-3 text-right">
+                      <Dropdown.Root>
+                        <Dropdown.DotsButton aria-label={`Actions section ${index + 1}`} />
+                        <Dropdown.Popover className="w-48">
+                          <Dropdown.Menu>
+                            <Dropdown.Section>
+                              <Dropdown.Item onAction={() => { setSectionIndex(index); setQuestionIndex(null); }}>Modifier</Dropdown.Item>
+                              {index > 0 && <Dropdown.Item onAction={() => onChange(moveTo(sections, index, index - 1))}>Monter</Dropdown.Item>}
+                              {index < sections.length - 1 && <Dropdown.Item onAction={() => onChange(moveTo(sections, index, index + 1))}>Descendre</Dropdown.Item>}
+                              <Dropdown.Item destructive onAction={() => onChange(sections.filter((_, i) => i !== index))}>Supprimer</Dropdown.Item>
+                            </Dropdown.Section>
+                          </Dropdown.Menu>
+                        </Dropdown.Popover>
+                      </Dropdown.Root>
+                    </td>
                   </tr>
-        );
-              })}
+                );
+                }}
+              />
             </tbody>
           </table>
         </div>
@@ -1977,52 +1471,86 @@ function QuestionnaireEditor({
   );
 }
 
+/**
+ * LA PAGE D'UNE QUESTION — quatre étapes, dans l'ordre où on la pense :
+ * ce qu'on demande, sous quelle forme, quelles réponses (et la bonne), combien
+ * elle rapporte.
+ */
 function QuestionItemEditor({
   item,
   index,
+  sectionTitle,
   onChange,
   onRemove,
 }: {
   item: Record<string, unknown>;
   index: number;
+  sectionTitle: string;
   onChange: (patch: Record<string, unknown>) => void;
   onRemove: () => void;
 }) {
+  const type = String(item.type || 'SINGLE');
   return (
-    <div className="rounded-lg border bg-background p-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="inline-flex items-center gap-2 text-sm font-semibold"><GripVertical className="h-4 w-4 text-muted-foreground" /> Question {index + 1}</span>
-        <div className="flex gap-1">
-          <Button type="button" size="icon" variant="ghost" aria-label="Supprimer la question" onClick={onRemove}><Trash2 className="h-4 w-4" /></Button>
+    <div className="grid gap-4" data-testid="question-editor">
+      <div className="flex flex-wrap items-start justify-between gap-3 rounded-xl border bg-card p-4">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Section « {sectionTitle} » · Question {index + 1}</p>
+          <h3 className="mt-1 text-xl font-semibold">{String(item.label || `Question ${index + 1}`)}</h3>
+          <div className="mt-2 flex flex-wrap gap-2"><QuestionTypeBadge type={type} /><span className="inline-flex rounded-full border px-2.5 py-1 text-xs font-medium">{Number(item.points || 0)} point(s)</span></div>
         </div>
+        <Button type="button" variant="destructive" onClick={onRemove}><Trash2 className="h-4 w-4" /> Supprimer la question</Button>
       </div>
-      <div className="mt-3 grid gap-3 lg:grid-cols-2">
-        <Field label="Intitule"><Input value={String(item.label || '')} onChange={(e) => onChange({ label: e.target.value })} /></Field>
-        <Field label="Type">
-          <CustomSelect
-            value={String(item.type || 'SINGLE')}
-            onChange={(value) => onChange({
-              type: value,
-              options: value === 'TRUE_FALSE' ? [] : questionOptions(item).filter((option) => !['true', 'false'].includes(String(option.id))),
-              correctOptionIds: value === 'TRUE_FALSE' ? ['true'] : [],
-            })}
-            options={[
-              { value: 'TRUE_FALSE', label: 'Vrai / faux' },
-              { value: 'SINGLE', label: '1 bonne reponse' },
-              { value: 'MULTIPLE', label: 'Choix multiple' },
-            ]}
-          />
+      <QuestionnaireSchema current="answers" />
+
+      <ToneSection tone="infos" title="1. Énoncé" description="Ce que la cliente lit.">
+        <Field label="Intitulé court" unit="titre de la question" icon={<Tag />}>
+          <Input className="h-12 text-base font-semibold" value={String(item.label || '')} onChange={(e) => onChange({ label: e.target.value })} placeholder="Désinfection du matériel" />
         </Field>
-        <Field label="Question / consigne" className="lg:col-span-2"><Textarea value={String(item.prompt || '')} onChange={(e) => onChange({ prompt: e.target.value })} /></Field>
-        <div className="lg:col-span-2">
-          <AnswerOptionsEditor item={item} onChange={onChange} />
+        <Field label="Question posée à la cliente" icon={<MessageCircle />}>
+          <Textarea className="min-h-24 text-base" value={String(item.prompt || '')} onChange={(e) => onChange({ prompt: e.target.value })} placeholder="Le matériel doit-il être désinfecté entre deux clientes ?" />
+        </Field>
+      </ToneSection>
+
+      <ToneSection tone="modules" title="2. Forme de la réponse" description="Comment la cliente répond.">
+        <div className="grid gap-3 md:grid-cols-3" role="radiogroup" aria-label="Type de question">
+          {Object.entries(QUESTION_TYPES).map(([value, meta]) => {
+            const active = value === type;
+            return (
+              <button
+                key={value}
+                type="button"
+                role="radio"
+                aria-checked={active}
+                onClick={() => active || onChange({
+                  type: value,
+                  options: value === 'TRUE_FALSE' ? [] : questionOptions(item).filter((option) => !['true', 'false'].includes(String(option.id))),
+                  correctOptionIds: value === 'TRUE_FALSE' ? ['true'] : [],
+                })}
+                className={`rounded-lg border p-3 text-left transition ${active ? 'border-violet-500 bg-white ring-2 ring-violet-200 dark:bg-violet-950/40' : 'bg-card hover:bg-muted/40'}`}
+              >
+                <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${meta.className}`}>{meta.label}</span>
+                <span className="mt-2 block text-sm text-muted-foreground">{meta.hint}</span>
+              </button>
+            );
+          })}
         </div>
-        <Field label="Points"><Input type="number" min="0" value={Number(item.points || 0)} onChange={(e) => onChange({ points: Number(e.target.value || 0) })} /></Field>
-        <div className="flex items-end gap-3">
-          <Switch checked={Boolean(item.required)} onChange={(v) => onChange({ required: v })} label="Question obligatoire" />
-          <span className="pb-1 text-sm text-muted-foreground">Obligatoire</span>
+      </ToneSection>
+
+      <ToneSection tone="sessions" title="3. Réponses proposées" description={type === 'MULTIPLE' ? 'Cochez TOUTES les bonnes réponses. Faites glisser la poignée pour changer l’ordre.' : 'Cochez LA bonne réponse. Faites glisser la poignée pour changer l’ordre.'}>
+        <AnswerOptionsEditor item={item} onChange={onChange} />
+      </ToneSection>
+
+      <ToneSection tone="promotion" title="4. Barème" description="Ce que rapporte une bonne réponse.">
+        <div className="flex flex-wrap items-end gap-6">
+          <Field label="Points" unit="par bonne réponse" className="w-56">
+            <Input type="number" min="0" className="h-12 text-center text-lg font-semibold" value={Number(item.points || 0)} onChange={(e) => onChange({ points: Number(e.target.value || 0) })} />
+          </Field>
+          <div className="flex items-center gap-3 pb-3">
+            <Switch checked={item.required !== false} onChange={(v) => onChange({ required: v })} label="Question obligatoire" />
+            <span className="text-sm">{item.required === false ? 'Facultative : la cliente peut la passer' : 'Obligatoire pour envoyer le dossier'}</span>
+          </div>
         </div>
-      </div>
+      </ToneSection>
     </div>
   );
 }
@@ -2030,64 +1558,59 @@ function QuestionItemEditor({
 function AnswerOptionsEditor({ item, onChange }: { item: Record<string, unknown>; onChange: (patch: Record<string, unknown>) => void }) {
   const type = String(item.type || 'SINGLE');
   const options = questionOptions(item);
-  const correctIds = new Set((Array.isArray(item.correctOptionIds) ? item.correctOptionIds : options.filter((option) => option.correct).map((option) => String(option.id))) as string[]);
+  const correctIds = new Set((Array.isArray(item.correctOptionIds) && (item.correctOptionIds as unknown[]).length ? item.correctOptionIds : options.filter((option) => option.correct).map((option) => String(option.id))) as string[]);
   const updateOptions = (next: Record<string, unknown>[]) => onChange({ options: next, correctOptionIds: next.filter((option) => option.correct).map((option) => String(option.id)) });
   const setCorrect = (id: string, checked: boolean) => {
     if (type === 'TRUE_FALSE') return onChange({ correctOptionIds: [id] });
-    const next = options.map((option) => ({
+    updateOptions(options.map((option) => ({
       ...option,
       correct: type === 'SINGLE' ? String(option.id) === id : String(option.id) === id ? checked : Boolean(option.correct),
-    }));
-    updateOptions(next);
+    })));
   };
   return (
-    <div className="grid gap-3 rounded-lg border bg-muted/20 p-3">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-sm font-semibold">Reponses</p>
-        {type !== 'TRUE_FALSE' && (
-          <Button type="button" size="sm" variant="outline" onClick={() => updateOptions([...options, { id: uid('a'), label: `Reponse ${options.length + 1}`, correct: false }])}>
-            <Plus className="h-4 w-4" /> Ajouter
-          </Button>
-        )}
-      </div>
-      <div className="max-w-full overflow-x-auto rounded-md border bg-card">
-        <table className="min-w-[560px] w-full text-left text-sm">
-          <thead className="bg-muted/40 text-xs uppercase text-muted-foreground">
-            <tr><th className="px-3 py-2">Bonne</th><th className="px-3 py-2">Reponse</th><th className="px-3 py-2">Actions</th></tr>
-          </thead>
-          <tbody>
-            {options.map((option, index) => {
-              const id = String(option.id || index);
-              const checked = correctIds.has(id) || Boolean(option.correct);
-              return (
-                <tr key={id} className="border-t">
-                  <td className="px-3 py-2">
-                    <input type={type === 'MULTIPLE' ? 'checkbox' : 'radio'} checked={checked} onChange={(event) => setCorrect(id, event.target.checked)} />
-                  </td>
-                  <td className="px-3 py-2">
-                    {type === 'TRUE_FALSE' ? (
-                      <span className="font-medium">{String(option.label)}</span>
-                    ) : (
-                      <Input value={String(option.label || '')} onChange={(event) => {
-                        const next = [...options];
-                        next[index] = { ...next[index], label: event.target.value };
-                        updateOptions(next);
-                      }} />
-                    )}
-                  </td>
-                  <td className="px-3 py-2">
-                    {type !== 'TRUE_FALSE' && (
-                      <div className="flex gap-1">
-                        <Button type="button" size="icon" variant="ghost" aria-label="Supprimer" onClick={() => updateOptions(options.filter((_, i) => i !== index))}><Trash2 className="h-4 w-4" /></Button>
-                      </div>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+    <div className="grid gap-2">
+      {type === 'TRUE_FALSE' ? options.map((option, index) => {
+        const id = String(option.id || index);
+        const checked = correctIds.has(id) || Boolean(option.correct);
+        return (
+          <div key={id} className={`flex items-center gap-3 rounded-lg border p-2 ${checked ? 'border-emerald-400 bg-emerald-50 dark:bg-emerald-950/30' : 'bg-card'}`}>
+            <label className="flex shrink-0 cursor-pointer items-center gap-2 rounded-md px-2 py-1 text-xs font-semibold">
+              <input type="radio" name={`correct-${String(item.id)}`} checked={checked} onChange={(event) => setCorrect(id, event.target.checked)} />
+              {checked ? <span className="text-emerald-700">Bonne réponse</span> : <span className="text-muted-foreground">Fausse</span>}
+            </label>
+            <span className="flex-1 font-medium">{String(option.label)}</span>
+          </div>
+        );
+      }) : (
+      <SortableList
+        items={options}
+        onChange={updateOptions}
+        renderItem={(option, { itemProps, handleProps, index }) => {
+        const id = String(option.id || index);
+        const checked = correctIds.has(id) || Boolean(option.correct);
+        return (
+          <div {...itemProps} className={`flex items-center gap-2 rounded-lg border p-2 ${checked ? 'border-emerald-400 bg-emerald-50 dark:bg-emerald-950/30' : 'bg-card'}`} data-testid="answer-row">
+            <DragHandle label={`Déplacer la réponse ${index + 1}`} {...handleProps} />
+            <label className="flex shrink-0 cursor-pointer items-center gap-2 rounded-md px-2 py-1 text-xs font-semibold">
+              <input type={type === 'MULTIPLE' ? 'checkbox' : 'radio'} name={`correct-${String(item.id)}`} checked={checked} onChange={(event) => setCorrect(id, event.target.checked)} />
+              {checked ? <span className="text-emerald-700">Bonne réponse</span> : <span className="text-muted-foreground">Fausse</span>}
+            </label>
+            <Input className="flex-1" value={String(option.label || '')} onChange={(event) => {
+              const next = [...options];
+              next[index] = { ...next[index], label: event.target.value };
+              updateOptions(next);
+            }} />
+            <Button type="button" size="icon" variant="ghost" aria-label="Supprimer la réponse" onClick={() => updateOptions(options.filter((_, i) => i !== index))}><Trash2 className="h-4 w-4" /></Button>
+          </div>
+        );
+        }}
+      />
+      )}
+      {type !== 'TRUE_FALSE' && (
+        <Button type="button" variant="outline" className="justify-self-start" onClick={() => updateOptions([...options, { id: uid('a'), label: `Réponse ${options.length + 1}`, correct: false }])}>
+          <Plus className="h-4 w-4" /> Ajouter une réponse
+        </Button>
+      )}
     </div>
   );
 }
@@ -2104,7 +1627,7 @@ function DeliverablesEditor({ rows, onChange }: { rows: Record<string, unknown>[
       {
         id: uid('liv'),
         type,
-        label: type === 'VIDEO' ? 'Video de pratique' : type === 'PHOTO_GALLERY' ? 'Galerie photo finale' : 'Photo avant / apres',
+        label: type === 'VIDEO' ? 'Vidéo de pratique' : type === 'PHOTO_GALLERY' ? 'Galerie photo finale' : 'Photo avant / après',
         description: '',
         required: true,
         maxDurationSeconds: type === 'VIDEO' ? 120 : 0,
@@ -2113,61 +1636,60 @@ function DeliverablesEditor({ rows, onChange }: { rows: Record<string, unknown>[
     ]);
   };
   return (
-    <section className="grid gap-4 rounded-lg border bg-card p-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h3 className="text-base font-semibold">Livrables demandes</h3>
-          <p className="text-sm text-muted-foreground">Les livrables attendus au final : photos avant/apres et videos, avec contraintes visibles cote cliente.</p>
-        </div>
+    <section className="grid gap-4">
+      <div className="flex flex-wrap items-start justify-end gap-3">
         <div className="flex flex-wrap gap-2">
-          <Button type="button" variant="outline" onClick={() => add('PHOTO_BEFORE_AFTER')}><FileText className="h-4 w-4" /> Photo avant/apres</Button>
-          <Button type="button" variant="outline" onClick={() => add('VIDEO')}><Video className="h-4 w-4" /> Video</Button>
+          <Button type="button" variant="outline" onClick={() => add('PHOTO_BEFORE_AFTER')}><FileText className="h-4 w-4" /> Photo avant/après</Button>
+          <Button type="button" variant="outline" onClick={() => add('VIDEO')}><Video className="h-4 w-4" /> Vidéo</Button>
           <Button type="button" variant="outline" onClick={() => add('PHOTO_GALLERY')}><FileText className="h-4 w-4" /> Galerie photo</Button>
         </div>
       </div>
       {rows.length === 0 ? (
-        <p className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">Aucun livrable. Ajoutez au moins une photo avant/apres ou une video si la certification le demande.</p>
+        <p className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">Aucun livrable. Ajoutez au moins une photo avant/après ou une vidéo si la certification le demande.</p>
       ) : (
         <div className="grid gap-3">
-          {rows.map((row, index) => {
+          <SortableList
+            items={rows}
+            onChange={onChange}
+            renderItem={(row, { itemProps, handleProps, remove, index }) => {
             const type = String(row.type || 'PHOTO_BEFORE_AFTER') as 'PHOTO_BEFORE_AFTER' | 'VIDEO' | 'PHOTO_GALLERY';
             return (
-              <div key={String(row.id || index)} className="rounded-lg border bg-background p-3">
+              <div {...itemProps} className="rounded-lg border bg-background p-3" data-testid="deliverable-row">
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div className="flex items-center gap-2 text-sm font-semibold">
-                    <GripVertical className="h-4 w-4 text-muted-foreground" />
+                  <div className="flex items-center gap-1 text-sm font-semibold">
+                    <DragHandle label={`Déplacer le livrable ${index + 1}`} {...handleProps} />
                     Livrable {index + 1}
-                    <span className="rounded-full border px-2 py-0.5 text-xs text-muted-foreground">{type === 'VIDEO' ? 'Video' : type === 'PHOTO_GALLERY' ? 'Galerie photo' : 'Avant / apres'}</span>
+                    <span className="ml-1 rounded-full border px-2 py-0.5 text-xs text-muted-foreground">{type === 'VIDEO' ? 'Vidéo' : type === 'PHOTO_GALLERY' ? 'Galerie photo' : 'Avant / après'}</span>
                   </div>
                   <div className="flex gap-1">
-                    <Button type="button" size="icon" variant="ghost" aria-label="Supprimer" onClick={() => onChange(rows.filter((_, i) => i !== index))}><Trash2 className="h-4 w-4" /></Button>
+                    <Button type="button" size="icon" variant="ghost" aria-label="Supprimer le livrable" onClick={remove}><Trash2 className="h-4 w-4" /></Button>
                   </div>
                 </div>
                 <div className="mt-3 grid gap-3 lg:grid-cols-2">
-                  <Field label="Type">
+                  <Field label="Type de livrable" icon={<Layers />}>
                     <CustomSelect
                       value={type}
                       onChange={(value) => update(index, { type: value, maxDurationSeconds: value === 'VIDEO' ? Number(row.maxDurationSeconds || 120) : 0, maxImages: value === 'PHOTO_GALLERY' ? Number(row.maxImages || 6) : 0 })}
                       options={[
-                        { value: 'PHOTO_BEFORE_AFTER', label: 'Photo avant / apres' },
-                        { value: 'VIDEO', label: 'Video' },
+                        { value: 'PHOTO_BEFORE_AFTER', label: 'Photo avant / après' },
+                        { value: 'VIDEO', label: 'Vidéo' },
                         { value: 'PHOTO_GALLERY', label: 'Galerie photo' },
                       ]}
                     />
                   </Field>
-                  <Field label="Libelle">
+                  <Field label="Libellé" icon={<Tag />}>
                     <Input value={String(row.label || '')} onChange={(event) => update(index, { label: event.target.value })} />
                   </Field>
-                  <Field label="Description / consigne" className="lg:col-span-2">
+                  <Field label="Description ou consigne" icon={<ClipboardList />} className="lg:col-span-2">
                     <Textarea value={String(row.description || '')} onChange={(event) => update(index, { description: event.target.value })} />
                   </Field>
                   {type === 'VIDEO' && (
-                    <Field label="Duree max video (secondes)">
+                    <Field label="Durée maximale de la vidéo" unit="secondes" icon={<Timer />}>
                       <Input type="number" min="1" value={Number(row.maxDurationSeconds || 120)} onChange={(event) => update(index, { maxDurationSeconds: Number(event.target.value || 0) })} />
                     </Field>
                   )}
                   {type === 'PHOTO_GALLERY' && (
-                    <Field label="Nombre max de photos">
+                    <Field label="Nombre maximal de photos" unit="1 à 20">
                       <Input type="number" min="1" max="20" value={Number(row.maxImages || 6)} onChange={(event) => update(index, { maxImages: Number(event.target.value || 1) })} />
                     </Field>
                   )}
@@ -2178,7 +1700,8 @@ function DeliverablesEditor({ rows, onChange }: { rows: Record<string, unknown>[
                 </div>
               </div>
             );
-          })}
+            }}
+          />
         </div>
       )}
     </section>
@@ -2196,7 +1719,6 @@ function EvaluationTab({
   return (
     <Card><CardContent className="grid gap-4">
       <div className="flex items-center justify-between"><h2 className="text-lg font-semibold">Evaluation finale</h2><Switch checked={readPath(product, 'evaluation.enabled', false)} onChange={(v) => patch('evaluation.enabled', v)} label="Activer l'evaluation" /></div>
-      <Field label="Version"><Input type="number" min="1" value={readPath(product, 'evaluation.version', 1)} onChange={(e) => patch('evaluation.version', Number(e.target.value || 1))} /></Field>
       <Repeater
         title="Sections et questions"
         rows={sections}
@@ -2224,7 +1746,7 @@ void EvaluationTab;
 function PreviewCard({ product }: { product: Partial<CommerceProduct> }) {
   return (
     <div className="rounded-lg border bg-muted/30 p-4">
-      <div className="mb-2 flex items-center gap-2 text-sm font-semibold"><Eye className="h-4 w-4" /> Apercu fiche vitrine</div>
+      <div className="mb-2 flex items-center gap-2 text-sm font-semibold"><Eye className="h-4 w-4" /> Aperçu de la fiche vitrine</div>
       <div className="rounded-lg border bg-card p-4">
         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{product.kind ? KIND_LABEL[product.kind] : 'Formation'}</p>
         <h3 className="mt-2 text-xl font-semibold">{product.title || 'Titre de la formation'}</h3>

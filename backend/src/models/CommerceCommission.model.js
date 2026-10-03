@@ -16,6 +16,27 @@ const commerceCommissionSchema = new mongoose.Schema(
     dueAt: { type: Date, default: null },
     paidAt: { type: Date, default: null },
     paymentReference: { type: String, default: '' },
+    /** La règle du mois (les lignes gardent chacune la leur dans `sourceSnapshot.lines`). */
+    ratePercent: { type: Number, default: null },
+    basis: { type: String, enum: ['HT', 'TTC', null], default: null },
+    /**
+     * LA FACTURE STRIPE DU MOIS — émise par la plateforme, une ligne par vente
+     * (avec son numéro). « Payer » ouvre sa page Stripe ; le webhook de la
+     * plateforme (`invoice.paid`) la passe à « payée ».
+     */
+    /** Quand l'e-mail « commissions du mois à payer » est parti (une fois par mois). */
+    notifiedAt: { type: Date, default: null },
+    stripeInvoice: {
+      id: { type: String, default: '' },
+      number: { type: String, default: '' },
+      status: { type: String, default: '' },
+      hostedInvoiceUrl: { type: String, default: '' },
+      invoicePdfUrl: { type: String, default: '' },
+      amountDueCents: { type: Number, default: 0 },
+      createdAt: { type: Date, default: null },
+      paidAt: { type: Date, default: null },
+      lastCheckedAt: { type: Date, default: null },
+    },
   },
   { timestamps: true }
 );

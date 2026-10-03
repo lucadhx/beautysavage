@@ -4,6 +4,7 @@ import { api } from '@/lib/api';
 import { Button, Field, Input, Switch, Textarea } from '@/components/ui/primitives';
 import { CustomSelect } from '@/components/ui/CustomSelect';
 import { Modal } from '@/components/ui/dialog';
+import { CardsSkeleton, Skeleton } from '@/components/ui/Skeleton';
 import {
   CommercePageFrame,
   Metric,
@@ -42,6 +43,7 @@ export default function CommerceAvisPage() {
   const [manualOpen, setManualOpen] = React.useState(false);
   const [manual, setManual] = React.useState(defaultManualForm);
   const [message, setMessage] = React.useState('');
+  const [loaded, setLoaded] = React.useState(false);
 
   const refresh = React.useCallback(() => {
     Promise.all([api.commerceReviews(), api.commerceProducts()])
@@ -49,7 +51,8 @@ export default function CommerceAvisPage() {
         setReviews(list as CommerceReview[]);
         setProducts(productList as CommerceProduct[]);
       })
-      .catch((err) => setMessage(err instanceof Error ? err.message : 'Chargement impossible'));
+      .catch((err) => setMessage(err instanceof Error ? err.message : 'Chargement impossible'))
+      .finally(() => setLoaded(true));
   }, []);
   React.useEffect(refresh, [refresh]);
 
@@ -81,14 +84,17 @@ export default function CommerceAvisPage() {
       actions={<Button onClick={() => setManualOpen(true)}><Plus className="h-4 w-4" /> Avis manuel</Button>}
     >
       {message && <p className="rounded-md border p-3 text-sm text-muted-foreground">{message}</p>}
-      <div className="grid gap-4 md:grid-cols-3">
-        <Metric label="En attente" value={reviews.filter((item) => item.status === 'PENDING').length} />
-        <Metric label="Publies" value={reviews.filter((item) => item.status === 'PUBLISHED').length} />
-        <Metric label="Refuses" value={reviews.filter((item) => item.status === 'REJECTED').length} />
-      </div>
+      {!loaded ? <CardsSkeleton count={3} /> : (
+        <div className="grid gap-4 md:grid-cols-3">
+          <Metric label="En attente" value={reviews.filter((item) => item.status === 'PENDING').length} />
+          <Metric label="Publies" value={reviews.filter((item) => item.status === 'PUBLISHED').length} />
+          <Metric label="Refuses" value={reviews.filter((item) => item.status === 'REJECTED').length} />
+        </div>
+      )}
       <Panel title="Moderation">
         <div className="grid gap-3">
-          {reviews.length === 0 && <p className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">Aucun avis pour le moment.</p>}
+          {!loaded && [0, 1, 2].map((i) => <Skeleton key={i} className="h-36 w-full rounded-lg" />)}
+          {loaded && reviews.length === 0 && <p className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">Aucun avis pour le moment.</p>}
           {reviews.map((review) => (
             <div key={review._id} className="rounded-lg border p-4">
               <div className="flex flex-wrap items-start justify-between gap-3">

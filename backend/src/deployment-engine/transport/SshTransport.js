@@ -9,6 +9,7 @@
  * chargent sans cette dépendance ; elle n'est requise que pour un déploiement
  * réel. Installez-la avec `npm install` côté backend (voir package.json).
  */
+import { StringDecoder } from 'node:string_decoder';
 import { Transport } from './Transport.js';
 
 const DEFAULT_TIMEOUT_MS = 120_000;
@@ -195,6 +196,39 @@ export class SshTransport extends Transport {
   async exec(command, opts = {}) {
     const client = await this._connect();
     const timeoutMs = opts.timeoutMs || DEFAULT_TIMEOUT_MS;
+    /**
+     * ── LE FLUX EST DÉCODÉ EN CONTINU, ET C'EST UNE CORRECTION ──────────────
+     *
+     * ══ LE DÉFAUT, TEL QU'IL S'EST PRODUIT ═════════════════════════════════
+     *
+     * Cette méthode faisait `stdout += chunk.toString('utf8')` : chaque bloc
+     * arrivant de SSH était décodé SEUL. Or un caractère UTF-8 non-ASCII tient
+     * sur plusieurs octets, et rien ne garantit qu'un bloc s'arrête entre deux
+     * caractères. Un « ’ », un « — » ou un « é » coupé en deux par une
+     * frontière de bloc devenait deux caractères de remplacement (U+FFFD) —
+     * silencieusement, sans erreur.
+     *
+     * Sur un `ls` ou un `pm2 status`, cela passe inaperçu. Sur le contrôle
+     * d'artefact du déploiement, qui télécharge le bundle JavaScript servi et
+     * compare son sha256 à celui construit, cela produit un verdict FAUX :
+     *
+     *     WEBSITE_ARTIFACT_MISMATCH — index ok, JS divergent, version ok
+     *
+     * Autrement dit : « le site servi n'est pas celui qu'on vient de
+     * construire », sur un déploiement parfaitement réussi. Le message oriente
+     * vers un cache ou une vieille version — deux pistes qui n'existent pas —
+     * et le déploiement est déclaré en échec après avoir tout fait.
+     *
+     * La probabilité grandit avec la taille du fichier et avec la quantité de
+     * texte non-ASCII qu'il contient : un bundle francophone d'un mégaoctet
+     * traverse des dizaines de frontières de blocs. Le contrôle passait donc
+     * jusqu'au jour où il a cessé de passer, sans que rien ne l'explique.
+     *
+     * `StringDecoder` conserve en tampon les octets d'un caractère incomplet
+     * jusqu'au bloc suivant. C'est exactement ce à quoi il sert.
+     */
+    const decodeurSortie = new StringDecoder('utf8');
+    const decodeurErreur = new StringDecoder('utf8');
     return new Promise((resolve, reject) => {
       client.exec(command, (err, stream) => {
         if (err) return reject(err);
@@ -223,6 +257,10 @@ export class SshTransport extends Transport {
            */
           .on('close', (exitCode, closeSignal) => {
             clearTimeout(timer);
+            // `end()` rend ce qui restait en tampon. Sans lui, un dernier
+            // caractère multi-octets tronqué serait simplement perdu.
+            stdout += decodeurSortie.end();
+            stderr += decodeurErreur.end();
             resolve({
               code: exitCode === undefined || exitCode === null ? null : exitCode,
               signal: closeSignal ?? signal ?? null,
@@ -232,10 +270,10 @@ export class SshTransport extends Transport {
           })
           .on('exit', (exitCode, exitSignal) => { signal = exitSignal ?? signal; })
           .on('data', (d) => {
-            stdout += d.toString('utf8');
+            stdout += decodeurSortie.write(d);
           })
           .stderr.on('data', (d) => {
-            stderr += d.toString('utf8');
+            stderr += decodeurErreur.write(d);
           });
         if (opts.input) {
           stream.end(opts.input);
@@ -262,23 +300,127 @@ export class SshTransport extends Transport {
     });
   }
 
+  /**
+   * LES BLOCS SONT RECOLLÉS AVANT D'ÊTRE DÉCODÉS, pas l'inverse.
+   *
+   * Le défaut était le même que dans `exec` : `data += bloc.toString('utf8')`
+   * décode chaque bloc SEUL, et un caractère non-ASCII coupé par une frontière
+   * de bloc devient deux caractères de remplacement. Sur un fichier distant —
+   * un `.env`, une configuration Nginx, un rapport — la corruption est
+   * silencieuse et ne se voit qu'à la relecture, longtemps après.
+   *
+   * Un fichier tient en mémoire : on concatène donc les OCTETS, et on décode
+   * une seule fois. Pour un flux sans fin, ce serait `StringDecoder` — c'est
+   * ce que fait `exec`.
+   */
   async readFile(remotePath) {
     const sftp = await this._getSftp();
     return new Promise((resolve, reject) => {
-      let data = '';
+      const blocs = [];
       const rs = sftp.createReadStream(remotePath);
-      rs.on('data', (d) => (data += d.toString('utf8')));
-      rs.on('end', () => resolve(data));
+      rs.on('data', (d) => blocs.push(Buffer.isBuffer(d) ? d : Buffer.from(d)));
+      rs.on('end', () => resolve(Buffer.concat(blocs).toString('utf8')));
       rs.on('error', reject);
     });
   }
 
   /**
-   * Envoie un dossier local vers le VPS via `tar | ssh` n'est pas disponible
-   * ici : on s'appuie sur SFTP récursif. Pour de gros volumes, préférer un
-   * artefact `.tar.gz` uploadé puis détendu (voir pipeline.build).
+   * ENVOIE UN DOSSIER — en UNE archive, plus fichier par fichier.
+   *
+   * ══ CE QUE COÛTAIT LA VERSION FICHIER PAR FICHIER ═══════════════════════════
+   *
+   * Chaque fichier était un aller-retour SFTP complet (ouverture, écriture,
+   * fermeture) : 3 à 5 secondes chacun vers le VPS, mesurés en production le
+   * 2026-09-27. Un backend de ~620 fichiers prenait donc 30 à 50 minutes, pour
+   * une douzaine de mégaoctets.
+   *
+   * Le dossier est désormais empaqueté localement (tar + gzip, en mémoire de
+   * flux), envoyé en UN transfert, puis détendu sur le serveur par `tar -xzf`.
+   * Même sémantique qu'avant : les fichiers existants sont écrasés, rien n'est
+   * supprimé (le pipeline vide lui-même les dossiers `.next`).
+   *
+   * Repli : si l'empaquetage ou la détente échoue (module absent, `tar`
+   * indisponible à distance…), on retombe sur l'envoi fichier par fichier —
+   * lent, mais le déploiement aboutit.
    */
   async uploadDir(localPath, remotePath) {
+    try {
+      return await this._uploadDirArchive(localPath, remotePath);
+    } catch (err) {
+      this._emettre?.('UPLOAD_ARCHIVE_FALLBACK', { localPath, remotePath, reason: String(err?.message || err).slice(0, 300) });
+      return this._uploadDirFiles(localPath, remotePath);
+    }
+  }
+
+  async _uploadDirArchive(localPath, remotePath) {
+    const fs = await import('node:fs');
+    const fsp = await import('node:fs/promises');
+    const path = await import('node:path');
+    const os = await import('node:os');
+    const zlib = await import('node:zlib');
+    const { default: tarStream } = await import('tar-stream');
+
+    const quote = (s) => `'${String(s).replace(/'/g, `'\\''`)}'`;
+    const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const localArchive = path.join(os.tmpdir(), `ly-upload-${stamp}.tgz`);
+    const remoteArchive = `/tmp/ly-upload-${stamp}.tgz`;
+
+    let files = 0;
+    let bytes = 0;
+    const pack = tarStream.pack();
+    const out = fs.createWriteStream(localArchive);
+    const written = new Promise((resolve, reject) => {
+      out.on('finish', resolve);
+      out.on('error', reject);
+      pack.on('error', reject);
+    });
+    pack.pipe(zlib.createGzip({ level: 6 })).pipe(out);
+
+    const addEntry = (header, content) => new Promise((resolve, reject) => {
+      pack.entry(header, content, (err) => (err ? reject(err) : resolve()));
+    });
+    const walk = async (dir, rel) => {
+      const entries = await fsp.readdir(dir, { withFileTypes: true });
+      for (const entry of entries) {
+        const full = path.join(dir, entry.name);
+        const name = rel ? `${rel}/${entry.name}` : entry.name;
+        if (entry.isDirectory()) {
+          await addEntry({ name, type: 'directory', mode: 0o755 });
+          await walk(full, name);
+        } else if (entry.isFile()) {
+          const stat = await fsp.stat(full);
+          const content = await fsp.readFile(full);
+          await addEntry({ name, size: content.length, mode: stat.mode & 0o777, mtime: stat.mtime }, content);
+          files += 1;
+          bytes += content.length;
+        }
+      }
+    };
+    try {
+      await walk(localPath, '');
+      pack.finalize();
+      await written;
+
+      const sftp = await this._getSftp();
+      await new Promise((resolve, reject) => {
+        sftp.fastPut(localArchive, remoteArchive, (err) => (err ? reject(err) : resolve()));
+      });
+      const res = await this.exec(
+        `mkdir -p ${quote(remotePath)} && tar -xzf ${remoteArchive} -C ${quote(remotePath)} --no-same-owner && rm -f ${remoteArchive}`,
+        { timeoutMs: 300_000 },
+      );
+      if (res.code !== 0) {
+        await this.exec(`rm -f ${remoteArchive}`).catch(() => {});
+        throw new Error(`détente distante en échec (code ${res.code}) : ${String(res.stderr || '').slice(0, 300)}`);
+      }
+      return { files, bytes, archive: true };
+    } finally {
+      await fsp.unlink(localArchive).catch(() => {});
+    }
+  }
+
+  /** L'envoi historique, fichier par fichier (repli). */
+  async _uploadDirFiles(localPath, remotePath) {
     const fs = await import('node:fs/promises');
     const path = await import('node:path');
     const sftp = await this._getSftp();

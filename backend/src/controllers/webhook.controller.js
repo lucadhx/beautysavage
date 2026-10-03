@@ -2,7 +2,7 @@ import { asyncHandler } from '../utils/asyncHandler.js';
 import { logger } from '../utils/logger.js';
 import { verifyStripeWebhookAnyMode } from '../services/stripe/stripe.service.js';
 import { handleStripeWebhook } from '../services/contractWebhook.service.js';
-import { finalizeInstituteStripeCheckout } from '../services/commerce.service.js';
+import { failInstituteStripeCheckout, finalizeInstituteStripeCheckout, recordInstituteStripeRefund } from '../services/commerce.service.js';
 import { verifyInstituteStripeWebhook } from '../services/instituteStripe.service.js';
 import { emailDebug, redactHeaders } from '../utils/emailDebug.js';
 
@@ -72,13 +72,17 @@ export const stripeInstituteWebhook = asyncHandler(async (req, res) => {
   }
 
   try {
-    if (event.type === 'checkout.session.completed') {
-      await finalizeInstituteStripeCheckout(event.data?.object);
+    const object = event.data?.object;
+    if (event.type === 'checkout.session.completed' || event.type === 'checkout.session.async_payment_succeeded' || event.type === 'checkout.session.expired') {
+      await finalizeInstituteStripeCheckout(object);
     } else if (event.type === 'checkout.session.async_payment_failed') {
-      logger.warn('[webhook] Paiement institut asynchrone echoue', event.data?.object?.id);
+      await failInstituteStripeCheckout(object);
+    } else if (event.type === 'charge.refunded') {
+      await recordInstituteStripeRefund(object);
     }
     return res.json({ received: true });
   } catch (err) {
+    // Finalisation déjà en cours ailleurs : Stripe rejouera, la vente sera vue payée.
     logger.error('[webhook] Stripe Institut traitement echoue', err.message);
     return res.status(500).json({ received: false });
   }

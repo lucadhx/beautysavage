@@ -4,11 +4,24 @@ import * as contactController from '../controllers/contact.controller.js';
 import { validate } from '../middlewares/validate.middleware.js';
 import { rateLimit } from '../middlewares/rateLimit.js';
 import { submitContactSchema } from '../validators/contact.validator.js';
+import { publicLiveStream } from '../services/publicLive.service.js';
+import { resolvePayLink as resolveCommissionPayLink } from '../services/commissionPayment.service.js';
 
 // Unauthenticated endpoints consumed by the vitrine.
 const router = Router();
 
 router.get('/bootstrap', publicController.bootstrap);
+// La vitrine en temps réel : prévenue dès que l'institut modifie ce qu'elle affiche.
+router.get('/live', publicLiveStream);
+// Le bouton « Payer » de l'e-mail des commissions : ouvre (ou reprend) la page Stripe du mois et y redirige.
+router.get('/commissions/payer/:token', async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  try {
+    res.redirect(302, await resolveCommissionPayLink(req.params.token));
+  } catch {
+    res.status(503).send('Le paiement est momentanément indisponible. Réessayez dans quelques minutes.');
+  }
+});
 router.get('/network-configuration', publicController.networkConfiguration);
 /**
  * LE PLAN DU SITE — servi par l'API, pas par un fichier statique.
@@ -21,6 +34,8 @@ router.get('/network-configuration', publicController.networkConfiguration);
  * Aucun `rateLimit` : c'est une lecture, sans effet de bord et sans envoi.
  */
 router.get('/sitemap.xml', publicController.sitemap);
+// L'en-tête SEO d'une adresse de la vitrine (titre, description, JSON-LD…).
+router.get('/seo', publicController.seo);
 router.get('/chapters/:slug', publicController.getChapterBySlug);
 
 /**

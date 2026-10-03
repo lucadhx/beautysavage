@@ -1,5 +1,6 @@
 // R10.5B — plus aucune lecture d'expéditeur local : il n'y en a plus.
 import { registerVariableResolver } from './emailVariableResolvers.js';
+import { resolveCommissionPaymentDue } from './commissionVariableResolver.js';
 import { registerRelevanceGuard } from '../events/actionRelevance.js';
 import { registerEmailActionHandlers } from './sendEmailHandler.js';
 import { registerReportIncidentHandler } from '../events/reportIncidentHandler.js';
@@ -15,6 +16,13 @@ import {
 } from './billingVariableResolver.js';
 import {
   resolveAppointmentCancelledClient,
+  resolveAppointmentConfirmedClient,
+  resolveCustomerAccountCreated,
+  resolveSaleAdminNotification,
+  resolveTrainingDecisionClient,
+  resolveTrainingSubmissionAdmin,
+  resolveSessionRescheduledClient,
+  resolveSessionCancelledClient,
   resolveCustomerEmailVerification,
   resolveCustomerPasswordReset,
   resolveGiftCardIssuedClient,
@@ -62,6 +70,14 @@ export async function initEmailModule({ skipBootstrap = false } = {}) {
   registerVariableResolver('COMMERCE_SALE_CONFIRMATION_CLIENT', resolveSaleConfirmationClient);
   registerVariableResolver('COMMERCE_GIFT_CARD_CLIENT', resolveGiftCardIssuedClient);
   registerVariableResolver('APPOINTMENT_CANCELLED_CLIENT', resolveAppointmentCancelledClient);
+  registerVariableResolver('APPOINTMENT_CONFIRMED_CLIENT', resolveAppointmentConfirmedClient);
+  registerVariableResolver('CUSTOMER_ACCOUNT_CREATED', resolveCustomerAccountCreated);
+  registerVariableResolver('COMMERCE_SALE_ADMIN_NOTIFICATION', resolveSaleAdminNotification);
+  registerVariableResolver('TRAINING_SUBMISSION_ADMIN_NOTIFICATION', resolveTrainingSubmissionAdmin);
+  registerVariableResolver('TRAINING_VALIDATED_CLIENT', resolveTrainingDecisionClient);
+  registerVariableResolver('TRAINING_REJECTED_CLIENT', resolveTrainingDecisionClient);
+  registerVariableResolver('FORMATION_SESSION_RESCHEDULED_CLIENT', resolveSessionRescheduledClient);
+  registerVariableResolver('FORMATION_SESSION_CANCELLED_CLIENT', resolveSessionCancelledClient);
 
   /**
    * Cycle de paiement et incidents techniques.
@@ -72,6 +88,7 @@ export async function initEmailModule({ skipBootstrap = false } = {}) {
    * qui rend sûr d'activer une action dans le registre.
    */
   registerVariableResolver('PAYMENT_CONFIRMED_ADMIN', resolvePaymentConfirmedAdmin);
+  registerVariableResolver('COMMISSION_PAYMENT_DUE_ADMIN', resolveCommissionPaymentDue);
   /*
    * `CONTRACT_PAYMENT_RECEIVED_ADMIN` N'EST PLUS ENREGISTRÉ (L12.1).
    *

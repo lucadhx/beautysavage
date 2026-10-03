@@ -1,14 +1,15 @@
 import * as React from 'react';
 import { FileSignature, Plus, ArrowLeft, Upload, Download, PenLine, ShieldCheck, RefreshCw, Trash2, ExternalLink, Eye, FlaskConical, Ban, RotateCcw } from 'lucide-react';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { Button, Card, CardContent, CardHeader, CardTitle, Field, Input, SegmentedControl, Stepper, Switch, Spinner, EmptyState } from '@/components/ui/primitives';
+import { Button, Card, CardContent, CardHeader, CardTitle, Field, Input, SegmentedControl, Stepper, Switch, EmptyState } from '@/components/ui/primitives';
 import { BrandLoader } from '@/components/ui/BrandLoader';
 import { Modal, ConfirmDialog } from '@/components/ui/dialog';
 import { ContractStatusBadge } from '@/components/contracts/status';
 import { SignatureZoneEditor } from '@/components/contracts/SignatureZoneEditor';
-import { ContractTimeline } from '@/components/contracts/ContractTimeline';
+import { ContractTimeline, ContractTimelineSkeleton } from '@/components/contracts/ContractTimeline';
 import { ContractProgressTracker } from '@/components/contracts/ContractProgressTracker';
 import { GuidedSteps } from '@/components/contracts/GuidedSteps';
+import { CommissionEditor } from '@/components/contracts/CommissionEditor';
 import { SubscriptionCostCard } from '@/components/contracts/SubscriptionCostCard';
 import { TechnicalTools, SyncAction } from '@/components/contracts/TechnicalTools';
 import { CollapsibleCard } from '@/components/contracts/CollapsibleCard';
@@ -565,7 +566,7 @@ function ContractDetail({ id, onBack, onChanged }: { id: string; onBack: () => v
   const download = (kind: ContractDocumentKind) =>
     run(() => downloadContractDocument(id, kind));
 
-  if (loading || !contract) return <BrandLoader />;
+  if (loading || !contract) return <BrandLoader variant="form" />;
 
   const isDraft = contract.status === 'DRAFT' && !contract.signatureConfiguration.locked;
   // Seul un contrat en cours peut être « terminé » (l'outil de recette simule
@@ -653,6 +654,15 @@ function ContractDetail({ id, onBack, onChanged }: { id: string; onBack: () => v
           <p className="mb-2 text-sm font-medium">En cas d'impayé</p>
           <PaymentGracePolicyEditor contract={contract} onSaved={refreshAll} />
         </div>
+      </div>
+    ),
+    COMMISSION: (
+      <div className="space-y-3">
+        <p className="text-sm text-muted-foreground">
+          Ce que l'institut reverse sur ses ventes : le pourcentage, les types de ventes assujettis et la base (HT ou TTC).
+          Les commissions sont facturées chaque mois, une ligne par vente.
+        </p>
+        <CommissionEditor contract={contract} onSaved={refreshAll} />
       </div>
     ),
     VALIDATE: (
@@ -854,7 +864,7 @@ function ContractDetail({ id, onBack, onChanged }: { id: string; onBack: () => v
                 </div>
               )}
 
-              <DevStripeDetails contract={contract} payments={payments.data || []} />
+              <DevStripeDetails contract={contract} payments={payments.data || []} paymentsLoading={payments.loading} />
             </div>
           </CollapsibleCard>
         )}
@@ -863,7 +873,7 @@ function ContractDetail({ id, onBack, onChanged }: { id: string; onBack: () => v
         <Card>
           <CardHeader><CardTitle>Timeline</CardTitle></CardHeader>
           <CardContent>
-            {timeline.loading ? <Spinner className="h-5 w-5" /> : <ContractTimeline events={timeline.data || []} />}
+            {timeline.loading ? <ContractTimelineSkeleton /> : <ContractTimeline events={timeline.data || []} />}
           </CardContent>
         </Card>
 
@@ -1076,7 +1086,7 @@ export default function DevContractsPage() {
         action={<Button onClick={create} loading={pending}><Plus className="h-4 w-4" /> Nouveau contrat</Button>} />
 
       {loading ? (
-        <BrandLoader />
+        <BrandLoader variant="list" />
       ) : contracts.length === 0 ? (
         <EmptyState icon={FileSignature} title="Aucun contrat"
           description="Configurez d'abord le paiement et la signature, puis créez un contrat."

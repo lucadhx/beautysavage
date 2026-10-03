@@ -22,14 +22,27 @@ import { useResource } from '@/hooks/useResource';
 import { useNetworkConfiguration } from '@/context/NetworkConfigContext';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Card, CardContent, Button, Badge } from '@/components/ui/primitives';
-import { BrandLoader } from '@/components/ui/BrandLoader';
+import { CardsSkeleton, Skeleton } from '@/components/ui/Skeleton';
 import { ContractStatusBadge, SubscriptionStatusBadge } from '@/components/contracts/status';
 import { formatDate } from '@/lib/utils';
 
 function ContractSiteCard() {
   const contract = useResource(() => api.getMyContract());
   const site = useResource(() => api.getSiteStatus(), [], { live: 'site-status' });
-  if (contract.loading || site.loading) return null;
+  if (contract.loading || site.loading) {
+    return (
+      <Card className="h-full">
+        <CardContent className="grid gap-3">
+          <Skeleton className="h-4 w-32" />
+          <div className="flex items-center justify-between">
+            <Skeleton className="h-5 w-24" />
+            <Skeleton className="h-5 w-24" />
+          </div>
+          <Skeleton className="h-3.5 w-2/3" />
+        </CardContent>
+      </Card>
+    );
+  }
   const c = contract.data;
   const siteActive = site.data?.status === 'ACTIVE';
   const sub = c?.stripe.subscription;
@@ -127,7 +140,19 @@ export default function DashboardPage() {
       />
 
       {loading ? (
-        <BrandLoader />
+        <div aria-busy="true">
+          <span role="status" className="sr-only">Chargement…</span>
+          <CardsSkeleton count={4} className="sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-4" />
+          <CardsSkeleton count={3} className="mt-4" />
+          <div className="mt-4 grid gap-3 rounded-xl border p-4">
+            <Skeleton className="h-4 w-32" />
+            <Skeleton className="h-5 w-48" />
+          </div>
+          <Skeleton className="mb-3 mt-8 h-3.5 w-24" />
+          <div className="grid gap-3 sm:grid-cols-2">
+            {Array.from({ length: 6 }, (_, i) => <Skeleton key={i} className="h-14 w-full rounded-xl" />)}
+          </div>
+        </div>
       ) : (
         <>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

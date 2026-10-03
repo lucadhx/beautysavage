@@ -84,6 +84,8 @@ export const NOTIFICATION_LABEL: Record<ContactNotificationStatus, string> = {
   NONE: 'Aucune notification',
   PENDING: 'Envoi en cours',
   SENT: 'En attente de confirmation',
+  DELIVERED: 'Reçue',
+  BOUNCED: 'Rejetée par la messagerie',
   PARTIAL: 'Partiellement envoyée',
   FAILED: 'Échec',
   SKIPPED: 'Non envoyée',
@@ -106,6 +108,8 @@ export function notificationLabel(status: string): string {
  * pour tous les écrans, sans quoi elle ne vaut nulle part.
  */
 export function notificationTone(status: string): 'success' | 'danger' | 'warning' | 'pending' | 'muted' {
+  if (status === 'DELIVERED') return 'success';
+  if (status === 'BOUNCED') return 'danger';
   if (status === 'SENT') return 'pending';
   if (status === 'FAILED') return 'danger';
   if (status === 'PARTIAL' || status === 'NONE') return 'warning';

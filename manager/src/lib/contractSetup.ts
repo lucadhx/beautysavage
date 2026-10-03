@@ -15,7 +15,7 @@ import { missingRoles } from '@/lib/signatureZones';
 
 export type SetupStatus = 'done' | 'current' | 'locked' | 'optional';
 
-export type SetupStepKey = 'NAME' | 'DOCUMENT' | 'SIGNATURE' | 'ZONES' | 'PRICING' | 'VALIDATE';
+export type SetupStepKey = 'NAME' | 'DOCUMENT' | 'SIGNATURE' | 'ZONES' | 'PRICING' | 'COMMISSION' | 'VALIDATE';
 
 export interface SetupStep {
   key: SetupStepKey;
@@ -168,6 +168,16 @@ export function deriveContractSetup(
       done: pricingDone,
       hint: priced ? pricingSummary(contract) : pricingDone ? 'Contrat gratuit' : 'À définir',
       blocksValidation: false,
+    },
+    {
+      // La commission sur les ventes de l'institut : taux, types assujettis, base HT/TTC.
+      key: 'COMMISSION',
+      title: 'Commission',
+      done: Boolean(contract.commission?.configuredAt),
+      hint: contract.commission?.configuredAt
+        ? `${contract.commission.ratePercent} % ${contract.commission.basis} · ${contract.commission.productKinds.length} type(s) assujetti(s)`
+        : 'À définir',
+      blocksValidation: true,
     },
   ];
 

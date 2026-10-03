@@ -2,6 +2,9 @@ import * as React from 'react';
 import { api } from '@/lib/api';
 import { Button, Field, Input, Textarea } from '@/components/ui/primitives';
 import { Modal } from '@/components/ui/dialog';
+import { CardsSkeleton, Skeleton } from '@/components/ui/Skeleton';
+import { useFloatingSave } from '@/hooks/useFloatingSave';
+import { FloatingSaveWidget } from '@/components/ui/FloatingSaveWidget';
 import { CommercePageFrame, Metric, Panel, StatusBadge, cents, dateShort, type CommerceProduct, type GiftCard } from './CommerceShared';
 
 export default function CommerceCartesCadeauxPage() {
@@ -12,17 +15,35 @@ export default function CommerceCartesCadeauxPage() {
   const [issueOpen, setIssueOpen] = React.useState(false);
   const [adjustDraft, setAdjustDraft] = React.useState<{ card: GiftCard; type: 'DEBIT' | 'CREDIT' | 'VOID'; amountEuros: string; reason: string } | null>(null);
   const [message, setMessage] = React.useState('');
+  const [loaded, setLoaded] = React.useState(false);
+  const [giftLoaded, setGiftLoaded] = React.useState(false);
   const refresh = React.useCallback(() => {
-    api.commerceGiftCards().then((list) => setCards(list as GiftCard[])).catch((err) => setMessage(err instanceof Error ? err.message : 'Chargement impossible'));
+    api.commerceGiftCards().then((list) => setCards(list as GiftCard[])).catch((err) => setMessage(err instanceof Error ? err.message : 'Chargement impossible')).finally(() => setLoaded(true));
     api.commerceProducts()
       .then((items) => {
         const product = (items as CommerceProduct[]).find((item) => item.kind === 'GIFT_CARD') ?? null;
         setGiftProduct(product);
         setMinimumEuros(String(Math.round((product?.price?.amountCents || 0) / 100)));
       })
-      .catch(() => null);
+      .catch(() => null)
+      .finally(() => setGiftLoaded(true));
   }, []);
   React.useEffect(refresh, [refresh]);
+
+  /*
+    Le montant minimum est un RÉGLAGE : il se sauve par le bouton flottant,
+    qui protège aussi la sortie de page. Émettre ou ajuster une carte restent
+    des gestes ponctuels, dans leurs fenêtres.
+  */
+  const { state: minimumState, save: saveMinimumFloating } = useFloatingSave<string>(giftLoaded ? minimumEuros : null, async () => {
+    try {
+      await saveMinimum();
+      return minimumEuros;
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : 'Enregistrement impossible');
+      throw err;
+    }
+  });
 
   async function issue() {
     const created = await api.issueCommerceGiftCard({
@@ -31,7 +52,7 @@ export default function CommerceCartesCadeauxPage() {
       recipientEmail: form.recipientEmail,
       message: form.message,
     });
-    setMessage(created.oneTimeCode ? `Carte emise. Code a remettre une seule fois : ${created.oneTimeCode}` : 'Carte emise.');
+    setMessage(created.oneTimeCode ? `Carte émise. Code à remettre une seule fois : ${created.oneTimeCode}` : 'Carte émise.');
     setIssueOpen(false);
     refresh();
   }
@@ -50,7 +71,7 @@ export default function CommerceCartesCadeauxPage() {
       id: giftProduct?._id,
       slug: giftProduct?.slug || 'carte-cadeau-beautysavage',
       title: giftProduct?.title || 'Carte cadeau BeautySavage',
-      subtitle: giftProduct?.subtitle || 'Offrir une experience institut.',
+      subtitle: giftProduct?.subtitle || 'Offrir une expérience institut.',
       description: giftProduct?.description || 'Carte cadeau utilisable sur les prestations et achats BeautySavage.',
       kind: 'GIFT_CARD',
       status: giftProduct?.status || 'PUBLISHED',
@@ -61,34 +82,36 @@ export default function CommerceCartesCadeauxPage() {
     });
     setGiftProduct(saved as CommerceProduct);
     setMinimumEuros(String(Math.round(((saved as CommerceProduct).price?.amountCents || 0) / 100)));
-    setMessage(amountCents > 0 ? 'Montant minimum de la carte cadeau enregistre.' : 'Montant minimum retire.');
+    setMessage(amountCents > 0 ? 'Montant minimum de la carte cadeau enregistré.' : 'Montant minimum retiré.');
   }
 
   return (
     <CommercePageFrame title="Cartes cadeaux" description="Emission, solde, debit/recredit et ledger. Les codes restent masques apres creation.">
       {message && <p className="rounded-md border p-3 text-sm text-muted-foreground">{message}</p>}
-      <div className="grid gap-4 md:grid-cols-3">
-        <Metric label="Cartes" value={cards.length} />
-        <Metric label="Actives" value={cards.filter((card) => card.status === 'ACTIVE').length} />
-        <Metric label="Solde total" value={cents(cards.reduce((sum, card) => sum + (card.balanceCents || 0), 0))} />
-      </div>
+      {!loaded ? <CardsSkeleton count={3} /> : (
+        <div className="grid gap-4 md:grid-cols-3">
+          <Metric label="Cartes" value={cards.length} />
+          <Metric label="Actives" value={cards.filter((card) => card.status === 'ACTIVE').length} />
+          <Metric label="Solde total" value={cents(cards.reduce((sum, card) => sum + (card.balanceCents || 0), 0))} />
+        </div>
+      )}
       <div className="flex justify-end">
         <Button onClick={() => setIssueOpen(true)}>Emettre une carte cadeau</Button>
       </div>
       <Panel title="Reglage vitrine">
-        <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
+        <div className="grid gap-3">
           <Field
             label="Montant minimum des cartes cadeaux"
             hint="Laissez 0 pour ne pas afficher de prix sur la vitrine. Si un minimum est saisi, la vitrine affichera A partir de ce montant."
           >
-            <Input type="number" min="0" step="1" value={minimumEuros} onChange={(e) => setMinimumEuros(e.target.value)} />
+            {giftLoaded ? <Input type="number" min="0" step="1" value={minimumEuros} onChange={(e) => setMinimumEuros(e.target.value)} /> : <Skeleton className="h-10 w-full" />}
           </Field>
-          <Button onClick={saveMinimum}>Enregistrer</Button>
         </div>
       </Panel>
       <Panel title="Cartes emises">
         <div className="grid gap-3">
-          {cards.length === 0 && <p className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">Aucune carte cadeau.</p>}
+          {!loaded && [0, 1, 2].map((i) => <Skeleton key={i} className="h-32 w-full rounded-lg" />)}
+          {loaded && cards.length === 0 && <p className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">Aucune carte cadeau.</p>}
           {cards.map((card) => (
             <div key={card._id} className="rounded-lg border p-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
@@ -151,6 +174,7 @@ export default function CommerceCartesCadeauxPage() {
           </div>
         )}
       </Modal>
+      <FloatingSaveWidget state={minimumState} onSave={() => void saveMinimumFloating()} />
     </CommercePageFrame>
   );
 }

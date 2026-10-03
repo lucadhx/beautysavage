@@ -113,18 +113,37 @@ section('1 · L’hôte PUBLIC a un bloc dédié pour le plan du site');
     /location\s*=\s*\/sitemap\.xml\s*\{[\s\S]{0,400}?proxy_pass\s+http:\/\/127\.0\.0\.1:6070\/sitemap\.xml\s*;/.test(vitrine));
 
   /**
-   * LE REPLI EXISTE TOUJOURS. On n'a pas remplacé le comportement d'une
-   * application à page unique, on lui a retiré UNE adresse. Si cette assertion
-   * tombe, toutes les routes du site rendent 404.
+   * LES PAGES SONT RENDUES PAR LE BACKEND, AVEC UN REPLI STATIQUE (lot SEO).
+   *
+   * Les fichiers réels restent servis par nginx ; toute autre adresse part au
+   * backend (`@page_render`), qui compose la page et son référencement. Si le
+   * backend échoue ou ne répond pas, la coquille statique est servie
+   * (`@page_static`) : si ces assertions tombent, les routes du site
+   * peuvent rendre une erreur au lieu de la page.
    */
-  check('le repli d’application à page unique est intact',
-    /try_files\s+\$uri\s+\$uri\/\s+\/index\.html\s*;/.test(vitrine));
+  check('les adresses sans fichier partent au rendu backend',
+    /location\s+\/\s*\{\s*try_files\s+\$uri\s+@page_render\s*;/.test(vitrine));
+  check('…qui reçoit l’en-tête de rendu et proxifie vers le backend',
+    /location\s+@page_render\s*\{[\s\S]{0,300}?proxy_pass\s+http:\/\/127\.0\.0\.1:6070\s*;[\s\S]{0,500}?X-Seo-Render/.test(vitrine));
+  check('…avec repli sur la coquille statique si le backend échoue',
+    /error_page\s+500\s+502\s+504\s*=\s*@page_static\s*;/.test(vitrine)
+      && /location\s+@page_static\s*\{[\s\S]{0,200}?try_files\s+\/index\.html\s*=404\s*;/.test(vitrine));
 
   /** L'hôte public ne doit surtout PAS s'interdire lui-même l'indexation. */
   check('la vitrine ne porte AUCUN en-tête de non-indexation',
     !/X-Robots-Tag/i.test(vitrine));
-  check('…et n’écrase pas son propre robots.txt',
-    !/location\s*=\s*\/robots\.txt/.test(vitrine));
+  /**
+   * robots.txt est PRODUIT par le backend (domaine et adresses privées tirés de
+   * la base), avec repli sur le fichier statique de la vitrine : un robots.txt
+   * absent ou en erreur ne doit jamais fermer le site aux moteurs.
+   */
+  check('…son robots.txt vient du backend',
+    /location\s*=\s*\/robots\.txt\s*\{[\s\S]{0,300}?proxy_pass\s+http:\/\/127\.0\.0\.1:6070\/robots\.txt\s*;/.test(vitrine));
+  check('…avec repli sur le fichier statique',
+    /error_page\s+500\s+502\s+503\s+504\s*=\s*@robots_static\s*;/.test(vitrine)
+      && /location\s+@robots_static\s*\{[\s\S]{0,200}?try_files\s+\/robots\.txt\s*=404\s*;/.test(vitrine));
+  check('…et llms.txt aussi, pour les assistants IA',
+    /location\s*=\s*\/llms\.txt\s*\{[\s\S]{0,300}?proxy_pass\s+http:\/\/127\.0\.0\.1:6070\/llms\.txt\s*;/.test(vitrine));
 }
 
 /* ══════════════════════════════════════════════════════════════════════════ */
@@ -268,12 +287,16 @@ section('4 · Le backend sert le plan À LA RACINE');
   const controleur = fs.readFileSync(
     path.join(racineProjet, 'backend/src/controllers/public.controller.js'), 'utf8',
   );
+  // Le plan est produit par le service de référencement (lot SEO/GEO).
+  const service = fs.readFileSync(
+    path.join(racineProjet, 'backend/src/services/seo/seo.service.js'), 'utf8',
+  );
   check('le contrôleur répond avec un type XML',
     /res\.type\(\s*['"]application\/xml['"]\s*\)/.test(controleur));
   check('…et une déclaration XML en tête du document',
-    controleur.includes('<?xml version="1.0" encoding="UTF-8"?>'));
+    service.includes('<?xml version="1.0" encoding="UTF-8"?>'));
   check('…dans un urlset conforme au schéma sitemaps.org',
-    controleur.includes('http://www.sitemaps.org/schemas/sitemap/0.9'));
+    service.includes('http://www.sitemaps.org/schemas/sitemap/0.9'));
 
   /**
    * LES ADRESSES SONT ABSOLUES, ET L'HÔTE NE VIENT PAS DE LA REQUÊTE. Un plan
@@ -281,18 +304,22 @@ section('4 · Le backend sert le plan À LA RACINE');
    * pointant ailleurs. L'hôte vient de la configuration réseau du projet.
    */
   check('l’hôte du plan vient de la configuration, pas d’un en-tête de requête',
-    /cfg\.network\?\.websiteUrl/.test(controleur) && !/req\.(headers\.host|hostname)/.test(controleur));
+    /cfg\.network\?\.websiteUrl/.test(service) && !/req\.(headers\.host|hostname)/.test(service));
+  check('…et un plan sans adresse absolue configurée n’est pas publié',
+    /if \(!\/\^https\?:\\\/\\\/\/i\.test\(data\.base\)\) return null;/.test(service));
 
   /** Ce que le plan ne doit JAMAIS contenir. */
-  const bloc = controleur.slice(controleur.indexOf('export const sitemap'));
-  const corpsSitemap = bloc.slice(0, bloc.indexOf('\n});'));
-  for (const interdit of ['/manager', '/api/', 'admin', 'login', '/404']) {
+  const bloc = service.slice(service.indexOf('export async function sitemapXml'));
+  const corpsSitemap = bloc.slice(0, bloc.indexOf('\n}\n'));
+  for (const interdit of ['/manager', '/api/', 'admin', 'login', '/404', '/panier', '/espace-client']) {
     check(`le plan ne cite pas « ${interdit} »`, !corpsSitemap.includes(interdit));
   }
-  check('le plan ne retient que les chapitres PUBLIÉS',
-    /Chapter\.find\(\s*\{\s*published:\s*true\s*\}/.test(corpsSitemap));
+  check('le plan ne retient que les offres PUBLIÉES',
+    /CommerceProduct\.find\(\s*\{\s*status:\s*PRODUCT_STATUS\.PUBLISHED\s*\}/.test(service));
   check('…et que les pages PUBLIÉES',
-    /SitePage\.find\(\s*\{\s*published:\s*true\s*\}/.test(corpsSitemap));
+    /SitePage\.find\(\s*\{\s*published:\s*true\s*\}/.test(service));
+  check('…et ne cite plus les chapitres, que la vitrine ne sait pas afficher',
+    !/Chapter/.test(service));
 }
 
 /* ══════════════════════════════════════════════════════════════════════════ */

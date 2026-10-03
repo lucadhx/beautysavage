@@ -80,6 +80,18 @@ const updateDraftBody = z
     // Décision EXPLICITE : une signature doit-elle être réalisée dans ce
     // parcours ? (REQUIRED | NOT_REQUIRED)
     signatureRequirement: z.enum(SIGNATURE_REQUIREMENT_VALUES).optional(),
+    // Étape « Commission » : taux, types assujettis, base HT/TTC.
+    commission: z
+      .object({
+        enabled: z.boolean().optional(),
+        ratePercent: z.number().min(0).max(100),
+        productKinds: z.array(z.enum(['IN_PERSON_TRAINING', 'DISTANCE_TRAINING', 'SERVICE'])).max(3),
+        basis: z.enum(['HT', 'TTC']),
+        salesVatRate: z.number().min(0).max(100).optional(),
+        capCents: z.number().int().min(0).max(1_000_000_000).nullable().optional(),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 

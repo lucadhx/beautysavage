@@ -2,6 +2,7 @@ import * as React from 'react';
 import { api } from '@/lib/api';
 import { Button, Field, Textarea } from '@/components/ui/primitives';
 import { Modal } from '@/components/ui/dialog';
+import { CardsSkeleton, Skeleton } from '@/components/ui/Skeleton';
 import { CommercePageFrame, Metric, Panel, StatusBadge, cents, dateShort, type RefundRequest } from './CommerceShared';
 
 function customer(value: RefundRequest['customerId']) {
@@ -17,8 +18,9 @@ export default function CommerceRemboursementsPage() {
   const [items, setItems] = React.useState<RefundRequest[]>([]);
   const [decision, setDecision] = React.useState<{ item: RefundRequest; status: string; comment: string } | null>(null);
   const [message, setMessage] = React.useState('');
+  const [loaded, setLoaded] = React.useState(false);
   const refresh = React.useCallback(() => {
-    api.commerceRefundRequests().then((list) => setItems(list as RefundRequest[])).catch((err) => setMessage(err instanceof Error ? err.message : 'Chargement impossible'));
+    api.commerceRefundRequests().then((list) => setItems(list as RefundRequest[])).catch((err) => setMessage(err instanceof Error ? err.message : 'Chargement impossible')).finally(() => setLoaded(true));
   }, []);
   React.useEffect(refresh, [refresh]);
 
@@ -33,15 +35,18 @@ export default function CommerceRemboursementsPage() {
   return (
     <CommercePageFrame title="Remboursements" description="Demandes clients, eligibilite calculee, decisions manager et traçabilite par ligne de vente.">
       {message && <p className="rounded-md border p-3 text-sm text-muted-foreground">{message}</p>}
-      <div className="grid gap-4 md:grid-cols-4">
-        <Metric label="Demandes" value={items.length} />
-        <Metric label="A traiter" value={items.filter((item) => item.status === 'REQUESTED').length} />
-        <Metric label="Remboursees" value={items.filter((item) => item.status === 'REFUNDED').length} />
-        <Metric label="Montant eligible" value={cents(items.reduce((sum, item) => sum + (item.eligibleAmountCents || 0), 0))} />
-      </div>
+      {!loaded ? <CardsSkeleton count={4} className="md:grid-cols-4" /> : (
+        <div className="grid gap-4 md:grid-cols-4">
+          <Metric label="Demandes" value={items.length} />
+          <Metric label="A traiter" value={items.filter((item) => item.status === 'REQUESTED').length} />
+          <Metric label="Remboursees" value={items.filter((item) => item.status === 'REFUNDED').length} />
+          <Metric label="Montant eligible" value={cents(items.reduce((sum, item) => sum + (item.eligibleAmountCents || 0), 0))} />
+        </div>
+      )}
       <Panel title="File de traitement">
         <div className="grid gap-3">
-          {items.length === 0 && <p className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">Aucune demande de remboursement.</p>}
+          {!loaded && [0, 1, 2].map((i) => <Skeleton key={i} className="h-36 w-full rounded-lg" />)}
+          {loaded && items.length === 0 && <p className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">Aucune demande de remboursement.</p>}
           {items.map((item) => (
             <div key={item._id} className="rounded-lg border p-4">
               <div className="flex flex-wrap items-start justify-between gap-3">

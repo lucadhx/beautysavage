@@ -13,6 +13,7 @@ router.put('/schedule', authorize(ROLES.ADMIN, ROLES.DEV), asyncHandler(async (r
 router.get('/availability', asyncHandler(async (req, res) => ok(res, await calendar.listAvailability(req.query))));
 
 router.get('/events', asyncHandler(async (req, res) => ok(res, await calendar.listEvents(req.query))));
+router.get('/formation-sessions/:productId/:sessionId', asyncHandler(async (req, res) => ok(res, await calendar.getFormationSession(req.params.productId, req.params.sessionId))));
 router.post('/events', authorize(ROLES.ADMIN, ROLES.DEV), asyncHandler(async (req, res) => created(res, await calendar.createEvent(req.body))));
 router.put('/events/:id', authorize(ROLES.ADMIN, ROLES.DEV), asyncHandler(async (req, res) => ok(res, await calendar.updateEvent(req.params.id, req.body))));
 router.post('/events/:id/cancel', authorize(ROLES.ADMIN, ROLES.DEV), asyncHandler(async (req, res) => ok(res, await calendar.cancelEvent(req.params.id, req.body))));

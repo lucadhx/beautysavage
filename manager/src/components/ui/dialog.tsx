@@ -152,7 +152,7 @@ export function Modal({
                 onClick={fermer}
                 disabled={busy}
                 aria-label="Fermer"
-                className="rounded-md p-1 text-muted-foreground transition hover:bg-muted disabled:opacity-40"
+                className="-m-1.5 grid h-10 w-10 shrink-0 place-items-center rounded-lg text-muted-foreground transition hover:bg-muted disabled:opacity-40"
               >
                 <X className="h-5 w-5" />
               </button>

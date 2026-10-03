@@ -3,7 +3,8 @@ import { toast } from 'sonner';
 import {
   CheckCircle2, AlertTriangle, Mail, RefreshCw, ExternalLink, XCircle, Clock, Settings2, Info,
 } from 'lucide-react';
-import { Button, Badge, Spinner } from '@/components/ui/primitives';
+import { Button, Badge } from '@/components/ui/primitives';
+import { Skeleton } from '@/components/ui/Skeleton';
 import { useResource, useAction } from '@/hooks/useResource';
 import { useAuth } from '@/context/AuthContext';
 import { api } from '@/lib/api';
@@ -231,11 +232,20 @@ export function EmailConfigurationSection() {
 
   if (loading) {
     return (
-      <div
-        className="mt-4 flex items-center gap-2 rounded-md border border-border p-4 text-sm text-muted-foreground"
-        role="status"
-      >
-        <Spinner className="h-4 w-4" aria-hidden="true" /> Chargement de la configuration des emails…
+      <div className="mt-4 space-y-4 border-t border-border pt-4" aria-busy="true">
+        <span role="status" className="sr-only">Chargement de la configuration des emails…</span>
+        <div className="flex items-center justify-between gap-2">
+          <Skeleton className="h-4 w-24" />
+          <Skeleton className="h-5 w-28" />
+        </div>
+        <div className="flex items-start gap-3 rounded-md border border-border p-3">
+          <Skeleton className="h-5 w-5 shrink-0 rounded-full" />
+          <div className="grid flex-1 gap-2">
+            <Skeleton className="h-4 w-2/5" />
+            <Skeleton className="h-3 w-3/5" />
+          </div>
+        </div>
+        <Skeleton className="h-24 w-full" />
       </div>
     );
   }

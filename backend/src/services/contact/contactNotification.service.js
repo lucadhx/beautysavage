@@ -36,6 +36,14 @@ export const NOTIFICATION_STATUS = Object.freeze({
   PENDING: 'PENDING',
   /** Tous les destinataires : Brevo a accepté. */
   SENT: 'SENT',
+  /**
+   * Tous les destinataires : le webhook de livraison a CONSTATÉ la réception.
+   * Le suivi existe désormais (événements Brevo relayés par le Panel) : rester
+   * sur « en attente » alors que la livraison est prouvée serait faux.
+   */
+  DELIVERED: 'DELIVERED',
+  /** Au moins un destinataire : la messagerie a rejeté le message (adresse invalide, boîte pleine…). */
+  BOUNCED: 'BOUNCED',
   /** Une partie acceptée, une partie en échec terminal. */
   PARTIAL: 'PARTIAL',
   /** Tout en échec terminal. */
@@ -85,16 +93,34 @@ export async function notificationSummaries(submissionIds) {
     byEvent.get(x.eventId).push(x);
   }
 
+  const deliveries = await EmailDelivery.find({
+    actionExecutionId: { $in: executions.map((x) => String(x._id)) },
+  }).select('actionExecutionId status').lean();
+  const deliveryOf = new Map(deliveries.map((d) => [d.actionExecutionId, d.status]));
+
   for (const event of events) {
     const execs = byEvent.get(event.eventId) || [];
     out.set(event.entityId, {
-      status: summarize(execs),
+      status: withDelivery(summarize(execs), execs, deliveryOf),
       eventId: event.eventId,
       counts: countStatuses(execs),
       total: execs.length,
     });
   }
   return out;
+}
+
+/**
+ * « En attente de confirmation » devient « Reçue » quand CHAQUE envoi réussi a
+ * été constaté livré, et « Rejetée » dès qu'une messagerie l'a renvoyé.
+ */
+const BOUNCED_STATUSES = new Set(['BOUNCED', 'HARD_BOUNCED', 'SOFT_BOUNCED', 'BLOCKED', 'INVALID', 'SPAM', 'COMPLAINT']);
+function withDelivery(status, execs, deliveryOf) {
+  if (status !== NOTIFICATION_STATUS.SENT && status !== NOTIFICATION_STATUS.PARTIAL) return status;
+  const states = execs.filter((x) => x.status === EXECUTION_STATUS.SUCCEEDED).map((x) => deliveryOf.get(String(x._id)));
+  if (states.some((s) => BOUNCED_STATUSES.has(s))) return NOTIFICATION_STATUS.BOUNCED;
+  if (status === NOTIFICATION_STATUS.SENT && states.length && states.every((s) => s === DELIVERY_STATUS.DELIVERED)) return NOTIFICATION_STATUS.DELIVERED;
+  return status;
 }
 
 function emptyCounts() {
@@ -162,7 +188,7 @@ export async function notificationDetail(submissionId) {
   const byExecution = new Map(deliveries.map((d) => [d.actionExecutionId, d]));
 
   return {
-    status: summarize(executions),
+    status: withDelivery(summarize(executions), executions, new Map(deliveries.map((d) => [d.actionExecutionId, d.status]))),
     eventId: event.eventId,
     dispatchStatus: event.dispatchStatus,
     occurredAt: event.occurredAt,
@@ -178,7 +204,7 @@ export async function notificationDetail(submissionId) {
         availableAt: x.availableAt,
         /** Connue seulement une fois la livraison créée (donc après readiness). */
         recipientEmailMasked: d?.recipientEmailMasked || null,
-        /** JAMAIS `DELIVERED` sans webhook — voir l'en-tête. */
+        /** `DELIVERED` seulement quand le webhook de livraison l'a constaté. */
         deliveryStatus: d?.status || null,
         providerMessageId: d?.providerMessageId || null,
         sentAt: d?.sentAt || null,

@@ -7,7 +7,7 @@ import type { BillingGroup, InvoiceView } from '@/types';
  * l'écran ne devine rien. Voir docs/RX_POLISH_CONTRACTS_BILLING_01.md.
  */
 
-export type InvoiceIconName = 'Rocket' | 'RotateCw' | 'Wrench' | 'FileText';
+export type InvoiceIconName = 'Rocket' | 'RotateCw' | 'Wrench' | 'FileText' | 'Percent';
 
 export interface InvoiceIdentity {
   title: string;
@@ -34,6 +34,9 @@ export function invoiceIdentity(inv: Pick<InvoiceView, 'type' | 'label' | 'added
   }
   if (inv.type === 'SUBSCRIPTION') {
     return { title: 'Abonnement mensuel', icon: 'RotateCw', tone: 'bg-blue-100 text-blue-700' };
+  }
+  if (inv.type === 'COMMISSION') {
+    return { title: inv.label?.trim() || 'Commissions', icon: 'Percent', tone: 'bg-emerald-100 text-emerald-700' };
   }
   return { title: inv.label?.trim() || 'Facture', icon: 'FileText', tone: 'bg-slate-100 text-slate-600' };
 }

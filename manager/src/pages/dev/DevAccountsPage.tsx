@@ -121,7 +121,7 @@ export default function DevAccountsPage() {
       />
 
       {loading ? (
-        <BrandLoader />
+        <BrandLoader variant="list" />
       ) : (
         <Card>
           <CardContent className="divide-y divide-border p-0">

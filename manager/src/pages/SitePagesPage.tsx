@@ -1,9 +1,9 @@
 import * as React from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent,
+  DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent,
 } from '@dnd-kit/core';
-import { SortableContext, arrayMove, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
+import { SortableContext, arrayMove, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Plus, Pencil, Trash2, GripVertical, FileText } from 'lucide-react';
 import { api } from '@/lib/api';
@@ -45,7 +45,11 @@ export default function SitePagesPage() {
   const [toDelete, setToDelete] = React.useState<SitePage | null>(null);
   const navigate = useNavigate();
   const { pending, run } = useAction();
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+  // Souris, doigt (tablette, téléphone) et clavier : voir components/ui/Sortable.
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
 
   const items = data || [];
 
@@ -88,7 +92,7 @@ export default function SitePagesPage() {
       />
 
       {loading ? (
-        <BrandLoader />
+        <BrandLoader variant="list" />
       ) : items.length > 0 ? (
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <SortableContext items={items.map((p) => p._id)} strategy={verticalListSortingStrategy}>
@@ -137,7 +141,7 @@ function LignePage({
 }: {
   page: SitePage; onEdit: () => void; onDelete: () => void; onToggle: () => void;
 }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: page._id });
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id: page._id });
   return (
     <div
       ref={setNodeRef}
@@ -166,10 +170,11 @@ function LignePage({
             cible. Elle n'avait ni l'un ni l'autre.
           */}
           <button
+            ref={setActivatorNodeRef}
             {...attributes}
             {...listeners}
             aria-label={`Déplacer « ${page.title} » dans l'ordre du menu`}
-            className="-m-1 shrink-0 cursor-grab p-1 text-muted-foreground hover:text-foreground"
+            className="-m-1 inline-flex h-9 w-9 shrink-0 cursor-grab touch-none select-none items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground active:cursor-grabbing"
           >
             <GripVertical className="h-5 w-5" />
           </button>

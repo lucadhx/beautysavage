@@ -70,16 +70,31 @@ async function publicSend<T>(path: string, body: unknown, token?: string | null,
   return json.data as T;
 }
 
-async function publicUpload<T>(path: string, file: File, token?: string | null): Promise<T> {
-  const headers: Record<string, string> = {};
-  if (token) headers.Authorization = `Bearer ${token}`;
-  const body = new FormData();
-  body.append('file', file);
-  const res = await fetch(`${PUBLIC_BASE}${path}`, { method: 'POST', headers, body });
-  const json = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(json.message || 'Import impossible.');
-  return json.data as T;
+/**
+ * Envoi avec PROGRESSION — `fetch` ne sait pas dire où en est l'envoi d'un
+ * corps de requête ; `XMLHttpRequest` si. Une vidéo de livrable pèse des
+ * dizaines de mégaoctets : sans progression, la cliente croit l'écran figé.
+ */
+function publicUploadWithProgress<T>(path: string, file: File, token: string | null, onProgress: (ratio: number) => void): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `${PUBLIC_BASE}${path}`);
+    if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+    xhr.upload.onprogress = (event) => { if (event.lengthComputable) onProgress(event.loaded / event.total); };
+    xhr.onload = () => {
+      let json: any = {};
+      try { json = JSON.parse(xhr.responseText || '{}'); } catch { /* reponse non JSON (proxy) */ }
+      if (xhr.status >= 200 && xhr.status < 300) resolve(json.data as T);
+      else reject(new Error(json.message || (xhr.status === 413 ? 'Fichier trop volumineux (120 Mo maximum).' : 'Import impossible.')));
+    };
+    xhr.onerror = () => reject(new Error("Connexion interrompue pendant l'envoi."));
+    const body = new FormData();
+    body.append('file', file);
+    xhr.send(body);
+  });
 }
+
+export type UploadedDeliverable = { url: string; name: string; mimeType: string; size: number; kind: string; uploadedAt: string };
 
 export interface CommerceProduct {
   id: string;
@@ -88,15 +103,40 @@ export interface CommerceProduct {
   subtitle: string;
   description: string;
   kind: 'DISTANCE_TRAINING' | 'IN_PERSON_TRAINING' | 'SERVICE' | 'GIFT_CARD' | 'PRODUCT';
+  /** Le prix à payer maintenant — promotion comprise. */
   price: { amountCents: number; currency: string };
+  /** Le prix d'origine, à barrer, quand une promotion court. */
+  compareAtPrice?: { amountCents: number; currency: string } | null;
+  promotion?: { percentOff: number; discountCents: number; type: 'PERCENT' | 'FIXED'; value: number; startsAt: string | null; endsAt: string | null } | null;
+  /** Paiement complet, acompte (solde sur place) ou gratuit — réglé dans le Manager. */
+  paymentRule?: { type: 'FULL' | 'DEPOSIT' | 'FREE'; depositType?: 'PERCENT' | 'FIXED'; depositValue?: number };
   coverUrl?: string;
   gallery?: string[];
   durationMinutes?: number;
   trailer?: { title?: string; url?: string; sourceUrl?: string; streamableShortcode?: string; coverUrl?: string };
   options: { key: string; label: string; description: string; priceCents: number }[];
-  sessions: { id: string; startsAt: string; endsAt: string; capacity: number; remaining: number }[];
+  sessions: { id: string; startsAt: string; endsAt: string; capacity: number; remaining: number; days?: { startsAt: string; endsAt: string }[] }[];
   requiresLegalWaiver?: boolean;
+  faq?: { question: string; answer: string }[];
+  consentRequirements?: { key: string; label: string; required: boolean }[];
+  homeFeatured?: boolean;
+  homeFeaturedRank?: number | null;
+  training?: { location?: string; durationDays?: number | null };
 }
+
+export type OrderLineInput = {
+  productId: string;
+  quantity?: number;
+  sessionId?: string | null;
+  optionKeys?: string[];
+  serviceBooking?: { startsAt: string; endsAt: string; durationMinutes?: number };
+  giftCard?: { senderName?: string; recipientName?: string; recipientEmail?: string; message?: string; amountCents?: number };
+};
+
+export type CheckoutResult = { saleId: string; saleNumber: string; paymentStatus: string; checkoutUrl: string | null; message: string };
+
+/** Identifiant de la ligne unique d'un achat rapide — le serveur préfixe ses consentements avec. */
+export const QUICK_BUY_LINE_ID = 'achat-rapide';
 
 export interface Customer {
   _id: string;
@@ -113,9 +153,14 @@ export interface CartView {
     product: CommerceProduct;
     quantity: number;
     sessionId: string | null;
+    bookingSnapshot?: { startsAt?: string; endsAt?: string; durationMinutes?: number } | null;
     optionKeys: string[];
     unitPriceCents: number;
+    /** Ce qui est payé en ligne (acompte compris). */
     totalCents: number;
+    fullTotalCents?: number;
+    balanceDueCents?: number;
+    paymentRule?: 'FULL' | 'DEPOSIT' | 'FREE';
     giftCard?: {
       senderName?: string;
       recipientName?: string;
@@ -126,8 +171,74 @@ export interface CartView {
     consentRequirements?: { key: string; label: string; required: boolean }[];
   }[];
   totalCents: number;
+  /** Ce qu'il restera à régler sur place (acomptes, prestations gratuites en ligne). */
+  balanceDueCents?: number;
   currency: string;
 }
+
+export type CheckoutStatus = {
+  state: 'PAID' | 'FINALIZING' | 'PENDING' | 'PROCESSING' | 'FAILED' | 'EXPIRED' | 'REFUNDED';
+  saleNumber: string;
+  totalCents: number;
+  giftCardAmountCents?: number;
+  cardAmountCents?: number;
+  giftCards?: { codeMasked: string; amountCents: number }[];
+  /** La facture Stripe (page hébergée) ; vide tant qu'elle n'est pas émise, ou sans paiement Stripe. */
+  invoiceUrl: string;
+  balanceDueCents?: number;
+};
+
+export type Appointment = {
+  id: string;
+  kind: 'SERVICE' | 'IN_PERSON_TRAINING';
+  title: string;
+  productSlug: string;
+  coverUrl: string;
+  startsAt: string;
+  endsAt: string;
+  days: { startsAt: string; endsAt: string }[];
+  status: string;
+  soon: boolean;
+  totalCents: number;
+  paidCents: number;
+  balanceDueCents: number;
+  saleId: string | null;
+  location: string;
+  terms: { cancellable: boolean; onTime: boolean; freeCancelHours: number; deadline: string; percent: number; refundCents: number; paidCents: number };
+};
+
+export type Agenda = { upcoming: Appointment[]; past: Appointment[]; balanceDueCents: number; next: Appointment | null };
+
+export type CustomerOrder = {
+  id: string;
+  saleNumber: string;
+  status: string;
+  paymentStatus: string;
+  totalCents: number;
+  balanceDueCents: number;
+  invoiceUrl: string;
+  createdAt: string;
+  lines: { productSnapshot?: { title?: string; kind?: string }; totalCents: number }[];
+};
+
+export type WalletGiftCard = {
+  id: string;
+  code: string | null;
+  codeMasked: string;
+  initialAmountCents: number;
+  balanceCents: number;
+  availableCents: number;
+  status: 'ACTIVE' | 'EMPTY' | 'VOID' | 'EXPIRED';
+  origin: 'BOUGHT' | 'RECEIVED' | 'ADDED';
+  recipientName: string;
+  senderName: string;
+  message: string;
+  pdfUrl: string;
+  createdAt: string;
+  usage: { at: string; amountCents: number; reason: string }[];
+};
+
+export type GiftCardCheck = { code: string; codeMasked: string; availableCents: number; debitCents: number; remainingToPayCents: number; balanceAfterCents: number };
 
 export const customerTokenStore = {
   get: () => localStorage.getItem(CUSTOMER_TOKEN_KEY),
@@ -135,8 +246,23 @@ export const customerTokenStore = {
   clear: () => localStorage.removeItem(CUSTOMER_TOKEN_KEY),
 };
 
+export interface ServiceCollection {
+  id: string;
+  slug: string;
+  title: string;
+  description: string;
+  coverUrl: string;
+  productIds: string[];
+}
+
 export const commerceApi = {
   catalog: () => publicGet<CommerceProduct[]>('/commerce/catalog'),
+  /**
+   * Collections de prestations (rayons). Un serveur qui ne les connaît pas encore
+   * répond 404 : on renvoie alors une liste vide, et la page « Prestations »
+   * garde son affichage en liste simple — rien ne casse.
+   */
+  collections: () => publicGet<ServiceCollection[]>('/commerce/collections').catch(() => [] as ServiceCollection[]),
   product: (slug: string) => publicGet<CommerceProduct>(`/commerce/products/${slug}`),
   availability: (params: { from: string; to: string; durationMinutes?: number; bufferAfterMinutes?: number }) => {
     const query = new URLSearchParams({ from: params.from, to: params.to });
@@ -162,16 +288,22 @@ export const customerApi = {
   resetPassword: (body: { token: string; password: string }) =>
     publicSend<{ message: string }>('/customer/password-reset/confirm', body),
   me: () => publicGet<Customer>('/customer/me', customerTokenStore.get()),
+  /** Où en est le paiement de cette session Stripe — vérifié (et finalisé) côté serveur. */
+  checkoutStatus: (sessionId: string, saleNumber = '') =>
+    publicGet<CheckoutStatus>(
+      sessionId ? `/customer/checkout/status?session_id=${encodeURIComponent(sessionId)}` : `/customer/checkout/status?commande=${encodeURIComponent(saleNumber)}`,
+      customerTokenStore.get(),
+    ),
   cart: () => publicGet<CartView>('/customer/cart', customerTokenStore.get()),
-  addCartItem: (body: {
-    productId: string;
-    quantity?: number;
-    sessionId?: string | null;
-    optionKeys?: string[];
-    serviceBooking?: { startsAt: string; endsAt: string; durationMinutes?: number };
-    giftCard?: { senderName?: string; recipientName?: string; recipientEmail?: string; message?: string; amountCents?: number };
-  }) =>
+  addCartItem: (body: OrderLineInput) =>
     publicSend<CartView>('/customer/cart/items', body, customerTokenStore.get()),
+  /** Achat rapide : paie UNE ligne depuis sa fiche, sans lire ni vider le panier. */
+  quickCheckout: (item: OrderLineInput, consents: string[] = [], giftCardCodes: string[] = [], returnPath = '') =>
+    publicSend<CheckoutResult>(
+      '/customer/checkout/quick',
+      { idempotencyKey: globalThis.crypto?.randomUUID?.() || String(Date.now()), item, consents, giftCardCodes, returnPath },
+      customerTokenStore.get()
+    ),
   removeCartItem: (lineId: string) =>
     publicSend<CartView>(`/customer/cart/items/${lineId}`, {}, customerTokenStore.get(), 'DELETE'),
   checkout: (consents: string[] = [], giftCardCodes: string[] = []) =>
@@ -180,16 +312,27 @@ export const customerApi = {
       { idempotencyKey: globalThis.crypto?.randomUUID?.() || String(Date.now()), consents, giftCardCodes },
       customerTokenStore.get()
     ),
-  orders: () => publicGet<unknown[]>('/customer/orders', customerTokenStore.get()),
+  orders: () => publicGet<CustomerOrder[]>('/customer/orders', customerTokenStore.get()),
+  appointments: () => publicGet<Agenda>('/customer/appointments', customerTokenStore.get()),
+  cancelAppointment: (id: string) =>
+    publicSend<{ cancelled: boolean; refundCents: number; percent: number; onTime: boolean }>(`/customer/appointments/${encodeURIComponent(id)}/cancel`, {}, customerTokenStore.get()),
   invoices: () => publicGet<unknown[]>('/customer/invoices', customerTokenStore.get()),
   formations: () => publicGet<unknown[]>('/customer/formations', customerTokenStore.get()),
-  giftCards: () => publicGet<unknown[]>('/customer/gift-cards', customerTokenStore.get()),
+  giftCards: () => publicGet<WalletGiftCard[]>('/customer/gift-cards', customerTokenStore.get()),
+  /** Ce qu'une carte paiera sur ce montant, et ce qu'il restera à régler. */
+  checkGiftCard: (code: string, totalCents: number) =>
+    publicSend<GiftCardCheck>('/customer/gift-cards/check', { code, totalCents }, customerTokenStore.get()),
+  addGiftCardToWallet: (code: string) =>
+    publicSend<WalletGiftCard[]>('/customer/gift-cards/wallet', { code }, customerTokenStore.get()),
   refundRequests: () => publicGet<unknown[]>('/customer/refund-requests', customerTokenStore.get()),
   createRefundRequest: (body: { saleId: string; lineId: string; amountCents?: number; reason?: string }) =>
     publicSend<unknown>('/customer/refund-requests', body, customerTokenStore.get()),
   trainingSubmissions: () => publicGet<unknown[]>('/customer/training-submissions', customerTokenStore.get()),
-  uploadTrainingDeliverable: (file: File) =>
-    publicUpload<{ url: string; name: string; mimeType: string; size: number; kind: string; uploadedAt: string }>('/customer/training-deliverables', file, customerTokenStore.get()),
+  uploadTrainingDeliverable: (file: File, onProgress: (ratio: number) => void = () => {}) =>
+    publicUploadWithProgress<UploadedDeliverable>('/customer/training-deliverables', file, customerTokenStore.get(), onProgress),
+  /** Retire du serveur un livrable envoyé mais pas encore soumis. */
+  deleteTrainingDeliverable: (url: string) =>
+    publicSend<{ deleted: boolean }>('/customer/training-deliverables', { url }, customerTokenStore.get(), 'DELETE'),
   createTrainingSubmission: (body: { saleId: string; productId: string; answers?: unknown; deliverables?: unknown }) =>
     publicSend<unknown>('/customer/training-submissions', body, customerTokenStore.get()),
   streamablePlaybackUrl: (shortcode: string) =>

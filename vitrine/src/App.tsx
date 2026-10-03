@@ -1,4 +1,4 @@
-import { Routes, Route, useLocation } from 'react-router-dom';
+import { Navigate, Routes, Route, useLocation } from 'react-router-dom';
 import * as React from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useSiteData } from '@/context/SiteDataContext';
@@ -8,8 +8,9 @@ import { useMinimumDuration } from '@/lib/minimumDuration';
 import { useVisualViewportTop } from '@/lib/viewport';
 import { Navbar } from '@/components/layout/Navbar';
 import { Footer } from '@/components/layout/Footer';
-import { CustomerProvider } from '@/context/CustomerContext';
+import { CustomerProvider, useCustomer } from '@/context/CustomerContext';
 import { RouteBoundary, RouteFallback } from '@/components/RouteBoundary';
+import { SeoHead } from '@/lib/seoHead';
 import HomePage from '@/pages/HomePage'; // page d'accueil (LCP) : chargée d'emblée
 // Les autres routes sont découpées en chunks séparés (code-splitting).
 const chargerContact = () => import('@/pages/ContactPage');
@@ -30,9 +31,12 @@ const PolitiqueConfidentialitePage = React.lazy(() => chargerLegal().then((m) =>
 const SitePageView = React.lazy(chargerPage);
 const SuspendedPage = React.lazy(() => import('@/pages/SuspendedPage'));
 const NotFoundPage = React.lazy(() => import('@/pages/NotFoundPage'));
+const EmailVerificationPage = React.lazy(() => import('@/pages/EmailVerificationPage'));
 const CatalogPage = React.lazy(() => import('@/pages/CatalogPage'));
+const ServiceCollectionPage = React.lazy(() => import('@/pages/ServiceCollectionPage'));
 const ProductPage = React.lazy(() => import('@/pages/ProductPage'));
 const CartPage = React.lazy(() => import('@/pages/CartPage'));
+const PaymentSuccessPage = React.lazy(() => import('@/pages/PaymentSuccessPage'));
 const CustomerAccountPage = React.lazy(() => import('@/pages/CustomerAccountPage'));
 const CustomerTrainingsPage = React.lazy(() => import('@/pages/CustomerTrainingsPage'));
 const CustomerPasswordResetPage = React.lazy(() => import('@/pages/CustomerPasswordResetPage'));
@@ -157,13 +161,16 @@ function PagesEnFondu() {
             <Route path="/contact" element={<ContactPage />} />
             <Route path="/formations" element={<CatalogPage kind="training" />} />
             <Route path="/prestations" element={<CatalogPage kind="service" />} />
+            <Route path="/prestations/:slug" element={<ServiceCollectionPage />} />
             <Route path="/boutique" element={<CatalogPage kind="all" />} />
             <Route path="/cartes-cadeaux" element={<CatalogPage kind="gift" />} />
             <Route path="/catalogue/:slug" element={<ProductPage />} />
             <Route path="/panier" element={<CartPage />} />
+            <Route path="/paiement/succes" element={<PaymentSuccessPage />} />
             <Route path="/connexion-client" element={<CustomerAccountPage />} />
             <Route path="/inscription-client" element={<CustomerAccountPage />} />
             <Route path="/espace-client" element={<CustomerAccountPage />} />
+            <Route path="/verification-email" element={<EmailVerificationPage />} />
             <Route path="/espace-client/formations" element={<CustomerTrainingsPage />} />
             <Route path="/espace-client/mot-de-passe" element={<CustomerPasswordResetPage />} />
             {/*
@@ -219,7 +226,24 @@ export function App() {
     sans un mot d'explication. Le message d'indisponibilité passe donc avant la
     règle, quitte à s'afficher aux couleurs par défaut.
   */
-  if (!palettePrete && !error) return null;
+  /*
+    LE VOILE DE DÉMARRAGE. Le HTML servi par le backend contient le contenu
+    lisible de la page (pour les robots sans JavaScript) sous un voile aux
+    couleurs du site, logo au centre. Il s'efface dès que React peint quelque
+    chose de lui-même : le loader (identique) ou le site. Sans lui, ce contenu
+    brut se serait montré un instant avant l'application.
+  */
+  React.useEffect(() => {
+    if (!palettePrete && !error) return;
+    const cover = document.getElementById('boot-cover');
+    if (!cover) return;
+    cover.style.transition = 'opacity 0.25s ease-out';
+    cover.style.opacity = '0';
+    const timer = window.setTimeout(() => cover.remove(), 260);
+    return () => window.clearTimeout(timer);
+  }, [palettePrete, error]);
+
+  if (!palettePrete && !error) return <SeoHead />;
 
   let contenu: React.ReactNode = null;
   if (chargementVisible) {
@@ -251,6 +275,7 @@ export function App() {
         les deux fondus bout à bout : une seconde de plus à regarder un écran
         vide, après celle qu'on vient déjà d'imposer.
       */}
+      <SeoHead />
       <AnimatePresence>{chargementVisible && <Loader key="loader" />}</AnimatePresence>
       {contenu && (
         <motion.div
@@ -268,12 +293,29 @@ export function App() {
   );
 }
 
+/**
+ * UN COMPTE NON VÉRIFIÉ NE VA NULLE PART AILLEURS — tant que la cliente est
+ * connectée avec une adresse non confirmée, toute page la ramène à la
+ * vérification du code (seules les pages légales restent lisibles). Elle ne
+ * peut donc ni réserver ni acheter sans e-mail vérifié.
+ */
+const OPEN_WHILE_UNVERIFIED = ['/verification-email', '/mentions-legales', '/politique-de-confidentialite'];
+function EmailVerificationGate() {
+  const { customer, loading } = useCustomer();
+  const location = useLocation();
+  if (loading || !customer || customer.emailVerified) return null;
+  if (OPEN_WHILE_UNVERIFIED.some((p) => location.pathname.startsWith(p))) return null;
+  const retour = `${location.pathname}${location.search}`;
+  return <Navigate to={`/verification-email${retour && retour !== '/espace-client' && retour !== '/' ? `?retour=${encodeURIComponent(retour)}` : ''}`} replace />;
+}
+
 /** Le site lui-même, une fois les données là et le site ni suspendu ni en panne. */
 function Site() {
   usePrechargementDesPages();
   return (
     <CustomerProvider>
       <ScrollManager />
+      <EmailVerificationGate />
       <Navbar />
       {/* `v-clip-x` empêche le contenu de rendre la page balayable
           latéralement (voir index.css) ; les surfaces fixes vivent hors de ce

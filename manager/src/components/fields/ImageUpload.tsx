@@ -9,6 +9,7 @@ import { MEDIA_LIMITS, MEDIA_DEFAULT_MAX_MO, MEDIA_FORMATS_LISIBLES } from '@/co
 import { messageUtilisateur } from '@/lib/erreurs';
 import { Modal } from '@/components/ui/dialog';
 import { Button, Field, Input } from '@/components/ui/primitives';
+import { Skeleton } from '@/components/ui/Skeleton';
 
 /**
  * IMPORT D'UNE IMAGE MÉTIER — le seul point d'entrée du projet.
@@ -325,11 +326,15 @@ function MediaLibraryDialog({
 }) {
   const [query, setQuery] = React.useState('');
   const [items, setItems] = React.useState<MediaLibraryItem[]>([]);
-  const [loading, setLoading] = React.useState(false);
+  // Vrai dès l'ouverture : sans cela, le premier rendu (avant l'effet) disait « Aucun media ».
+  const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState('');
 
   React.useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      setLoading(true);
+      return;
+    }
     let cancelled = false;
     setLoading(true);
     setError('');
@@ -349,7 +354,7 @@ function MediaLibraryDialog({
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
-      <div className="flex max-h-[86vh] w-full max-w-5xl flex-col overflow-hidden rounded-xl border bg-background shadow-2xl">
+      <div className="flex max-h-[calc(var(--m-viewport-h)*0.86)] w-full max-w-5xl flex-col overflow-hidden rounded-xl border bg-background shadow-2xl">
         <div className="flex items-center justify-between gap-3 border-b p-4">
           <div>
             <h2 className="text-base font-semibold">Mediatheque</h2>
@@ -370,15 +375,28 @@ function MediaLibraryDialog({
             />
           </div>
         </div>
-        <div className="min-h-0 flex-1 overflow-auto p-4">
-          {loading && <p className="text-sm text-muted-foreground">Chargement...</p>}
+        <div className="min-h-0 flex-1 overflow-auto overscroll-contain p-4">
+          {loading && (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4" aria-busy="true">
+              <span role="status" className="sr-only">Chargement...</span>
+              {Array.from({ length: 8 }, (_, i) => (
+                <div key={i} className="overflow-hidden rounded-lg border bg-card">
+                  <Skeleton className="aspect-video w-full rounded-none" />
+                  <div className="grid gap-1.5 p-3">
+                    <Skeleton className="h-3 w-4/5" />
+                    <Skeleton className="h-2.5 w-1/2" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
           {error && <p className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</p>}
           {!loading && !error && items.length === 0 && (
             <p className="rounded-md border p-4 text-sm text-muted-foreground">
               Aucun media trouve pour ce type. Importez une image depuis le champ, elle apparaitra ici ensuite.
             </p>
           )}
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className={cn('grid gap-3 sm:grid-cols-2 lg:grid-cols-4', loading && 'hidden')}>
             {items.map((item) => (
               <button
                 key={item.id}

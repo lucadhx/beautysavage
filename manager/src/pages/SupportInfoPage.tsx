@@ -63,7 +63,7 @@ export default function SupportInfoPage() {
     { live: 'panel-company' },
   );
 
-  if (loading) return <BrandLoader />;
+  if (loading) return <BrandLoader variant="form" />;
 
   const company = data?.company ?? null;
   const identity = company?.identity ?? null;
