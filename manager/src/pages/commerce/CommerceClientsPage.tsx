@@ -14,7 +14,12 @@ import {
   type CommerceSale,
 } from './CommerceShared';
 
-type CustomerWithVerification = CommerceCustomer & { emailVerified?: boolean };
+type CustomerWithVerification = CommerceCustomer & { emailVerified?: boolean; accessPending?: boolean };
+
+function verificationLabel(c: CustomerWithVerification) {
+  if (c.emailVerified) return 'VERIFIE';
+  return c.accessPending ? 'ACCÈS NON ACTIVÉ' : 'A VERIFIER';
+}
 
 function customerEmail(sale: CommerceSale) {
   return typeof sale.customerId === 'object' && sale.customerId ? sale.customerId.email || '' : '';
@@ -81,7 +86,7 @@ export default function CommerceClientsPage() {
               <Metric label="Commandes" value={customerSales.length} />
               <Metric label="Total paye" value={cents(spent)} />
               <Metric label="Marketing" value={selected.marketingConsent ? 'Oui' : 'Non'} />
-              <Metric label="E-mail" value={selected.emailVerified ? 'Verifie' : 'A verifier'} />
+              <Metric label="E-mail" value={selected.emailVerified ? 'Verifie' : selected.accessPending ? 'Accès non activé' : 'A verifier'} />
             </div>
             <div className="grid gap-4 lg:grid-cols-[0.8fr_1.2fr]">
               <Panel title="Identite">
@@ -92,6 +97,7 @@ export default function CommerceClientsPage() {
                   <Detail label="Inscription" value={dateShort(selected.createdAt)} />
                   <Detail label="Verification e-mail" value={selected.emailVerified ? 'Verifiee' : 'Non verifiee'} />
                 </div>
+                {selected.accessPending && <AccessLinkBox customerId={selected._id} email={selected.email} />}
               </Panel>
               <Panel title="Commandes">
                 <SalesMiniTable sales={customerSales} onOpen={(sale) => navigate(`/commerce/ventes/${sale._id}`)} />
@@ -148,7 +154,7 @@ export default function CommerceClientsPage() {
                     </td>
                     <td className="m-hide px-4 py-3">{customer.phone || 'Non renseigne'}</td>
                     <td className="m-hide whitespace-nowrap px-4 py-3">{dateShort(customer.createdAt)}</td>
-                    <td className="px-4 py-3"><StatusBadge>{customer.emailVerified ? 'VERIFIE' : 'A VERIFIER'}</StatusBadge></td>
+                    <td className="px-4 py-3"><StatusBadge>{verificationLabel(customer)}</StatusBadge></td>
                     <td className="m-hide px-4 py-3">{customer.marketingConsent ? 'Oui' : 'Non'}</td>
                     <td className="px-4 py-3">
                       <Dropdown.Root>
@@ -205,6 +211,42 @@ function SalesMiniTable({ sales, onOpen }: { sales: CommerceSale[]; onOpen: (sal
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+/**
+ * Compte ouvert par l'institut lors d'une réservation, jamais activé : la
+ * cliente n'a pas encore choisi son mot de passe. On peut lui renvoyer le lien
+ * « Votre espace client est prêt » (le précédent cesse de fonctionner).
+ */
+function AccessLinkBox({ customerId, email }: { customerId: string; email: string }) {
+  const [state, setState] = React.useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
+  const [error, setError] = React.useState('');
+  async function resend() {
+    setState('sending');
+    setError('');
+    try {
+      await api.resendCustomerAccessLink(customerId);
+      setState('sent');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Envoi impossible');
+      setState('error');
+    }
+  }
+  return (
+    <div className="mt-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900" data-testid="access-pending">
+      <p className="font-semibold">Accès pas encore activé</p>
+      <p className="mt-1">Compte créé par l’institut lors d’une réservation. La cliente active son espace en choisissant son mot de passe depuis le lien reçu par e-mail.</p>
+      {state === 'sent'
+        ? <p className="mt-2 font-medium text-emerald-800" data-testid="access-link-sent">Lien renvoyé à {email}.</p>
+        : (
+          <button type="button" onClick={resend} disabled={state === 'sending'} data-testid="resend-access-link"
+            className="mt-2 rounded-md bg-amber-900 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60">
+            {state === 'sending' ? 'Envoi…' : 'Renvoyer le lien d’accès'}
+          </button>
+        )}
+      {error && <p className="mt-2 text-rose-700">{error}</p>}
     </div>
   );
 }

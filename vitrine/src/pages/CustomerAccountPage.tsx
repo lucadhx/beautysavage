@@ -17,7 +17,10 @@ export default function CustomerAccountPage() {
   // Une erreur (compte existant, mot de passe faux…) s'affiche en rouge ; une information, en neutre.
   const [messageTone, setMessageTone] = React.useState<'error' | 'info'>('info');
   const fail = (err: unknown, fallback: string) => { setMessageTone('error'); setMessage(err instanceof Error ? err.message : fallback); };
-  const tell = (text: string) => { setMessageTone('info'); setMessage(text); };
+  const tell = (text: string) => { setMessageTone('info'); setMessage(text); setExistingAccount(false); };
+  // Inscription sur une adresse déjà connue : l'encadré propose d'envoyer le lien d'accès.
+  const [existingAccount, setExistingAccount] = React.useState(false);
+  const [sendingLink, setSendingLink] = React.useState(false);
 
   React.useEffect(() => {
     setMode(location.pathname.includes('inscription') ? 'register' : 'login');
@@ -59,6 +62,19 @@ export default function CustomerAccountPage() {
       }
     } catch (err) {
       fail(err, mode === 'login' ? 'Connexion impossible' : 'Création du compte impossible');
+      setExistingAccount(mode === 'register' && (err as { code?: string })?.code === 'CUSTOMER_EXISTS');
+    }
+  }
+
+  async function sendAccessLink() {
+    setSendingLink(true);
+    try {
+      const result = await customerApi.requestPasswordReset(email);
+      tell(result.resetUrl ? `Lien envoyé à ${email}. Lien TEST : ${result.resetUrl}` : `C’est envoyé : ouvrez l’e-mail reçu à ${email} et choisissez votre mot de passe.`);
+    } catch (err) {
+      fail(err, 'Envoi impossible pour le moment');
+    } finally {
+      setSendingLink(false);
     }
   }
 
@@ -132,7 +148,18 @@ export default function CustomerAccountPage() {
               className="mt-4 flex items-start gap-2 rounded-lg border px-3 py-2.5 text-sm"
               style={messageTone === 'error' ? { borderColor: '#fecaca', background: '#fef2f2', color: '#991b1b' } : { borderColor: 'var(--v-border)', color: 'var(--v-muted-foreground)' }}>
               {messageTone === 'error' && <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />}
-              {message}
+              <span className="min-w-0">
+                {message}
+                {existingAccount && (
+                  <span className="mt-2 flex flex-wrap gap-2">
+                    <button type="button" onClick={sendAccessLink} disabled={sendingLink} data-testid="send-access-link"
+                      className="rounded-md px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60" style={{ background: '#991b1b' }}>
+                      {sendingLink ? 'Envoi…' : 'Recevoir mon lien d’accès'}
+                    </button>
+                    <Link to="/connexion-client" className="rounded-md border px-3 py-1.5 text-xs font-semibold" style={{ borderColor: '#fecaca' }}>Me connecter</Link>
+                  </span>
+                )}
+              </span>
             </p>
           )}
         </div>

@@ -27,7 +27,7 @@ import { activePromotion, effectivePriceCents } from './commercePromotion.js';
 import { paymentSplit, publicPaymentRule } from './commercePaymentRules.js';
 import { configuredSiteUrl } from '../utils/siteOrigin.js';
 import { view as commissionView } from './commissionPayment.service.js';
-import { emitAppointmentBooked } from './commerceCustomer.service.js';
+import { emitAppointmentBooked, isPendingInstituteAccount, sendCustomerAccessLink } from './commerceCustomer.service.js';
 import { emitAndDispatch } from './events/domainEvent.service.js';
 import {
   activeInstituteMode,
@@ -934,7 +934,17 @@ export async function registerCustomer(payload) {
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw ApiError.badRequest('Adresse e-mail invalide');
   if (password.length < 8) throw ApiError.badRequest('Mot de passe trop court');
   const exists = await Customer.findOne({ email }).lean();
-  if (exists) throw ApiError.conflict('Un compte client existe déjà pour cette adresse');
+  if (exists) {
+    // Compte ouvert par l'institut lors d'une réservation : on le dit, et la
+    // vitrine propose d'envoyer le lien d'accès plutôt qu'un cul-de-sac.
+    const managed = isPendingInstituteAccount(exists);
+    throw ApiError.conflict(
+      managed
+        ? 'Un espace client a déjà été créé pour vous lors d’une réservation à l’institut. Recevez votre lien d’accès par e-mail pour l’activer.'
+        : 'Un compte client existe déjà pour cette adresse. Connectez-vous, ou recevez un lien pour choisir un nouveau mot de passe.',
+      { code: 'CUSTOMER_EXISTS', createdByInstitute: managed },
+    );
+  }
   const code = verificationCode();
   const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000);
   const customer = await Customer.create({
@@ -978,7 +988,8 @@ export async function loginCustomer(email, password) {
   if (!customer || !(await customer.comparePassword(String(password || '')))) {
     throw ApiError.unauthorized('Identifiants client invalides');
   }
-  return { customer, token: signCustomerToken(customer) };
+  // Relu sans `+password` : l'empreinte du mot de passe ne quitte jamais le serveur.
+  return { customer: await Customer.findById(customer._id).lean(), token: signCustomerToken(customer) };
 }
 
 export async function requestCustomerEmailVerification(customerId) {
@@ -1052,6 +1063,13 @@ export async function requestCustomerPasswordReset(email, { siteUrl = '' } = {})
   const customer = await Customer.findOne({ email: normalized }).select('+passwordReset.tokenHash');
   const response = { message: 'Si ce compte existe, un lien de réinitialisation va être envoyé.' };
   if (!customer) return response;
+  // Compte ouvert par l'institut, jamais activé : le bon message est « votre
+  // espace est prêt », pas « réinitialisez votre mot de passe ».
+  if (isPendingInstituteAccount(customer)) {
+    // Réponse identique quoi qu'il arrive : elle ne doit pas révéler qu'un compte existe.
+    await sendCustomerAccessLink(customer, { origin: 'SELF_REQUEST', siteUrl }).catch(() => null);
+    return response;
+  }
   const token = crypto.randomBytes(32).toString('hex');
   customer.passwordReset = {
     tokenHash: crypto.createHash('sha256').update(token).digest('hex'),
@@ -1091,8 +1109,18 @@ export async function resetCustomerPassword(payload = {}) {
   customer.password = password;
   customer.passwordReset.usedAt = new Date();
   customer.passwordReset.tokenHash = '';
+  // Le lien est arrivé dans SA boîte : l'adresse est prouvée, aucun code OTP
+  // n'est redemandé (compte ouvert par l'institut comme mot de passe oublié).
+  if (!customer.emailVerified) {
+    customer.emailVerified = true;
+    customer.emailVerification = { ...(customer.emailVerification?.toObject?.() || {}), verifiedAt: new Date() };
+  }
   await customer.save();
-  return { message: 'Mot de passe client mis à jour.' };
+  return {
+    message: 'Mot de passe enregistré. Bienvenue dans votre espace client.',
+    token: signCustomerToken(customer),
+    customer: await Customer.findById(customer._id).lean(),
+  };
 }
 
 export async function getCustomerCart(customerId) {
@@ -2275,7 +2303,16 @@ async function cancelSaleAppointments(sale, reason) {
 }
 
 export async function listManagerCustomers() {
-  return Customer.find().sort({ createdAt: -1 }).lean();
+  const customers = await Customer.find().sort({ createdAt: -1 }).lean();
+  return customers.map((c) => ({ ...c, accessPending: isPendingInstituteAccount(c) }));
+}
+
+/** Manager : renvoie le lien d'accès d'un compte ouvert par l'institut. */
+export async function resendCustomerAccessLink(customerId) {
+  const customer = await Customer.findById(customerId).lean();
+  if (!customer) throw ApiError.notFound('Client introuvable');
+  if (customer.emailVerified) throw ApiError.badRequest('Ce compte est déjà activé : la cliente se connecte avec son mot de passe.');
+  return sendCustomerAccessLink(customer, { origin: 'MANAGER_RESEND' });
 }
 
 export async function listCommissions() {

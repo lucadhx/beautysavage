@@ -1092,6 +1092,7 @@ export const api = {
   refundCommerceSale: (id: string, data: { amountCents?: number; reason?: string }) =>
     request<any>(`/commerce/sales/${id}/refund`, { method: 'POST', body: data }),
   commerceCustomers: () => request<any[]>('/commerce/customers'),
+  resendCustomerAccessLink: (id: string) => request<{ sent: boolean; expiresAt: string }>(`/commerce/customers/${id}/access-link`, { method: 'POST', body: {} }),
   commerceCommissions: () => request<any[]>('/commerce/commissions'),
   recalculateCommerceCommissions: () =>
     request<any[]>('/commerce/commissions/recalculate', { method: 'POST' }),

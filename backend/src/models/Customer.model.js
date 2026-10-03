@@ -16,6 +16,12 @@ const customerSchema = new mongoose.Schema(
       country: { type: String, default: 'FR' },
     },
     marketingConsent: { type: Boolean, default: false },
+    /**
+     * Compte ouvert PAR L'INSTITUT (réservation saisie au Manager), pas par la
+     * cliente. Son accès s'active par le lien reçu par e-mail : cliquer ce lien
+     * prouve l'adresse, aucun code OTP n'est demandé ensuite.
+     */
+    createdByInstitute: { type: Boolean, default: false },
     emailVerified: { type: Boolean, default: false, index: true },
     emailVerification: {
       tokenHash: { type: String, default: '', select: false },

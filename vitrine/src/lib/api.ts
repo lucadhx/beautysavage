@@ -66,8 +66,17 @@ async function publicSend<T>(path: string, body: unknown, token?: string | null,
   if (token) headers.Authorization = `Bearer ${token}`;
   const res = await fetch(`${PUBLIC_BASE}${path}`, { method, headers, body: JSON.stringify(body) });
   const json = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(json.message || 'Une erreur est survenue.');
+  if (!res.ok) throw apiError(json);
   return json.data as T;
+}
+
+/** Erreur d'API qui garde le code métier (`CUSTOMER_EXISTS`, `SLOT_REQUIRED`…) pour que l'écran réagisse au bon cas. */
+export type ApiFailure = Error & { code?: string; details?: Record<string, unknown> };
+function apiError(json: { message?: string; code?: string; details?: unknown }): ApiFailure {
+  const err = new Error(json.message || 'Une erreur est survenue.') as ApiFailure;
+  err.code = json.code;
+  if (json.details && typeof json.details === 'object' && !Array.isArray(json.details)) err.details = json.details as Record<string, unknown>;
+  return err;
 }
 
 /**
@@ -286,7 +295,7 @@ export const customerApi = {
   requestPasswordReset: (email: string) =>
     publicSend<{ message: string; resetUrl?: string }>('/customer/password-reset/request', { email }),
   resetPassword: (body: { token: string; password: string }) =>
-    publicSend<{ message: string }>('/customer/password-reset/confirm', body),
+    publicSend<{ message: string; token?: string; customer?: Customer }>('/customer/password-reset/confirm', body),
   me: () => publicGet<Customer>('/customer/me', customerTokenStore.get()),
   /** Où en est le paiement de cette session Stripe — vérifié (et finalisé) côté serveur. */
   checkoutStatus: (sessionId: string, saleNumber = '') =>

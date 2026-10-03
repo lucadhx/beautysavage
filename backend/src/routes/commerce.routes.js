@@ -119,6 +119,7 @@ managerCommerceRoutes.post('/training-files', authorize(ROLES.ADMIN, ROLES.DEV),
 managerCommerceRoutes.get('/sales', asyncHandler(async (_req, res) => ok(res, await commerce.listManagerSales())));
 managerCommerceRoutes.post('/sales/:id/refund', authorize(ROLES.ADMIN, ROLES.DEV), asyncHandler(async (req, res) => ok(res, await commerce.refundSale(req.params.id, req.body, req.user?._id || null))));
 managerCommerceRoutes.get('/customers', asyncHandler(async (_req, res) => ok(res, await commerce.listManagerCustomers())));
+managerCommerceRoutes.post('/customers/:id/access-link', asyncHandler(async (req, res) => ok(res, await commerce.resendCustomerAccessLink(req.params.id))));
 managerCommerceRoutes.get('/commissions', asyncHandler(async (_req, res) => ok(res, await commerce.listCommissions())));
 managerCommerceRoutes.post('/commissions/recalculate', authorize(ROLES.ADMIN, ROLES.DEV), asyncHandler(async (_req, res) => ok(res, await commerce.recalculateMonthlyCommissions())));
 managerCommerceRoutes.get('/commissions/summary', asyncHandler(async (_req, res) => ok(res, await commissionPayment.commissionSummary())));

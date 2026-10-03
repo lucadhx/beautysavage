@@ -38,6 +38,56 @@ function splitName(fullName = '') {
  *
  * @returns {Promise<{customer: object|null, created: boolean}>}
  */
+/**
+ * Compte ouvert par l'institut et pas encore activé par la cliente. Les comptes
+ * antérieurs au marqueur `createdByInstitute` se reconnaissent à ce qu'aucun
+ * code de vérification n'a jamais été demandé (une inscription spontanée en
+ * demande toujours un).
+ */
+export function isPendingInstituteAccount(customer) {
+  if (!customer || customer.emailVerified) return false;
+  return Boolean(customer.createdByInstitute) || !customer.emailVerification?.requestedAt;
+}
+
+/**
+ * ENVOIE LE LIEN D'ACCÈS d'un compte ouvert par l'institut : « Votre espace
+ * client est prêt — choisissez votre mot de passe ». Le choisir depuis ce lien
+ * vaut vérification de l'adresse. Rappelable (renvoi depuis le Manager, lien
+ * expiré, inscription sur une adresse déjà connue) : chaque appel invalide le
+ * lien précédent.
+ */
+export async function sendCustomerAccessLink(customer, { origin = 'RESEND', siteUrl = '' } = {}) {
+  const setupSecret = crypto.randomBytes(32).toString('hex');
+  const requestedAt = new Date();
+  const expiresAt = new Date(requestedAt.getTime() + ACCOUNT_SETUP_LINK_DAYS * 24 * 60 * 60 * 1000);
+  await Customer.updateOne({ _id: customer._id }, { $set: {
+    passwordReset: {
+      tokenHash: crypto.createHash('sha256').update(setupSecret).digest('hex'),
+      expiresAt,
+      requestedAt,
+      usedAt: null,
+    },
+  } });
+  const event = await emitAndDispatch({
+    type: 'customer.account_created',
+    entityType: 'Customer',
+    entityId: customer._id,
+    payloadSafe: {
+      customerId: String(customer._id),
+      customerEmailMasked: maskEmail(customer.email),
+      actionUrl: `${siteUrl || await configuredSiteUrl()}/espace-client/mot-de-passe?token=${setupSecret}&bienvenue=1`,
+      expiresAt: expiresAt.toISOString(),
+      origin,
+      createdAt: requestedAt.toISOString(),
+    },
+    idempotencyKey: `customer-account-created:${customer._id}:${requestedAt.getTime()}`,
+  });
+  // `emitAndDispatch` ne lève pas : un événement refusé laisserait croire au
+  // Manager que le lien est parti.
+  if (!event) throw ApiError.serviceUnavailable('Le lien d’accès n’a pas pu être envoyé. Réessayez dans un instant.');
+  return { sent: true, expiresAt };
+}
+
 export async function ensureCustomerForBooking({ email, name = '', phone = '' } = {}) {
   const normalized = String(email || '').trim().toLowerCase();
   if (!normalized) return { customer: null, created: false };
@@ -55,9 +105,6 @@ export async function ensureCustomerForBooking({ email, name = '', phone = '' } 
   }
 
   const { firstName, lastName } = splitName(name);
-  const setupSecret = crypto.randomBytes(32).toString('hex');
-  const requestedAt = new Date();
-  const expiresAt = new Date(requestedAt.getTime() + ACCOUNT_SETUP_LINK_DAYS * 24 * 60 * 60 * 1000);
   let customer;
   try {
     customer = await Customer.create({
@@ -68,12 +115,7 @@ export async function ensureCustomerForBooking({ email, name = '', phone = '' } 
       lastName,
       phone: String(phone || '').trim(),
       emailVerified: false,
-      passwordReset: {
-        tokenHash: crypto.createHash('sha256').update(setupSecret).digest('hex'),
-        expiresAt,
-        requestedAt,
-        usedAt: null,
-      },
+      createdByInstitute: true,
     });
   } catch (err) {
     // Deux réservations simultanées pour la même adresse : la seconde reprend le compte.
@@ -83,20 +125,8 @@ export async function ensureCustomerForBooking({ email, name = '', phone = '' } 
     throw err;
   }
 
-  await emitAndDispatch({
-    type: 'customer.account_created',
-    entityType: 'Customer',
-    entityId: customer._id,
-    payloadSafe: {
-      customerId: String(customer._id),
-      customerEmailMasked: maskEmail(customer.email),
-      actionUrl: `${await configuredSiteUrl()}/espace-client/mot-de-passe?token=${setupSecret}`,
-      expiresAt: expiresAt.toISOString(),
-      origin: 'MANUAL_BOOKING',
-      createdAt: requestedAt.toISOString(),
-    },
-    idempotencyKey: `customer-account-created:${customer._id}`,
-  });
+  // La réservation ne dépend pas de l'e-mail : en cas d'échec, l'institut renverra le lien depuis la fiche cliente.
+  await sendCustomerAccessLink(customer, { origin: 'MANUAL_BOOKING' }).catch(() => null);
   return { customer, created: true };
 }
 

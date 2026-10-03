@@ -289,7 +289,7 @@ export const DOMAIN_EVENT_REGISTRY = Object.freeze({
       customerEmailMasked: z.string().max(254),
       actionUrl: z.string().max(500),
       expiresAt: z.string().max(40),
-      origin: z.enum(['MANUAL_BOOKING']),
+      origin: z.enum(['MANUAL_BOOKING', 'SELF_REQUEST', 'MANAGER_RESEND', 'RESEND']), // création, ou renvoi du lien d'accès
       createdAt: z.string().max(40),
     }).strict(),
   },
