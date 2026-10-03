@@ -9,6 +9,8 @@ import { useCustomer } from '@/context/CustomerContext';
 import { cn } from '@/lib/utils';
 import { resolvePreviewMediaUrl } from '@/lib/media';
 import { useScrollLock } from '@/lib/scrollLock';
+import { customerApi } from '@/lib/api';
+import { onCartCount } from '@/lib/cartSignal';
 
 /**
  * LA BARRE DE NAVIGATION — quatre liens, à plat.
@@ -126,14 +128,7 @@ export function Navbar() {
                 {e.label}
               </LienDeBarre>
             ))}
-            <Link
-              to="/panier"
-              aria-label="Panier"
-              className="inline-flex h-10 w-10 items-center justify-center"
-              style={{ color: 'var(--v-accent)', borderRadius: 'var(--v-radius)' }}
-            >
-              <ShoppingBag className="h-4 w-4" />
-            </Link>
+            <CartButton loggedIn={Boolean(customer)} />
             <ProfileDropdown customer={customer} onLogout={logout} />
             <Link
               to="/prestations"
@@ -149,14 +144,7 @@ export function Navbar() {
           </nav>
 
           <div className="flex items-center gap-2 lg:hidden">
-            <Link
-              to="/panier"
-              aria-label="Panier"
-              className="inline-flex h-10 w-10 items-center justify-center"
-              style={{ color: 'var(--v-accent)', borderRadius: 'var(--v-radius)' }}
-            >
-              <ShoppingBag className="h-4 w-4" />
-            </Link>
+            <CartButton loggedIn={Boolean(customer)} />
             <ProfileDropdown customer={customer} onLogout={logout} compact />
             <button
               type="button"
@@ -434,5 +422,49 @@ function Tiroir({ entrees, onFermer }: { entrees: Entree[]; onFermer: () => void
       </motion.div>
     </motion.div>,
     document.body,
+  );
+}
+
+/**
+ * L'ICÔNE PANIER ET SON COMPTEUR — lu au chargement (cliente connectée), puis
+ * tenu à jour par le signal que publient la fiche produit et le panier. Un
+ * ajout fait « rebondir » l'icône à l'arrivée de la vignette volante.
+ */
+function CartButton({ loggedIn }: { loggedIn: boolean }) {
+  const [count, setCount] = React.useState(0);
+  const [bump, setBump] = React.useState(0);
+  React.useEffect(() => {
+    if (!loggedIn) { setCount(0); return undefined; }
+    let alive = true;
+    customerApi.cart().then((c) => { if (alive) setCount(c.lines.length); }).catch(() => null);
+    return () => { alive = false; };
+  }, [loggedIn]);
+  React.useEffect(() => onCartCount(({ count: n, bump: b }) => { setCount(n); if (b) setBump((x) => x + 1); }), []);
+  return (
+    <Link
+      to="/panier"
+      aria-label={count ? `Panier, ${count} article${count > 1 ? 's' : ''}` : 'Panier'}
+      data-cart-target
+      data-testid="nav-cart"
+      className="relative inline-flex h-10 w-10 items-center justify-center"
+      style={{ color: 'var(--v-accent)', borderRadius: 'var(--v-radius)' }}
+    >
+      <motion.span key={bump} initial={bump ? { scale: 1.45 } : false} animate={{ scale: 1 }} transition={{ type: 'spring', stiffness: 500, damping: 12 }} className="inline-flex">
+        <ShoppingBag className="h-4 w-4" />
+      </motion.span>
+      <AnimatePresence>
+        {count > 0 && (
+          <motion.span
+            key="badge"
+            initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }}
+            className="absolute -right-0.5 -top-0.5 grid h-[18px] min-w-[18px] place-items-center rounded-full px-1 text-[10px] font-bold tabular-nums"
+            style={{ background: 'var(--v-accent)', color: 'var(--v-accent-foreground, #fff)' }}
+            data-testid="nav-cart-count"
+          >
+            {count}
+          </motion.span>
+        )}
+      </AnimatePresence>
+    </Link>
   );
 }

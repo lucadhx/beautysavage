@@ -210,13 +210,19 @@ function Recap({ agenda, inProgress, giftBalance, orders, onTab }: {
 
 function FormationRow({ f }: { f: Formation }) {
   const pct = Math.round(f.progress?.percent ?? 0);
+  const cover = resolvePreviewMediaUrl(f.product?.coverUrl || f.product?.gallery?.[0] || '');
   return (
-    <li className="min-w-0">
-      <p className="truncate text-sm font-semibold">{f.product?.title || f.productSnapshot?.title || 'Formation'}</p>
-      <div className="mt-1.5 h-2 overflow-hidden rounded-full" style={{ background: 'color-mix(in srgb, var(--v-muted-foreground) 16%, transparent)' }}>
-        <motion.div className="h-full rounded-full" style={{ background: 'var(--v-primary)' }} initial={{ width: 0 }} animate={{ width: `${pct}%` }} transition={{ duration: 0.8 }} />
-      </div>
-      <p className="mt-1 text-xs" style={{ color: 'var(--v-muted-foreground)' }}>{pct} % complété</p>
+    <li className="flex min-w-0 items-center gap-3">
+      <span className="h-12 w-12 shrink-0 overflow-hidden rounded-lg" style={{ background: 'color-mix(in srgb, var(--v-muted-foreground) 12%, transparent)' }}>
+        {cover ? <img src={cover} alt="" className="h-full w-full object-cover" loading="lazy" /> : <span className="grid h-full w-full place-items-center"><GraduationCap className="h-5 w-5" style={{ color: 'var(--v-accent)' }} /></span>}
+      </span>
+      <span className="min-w-0 flex-1">
+        <p className="truncate text-sm font-semibold">{f.product?.title || f.productSnapshot?.title || 'Formation'}</p>
+        <span className="mt-1.5 block h-2 overflow-hidden rounded-full" style={{ background: 'color-mix(in srgb, var(--v-muted-foreground) 16%, transparent)' }}>
+          <motion.span className="block h-full rounded-full" style={{ background: 'var(--v-primary)' }} initial={{ width: 0 }} animate={{ width: `${pct}%` }} transition={{ duration: 0.8 }} />
+        </span>
+        <p className="mt-1 text-xs" style={{ color: 'var(--v-muted-foreground)' }}>{pct} % complété</p>
+      </span>
     </li>
   );
 }

@@ -304,6 +304,9 @@ export const customerApi = {
       { idempotencyKey: globalThis.crypto?.randomUUID?.() || String(Date.now()), item, consents, giftCardCodes, returnPath },
       customerTokenStore.get()
     ),
+  /** Choisit (ou change) le créneau d'une prestation déjà au panier. */
+  setCartItemBooking: (lineId: string, serviceBooking: { startsAt: string; endsAt?: string; durationMinutes?: number }) =>
+    publicSend<CartView>(`/customer/cart/items/${lineId}/booking`, { serviceBooking }, customerTokenStore.get(), 'PUT'),
   removeCartItem: (lineId: string) =>
     publicSend<CartView>(`/customer/cart/items/${lineId}`, {}, customerTokenStore.get(), 'DELETE'),
   checkout: (consents: string[] = [], giftCardCodes: string[] = []) =>

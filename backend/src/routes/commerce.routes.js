@@ -61,6 +61,7 @@ customerRoutes.post('/password-reset/confirm', customerLoginLimiter, asyncHandle
 customerRoutes.get('/me', authenticateCustomer, asyncHandler(async (req, res) => ok(res, req.customer)));
 customerRoutes.get('/cart', authenticateCustomer, asyncHandler(async (req, res) => ok(res, await commerce.getCustomerCart(req.customer._id))));
 customerRoutes.post('/cart/items', authenticateCustomer, requireSiteOpenForPurchase, asyncHandler(async (req, res) => ok(res, await commerce.addCartItem(req.customer._id, req.body))));
+customerRoutes.put('/cart/items/:lineId/booking', authenticateCustomer, requireSiteOpenForPurchase, asyncHandler(async (req, res) => ok(res, await commerce.setCartItemBooking(req.customer._id, req.params.lineId, req.body))));
 customerRoutes.delete('/cart/items/:lineId', authenticateCustomer, asyncHandler(async (req, res) => ok(res, await commerce.removeCartItem(req.customer._id, req.params.lineId))));
 // Le retour après paiement se fait sur le site d'où vient la cliente (origine autorisée), jamais sur une adresse devinée.
 customerRoutes.post('/checkout', authenticateCustomer, requireSiteOpenForPurchase, asyncHandler(async (req, res) => created(res, await commerce.createCheckout(req.customer._id, { ...req.body, siteUrl: await siteUrlFor(req) }))));

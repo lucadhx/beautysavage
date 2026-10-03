@@ -62,20 +62,21 @@ function TrainingList({ items, onOpen }: { items: Record<string, any>[]; onOpen:
             const progress = trainingProgress(item);
             const cover = resolvePreviewMediaUrl(product.coverUrl || product.gallery?.[0] || '');
             return (
-              <article key={`${item.saleId || index}-${item.productId || title}`} className="grid gap-4 rounded-lg border p-4 sm:grid-cols-[120px_1fr]" style={{ borderColor: 'var(--v-border)', background: 'var(--v-surface)' }}>
-                <div className="aspect-square overflow-hidden rounded-md border" style={{ borderColor: 'var(--v-border)', background: 'color-mix(in srgb, var(--v-foreground) 5%, var(--v-background))' }}>
+              <article key={`${item.saleId || index}-${item.productId || title}`} className="flex min-w-0 gap-3 rounded-lg border p-3 sm:gap-4 sm:p-4" style={{ borderColor: 'var(--v-border)', background: 'var(--v-surface)' }} data-testid="training-card">
+                {/* Vignette à gauche, petite sur téléphone : le titre et la progression restent lisibles d'un coup d'œil. */}
+                <div className="h-16 w-16 shrink-0 self-start overflow-hidden rounded-md border min-[380px]:h-20 min-[380px]:w-20 sm:h-[120px] sm:w-[120px]" style={{ borderColor: 'var(--v-border)', background: 'color-mix(in srgb, var(--v-foreground) 5%, var(--v-background))' }} data-testid="training-cover">
                   {cover ? <img src={cover} alt="" className="h-full w-full object-cover" /> : <div className="grid h-full place-items-center text-xs" style={{ color: 'var(--v-muted-foreground)' }}>Image</div>}
                 </div>
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <h2 className="text-xl font-semibold">{title}</h2>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-start justify-between gap-x-2 gap-y-1">
+                    <h2 className="min-w-0 break-words text-base font-semibold leading-snug sm:text-xl">{title}</h2>
                     <StatusPill item={item} />
                   </div>
-                  <div className="mt-4 h-2 overflow-hidden rounded-full" style={{ background: 'color-mix(in srgb, var(--v-muted-foreground) 16%, transparent)' }}>
+                  <div className="mt-3 h-2 sm:mt-4 overflow-hidden rounded-full" style={{ background: 'color-mix(in srgb, var(--v-muted-foreground) 16%, transparent)' }}>
                     <div className="h-full rounded-full" style={{ width: `${progress}%`, background: 'var(--v-primary)' }} />
                   </div>
                   <p className="mt-2 text-xs" style={{ color: 'var(--v-muted-foreground)' }}>{progress}% complété</p>
-                  <div className="mt-4 flex flex-wrap gap-2">
+                  <div className="mt-3 flex flex-wrap gap-2 sm:mt-4">
                     <button type="button" onClick={() => onOpen(index)} className="inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-semibold" style={{ background: 'var(--v-primary)', color: 'var(--v-primary-foreground)' }}>
                       Accéder <ArrowRight className="h-4 w-4" />
                     </button>

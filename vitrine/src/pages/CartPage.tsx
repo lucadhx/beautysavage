@@ -3,8 +3,10 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   ArrowRight, CalendarDays, Clock, CreditCard, Gift, GraduationCap, ImageIcon, Loader2, LockKeyhole,
-  MailCheck, MonitorPlay, ShoppingBag, Sparkles, Trash2,
+  AlertTriangle, MailCheck, MonitorPlay, ShoppingBag, Sparkles, Trash2, X,
 } from 'lucide-react';
+import { BookingMonthCalendar, type Slot } from '@/components/BookingMonthCalendar';
+import { publishCartCount } from '@/lib/cartSignal';
 import { customerApi, type CartView } from '@/lib/api';
 import { useCustomer } from '@/context/CustomerContext';
 import { resolvePreviewMediaUrl } from '@/lib/media';
@@ -56,6 +58,7 @@ export default function CartPage() {
   const [cards, setCards] = React.useState<AppliedGiftCard[]>([]);
   const [paying, setPaying] = React.useState(false);
   const [removing, setRemoving] = React.useState<string | null>(null);
+  const [scheduling, setScheduling] = React.useState<Line | null>(null);
 
   React.useEffect(() => {
     if (!customer) { setLoading(false); return; }
@@ -74,6 +77,9 @@ export default function CartPage() {
   const split = splitPayment(total, cards);
   const required = lines.flatMap((line) => (line.consentRequirements ?? []).filter((r) => r.required).map((r) => `${line.id}:${r.key}`));
   const missing = required.filter((key) => !consents.includes(key));
+  // Une prestation ajoutée sans date attend son créneau : le paiement aussi.
+  const unscheduled = lines.filter((line) => line.product.kind === 'SERVICE' && !line.bookingSnapshot?.startsAt);
+  React.useEffect(() => { if (cart) publishCartCount(cart.lines.length); }, [cart]);
 
   async function remove(line: Line) {
     setRemoving(line.id);
@@ -84,6 +90,11 @@ export default function CartPage() {
   async function checkout() {
     setMessage(null);
     if (!customer?.emailVerified) { setMessage({ tone: 'error', text: 'Confirmez d’abord votre adresse e-mail depuis votre espace client.' }); return; }
+    if (unscheduled.length) {
+      setMessage({ tone: 'error', text: unscheduled.length > 1 ? 'Choisissez un créneau pour chaque prestation avant de payer.' : `Choisissez un créneau pour « ${unscheduled[0].product.title} » avant de payer.` });
+      setScheduling(unscheduled[0]);
+      return;
+    }
     if (missing.length) { setMessage({ tone: 'error', text: 'Cochez les conditions demandées sous les articles concernés.' }); return; }
     setPaying(true);
     try {
@@ -147,7 +158,7 @@ export default function CartPage() {
           <ul className="grid content-start gap-4" data-testid="cart-lines">
             <AnimatePresence initial={false}>
               {lines.map((line) => (
-                <CartLine key={line.id} line={line} consents={consents} setConsents={setConsents} removing={removing === line.id} onRemove={() => remove(line)} />
+                <CartLine key={line.id} line={line} consents={consents} setConsents={setConsents} removing={removing === line.id} onRemove={() => remove(line)} onSchedule={() => setScheduling(line)} />
               ))}
             </AnimatePresence>
           </ul>
@@ -175,23 +186,78 @@ export default function CartPage() {
                 {paying ? <Loader2 className="h-4 w-4 animate-spin" /> : split.toPayCents === 0 ? <Gift className="h-4 w-4" /> : <CreditCard className="h-4 w-4" />}
                 {paying ? 'Un instant…' : split.toPayCents === 0 ? 'Valider ma commande' : `Payer ${formatEuro(split.toPayCents)}`}
               </button>
+              {unscheduled.length > 0 && <p className="-mt-2 text-center text-xs font-medium" style={{ color: '#9a3412' }} data-testid="cart-unscheduled-hint">{unscheduled.length > 1 ? `${unscheduled.length} prestations attendent leur créneau.` : 'Une prestation attend son créneau.'}</p>}
               {missing.length > 0 && <p className="-mt-2 text-center text-xs" style={{ color: 'var(--v-muted-foreground)' }}>Pensez à cocher les conditions sous {missing.length > 1 ? 'les articles' : 'l’article'}.</p>}
               <p className="flex items-center justify-center gap-1.5 text-xs" style={{ color: 'var(--v-muted-foreground)' }}><LockKeyhole className="h-3.5 w-3.5" /> Paiement sécurisé</p>
             </div>
           </aside>
         </div>
       )}
+      <ScheduleDialog line={scheduling} onClose={() => setScheduling(null)} onSaved={(next) => { setCart(next); setScheduling(null); setMessage(null); }} />
     </section>
   );
 }
 
-function CartLine({ line, consents, setConsents, removing, onRemove }: {
+/** Choisir le créneau d'une prestation du panier — le même calendrier que sur la fiche. */
+function ScheduleDialog({ line, onClose, onSaved }: { line: Line | null; onClose: () => void; onSaved: (cart: CartView) => void }) {
+  const [slot, setSlot] = React.useState<Slot | null>(null);
+  const [busy, setBusy] = React.useState(false);
+  const [error, setError] = React.useState('');
+  React.useEffect(() => { setSlot(null); setError(''); setBusy(false); }, [line?.id]);
+  async function save() {
+    if (!line || !slot) return;
+    setBusy(true);
+    setError('');
+    try {
+      onSaved(await customerApi.setCartItemBooking(line.id, slot));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Ce créneau n’est plus disponible.');
+      setBusy(false);
+    }
+  }
+  return (
+    <AnimatePresence>
+      {line && (
+        <motion.div className="fixed inset-0 z-50 grid place-items-end bg-black/60 sm:place-items-center sm:px-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+          onClick={() => !busy && onClose()} role="dialog" aria-modal="true" aria-label="Choisir un créneau" data-testid="schedule-dialog">
+          <motion.div onClick={(e) => e.stopPropagation()} initial={{ y: 40, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 40, opacity: 0 }} transition={{ type: 'spring', stiffness: 320, damping: 30 }}
+            className="flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-t-2xl border sm:rounded-2xl" style={{ borderColor: 'var(--v-border)', background: 'var(--v-surface)' }}>
+            <div className="flex items-center justify-between gap-3 border-b p-4" style={{ borderColor: 'var(--v-border)' }}>
+              <div className="min-w-0">
+                <p className="text-xs font-semibold uppercase tracking-[0.14em]" style={{ color: 'var(--v-muted-foreground)' }}>Choisir le créneau</p>
+                <h2 className="truncate font-semibold">{line.product.title}</h2>
+              </div>
+              <button type="button" onClick={onClose} disabled={busy} className="grid h-10 w-10 shrink-0 place-items-center rounded-md border" style={{ borderColor: 'var(--v-border)' }} aria-label="Fermer"><X className="h-4 w-4" /></button>
+            </div>
+            <div className="overflow-y-auto p-4 sm:p-5">
+              <BookingMonthCalendar durationMinutes={Number(line.product.durationMinutes || 60)} slot={slot} onSlot={setSlot} />
+              {error && <p className="mt-3 rounded-lg border px-3 py-2 text-sm" style={{ borderColor: '#fecaca', background: '#fef2f2', color: '#991b1b' }} role="alert">{error}</p>}
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-2 border-t p-4" style={{ borderColor: 'var(--v-border)' }}>
+              <span className="text-sm" style={{ color: 'var(--v-muted-foreground)' }}>
+                {slot ? `${cap(dayFmt.format(new Date(slot.startsAt)))} · ${timeFmt.format(new Date(slot.startsAt))}` : 'Choisissez un jour puis une heure'}
+              </span>
+              <button type="button" onClick={save} disabled={!slot || busy} data-testid="schedule-confirm"
+                className="inline-flex items-center gap-2 rounded-md px-5 py-3 text-sm font-semibold disabled:opacity-50" style={{ background: 'var(--v-primary)', color: 'var(--v-primary-foreground)' }}>
+                {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <CalendarDays className="h-4 w-4" />} Valider ce créneau
+              </button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
+
+function CartLine({ line, consents, setConsents, removing, onRemove, onSchedule }: {
   line: Line;
   consents: string[];
   setConsents: React.Dispatch<React.SetStateAction<string[]>>;
   removing: boolean;
   onRemove: () => void;
+  onSchedule: () => void;
 }) {
+  const needsSlot = line.product.kind === 'SERVICE' && !line.bookingSnapshot?.startsAt;
   const kind = KIND[line.product.kind] ?? KIND.PRODUCT;
   const image = resolvePreviewMediaUrl(line.product.coverUrl || line.product.gallery?.[0] || '');
   const when = whenOf(line);
@@ -216,8 +282,22 @@ function CartLine({ line, consents, setConsents, removing, onRemove }: {
             <span className="shrink-0 text-right font-semibold tabular-nums sm:text-lg" data-testid="cart-price">{formatEuro(line.totalCents)}</span>
           </div>
 
+          {needsSlot && (
+            <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm"
+              style={{ borderColor: '#fed7aa', background: '#fff7ed', color: '#9a3412' }} data-testid="cart-needs-slot">
+              <span className="flex items-center gap-1.5 font-medium"><AlertTriangle className="h-4 w-4 shrink-0" /> Créneau à choisir</span>
+              <button type="button" onClick={onSchedule} data-testid="cart-pick-slot" className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold" style={{ background: 'var(--v-primary)', color: 'var(--v-primary-foreground)' }}>
+                <CalendarDays className="h-3.5 w-3.5" /> Choisir un créneau
+              </button>
+            </motion.div>
+          )}
           <div className="mt-2 grid gap-1 text-sm" style={{ color: 'var(--v-muted-foreground)' }}>
-            {when.map((w) => <p key={w} className="flex items-center gap-1.5" data-testid="cart-when"><CalendarDays className="h-3.5 w-3.5 shrink-0" style={{ color: 'var(--v-accent)' }} /> {w}</p>)}
+            {when.map((w) => (
+              <p key={w} className="flex flex-wrap items-center gap-1.5" data-testid="cart-when">
+                <CalendarDays className="h-3.5 w-3.5 shrink-0" style={{ color: 'var(--v-accent)' }} /> {w}
+                {line.product.kind === 'SERVICE' && <button type="button" onClick={onSchedule} className="text-xs font-semibold underline" data-testid="cart-change-slot">Changer</button>}
+              </p>
+            ))}
             {line.product.kind === 'SERVICE' && line.product.durationMinutes ? <p className="flex items-center gap-1.5"><Clock className="h-3.5 w-3.5 shrink-0" style={{ color: 'var(--v-accent)' }} /> {durationText(line.product.durationMinutes)}</p> : null}
             {line.giftCard && <p>Pour {line.giftCard.recipientName || 'la personne de votre choix'}{line.giftCard.senderName ? `, de la part de ${line.giftCard.senderName}` : ''}</p>}
             {options.length > 0 && <p>Options : {options.map((o) => o.label).join(', ')}</p>}

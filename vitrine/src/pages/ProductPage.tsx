@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import { ArrowRight, CalendarDays, Check, CheckCircle2, CreditCard, ChevronDown, Gift, ImageIcon, Loader2, PawPrint, Play, ShoppingBag, X } from 'lucide-react';
 import { QUICK_BUY_LINE_ID, commerceApi, customerApi, type CommerceProduct, type OrderLineInput } from '@/lib/api';
 import { useCustomer } from '@/context/CustomerContext';
@@ -13,6 +13,7 @@ import { ProductOptions, optionsTotalCents } from '@/components/ProductOptions';
 import { AuthRequiredModal, type AuthAction } from '@/components/AuthRequiredModal';
 import { paySplit } from '@/lib/paymentRule';
 import { GiftCardPayment, PaymentSummary, splitPayment, type AppliedGiftCard } from '@/components/GiftCardPayment';
+import { flyToCart, publishCartCount } from '@/lib/cartSignal';
 
 const formatter = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' });
 
@@ -83,14 +84,27 @@ export default function ProductPage() {
     };
   }
 
-  /** Formation en ligne et carte cadeau : rien à choisir, on passe directement au panier. */
-  async function addToCart() {
-    if (!product || !canStart('cart')) return;
+  /**
+   * AJOUT DIRECT AU PANIER — prestation, formation en ligne, carte cadeau.
+   * Rien à configurer ici : le créneau d'une prestation se choisit depuis le
+   * panier. La vignette vole jusqu'à l'icône panier, qui compte un article de plus.
+   */
+  const [adding, setAdding] = React.useState(false);
+  const [added, setAdded] = React.useState(false);
+  async function addToCart(from?: HTMLElement | null) {
+    if (!product || adding || !canStart('cart')) return;
+    setAdding(true);
+    setMessage('');
     try {
-      await customerApi.addCartItem(giftCardLine() || { productId: product.id, quantity: 1 });
-      setMessage('Article ajouté au panier.');
+      const cart = await customerApi.addCartItem(giftCardLine() || { productId: product.id, quantity: 1 });
+      const image = product.kind === 'GIFT_CARD' ? GIFT_CARD_IMAGE : resolvePreviewMediaUrl(product.coverUrl || product.gallery?.[0] || '');
+      void flyToCart(from || null, image || undefined).then(() => publishCartCount(cart.lines.length, true));
+      setAdded(true);
+      window.setTimeout(() => setAdded(false), 2600);
     } catch (err) {
       setMessage(err instanceof Error ? err.message : 'Ajout au panier impossible');
+    } finally {
+      setAdding(false);
     }
   }
 
@@ -228,17 +242,8 @@ export default function ProductPage() {
           <p className="mt-2 text-center text-xs" style={{ color: 'var(--v-muted-foreground)' }}>
             {reservable ? 'Choisissez votre créneau, puis réglez en ligne.' : 'Paiement direct, sans passer par le panier.'}
           </p>
-          {!reservable && (
-            <button
-              type="button"
-              onClick={addToCart}
-              className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-md border px-5 py-3 font-semibold"
-              style={{ borderColor: 'var(--v-border)' }}
-            >
-              <ShoppingBag className="h-4 w-4" /> Ajouter au panier
-            </button>
-          )}
-          {reservable && (
+          {/* La formation présentielle choisit sa session d'abord (les places en dépendent) ; tout le reste s'ajoute tel quel. */}
+          {product.kind === 'IN_PERSON_TRAINING' ? (
             <button
               type="button"
               onClick={() => start('cart')}
@@ -248,7 +253,39 @@ export default function ProductPage() {
             >
               <ShoppingBag className="h-4 w-4" /> Ajouter au panier
             </button>
+          ) : (
+            <motion.button
+              type="button"
+              onClick={(e) => addToCart(e.currentTarget)}
+              disabled={adding}
+              whileTap={{ scale: 0.97 }}
+              data-testid="add-to-cart"
+              data-added={added || undefined}
+              className="relative mt-3 inline-flex w-full items-center justify-center gap-2 overflow-hidden rounded-md border-2 px-5 py-3 font-semibold transition-colors"
+              style={added
+                ? { borderColor: '#059669', background: '#ecfdf5', color: '#065f46' }
+                : { borderColor: 'var(--v-primary)', color: 'var(--v-foreground)', background: 'color-mix(in srgb, var(--v-primary) 6%, transparent)' }}
+            >
+              <AnimatePresence mode="wait" initial={false}>
+                {added ? (
+                  <motion.span key="ok" initial={{ y: 14, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -14, opacity: 0 }} className="inline-flex items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4" /> Ajouté au panier
+                  </motion.span>
+                ) : (
+                  <motion.span key="add" initial={{ y: 14, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -14, opacity: 0 }} className="inline-flex items-center gap-2">
+                    {adding ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShoppingBag className="h-4 w-4" />} Ajouter au panier
+                  </motion.span>
+                )}
+              </AnimatePresence>
+            </motion.button>
           )}
+          <AnimatePresence>
+            {added && (
+              <motion.p initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="mt-2 text-center text-xs" style={{ color: 'var(--v-muted-foreground)' }}>
+                {product.kind === 'SERVICE' ? 'Vous choisirez le créneau depuis le panier. ' : ''}<Link to="/panier" className="font-semibold underline" data-testid="added-see-cart">Voir le panier</Link>
+              </motion.p>
+            )}
+          </AnimatePresence>
           {message && <p className="mt-4 text-sm" style={{ color: 'var(--v-muted-foreground)' }}>{message}</p>}
         </aside>
       </div>
@@ -563,7 +600,8 @@ function BookingDialog({
     setBusy(true);
     setError('');
     try {
-      await customerApi.addCartItem(line);
+      const cart = await customerApi.addCartItem(line);
+      publishCartCount(cart.lines.length, true);
       setInfo('Ajouté au panier.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Ajout au panier impossible');

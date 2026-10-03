@@ -1105,7 +1105,9 @@ export async function getCustomerCart(customerId) {
 }
 
 export async function addCartItem(customerId, payload) {
-  const line = await buildOrderLine(payload);
+  // Au panier, une prestation peut arriver SANS créneau : il se choisit depuis
+  // le panier, et le paiement attend qu'il le soit (voir checkoutHydratedLines).
+  const line = await buildOrderLine(payload, { allowUnscheduled: true });
   const cart = await Cart.findOneAndUpdate(
     { customerId },
     { $push: { lines: line } },
@@ -1119,7 +1121,7 @@ export async function addCartItem(customerId, payload) {
  * libre, carte cadeau renseignée. Le panier et l'achat rapide passent tous deux
  * par ici : la règle d'admissibilité n'existe qu'à un endroit.
  */
-async function buildOrderLine(payload = {}) {
+async function buildOrderLine(payload = {}, { allowUnscheduled = false } = {}) {
   const product = await CommerceProduct.findOne({ _id: payload.productId, status: PRODUCT_STATUS.PUBLISHED });
   if (!product) throw ApiError.notFound('Article indisponible');
   let bookingSnapshot = null;
@@ -1131,28 +1133,9 @@ async function buildOrderLine(payload = {}) {
     if (!session || session.status !== 'ACTIVE') throw ApiError.badRequest('Session indisponible');
     if ((session.reservedCount || 0) >= (session.capacity || 0)) throw ApiError.conflict('Cette session est complète');
   }
-  if (product.kind === 'SERVICE') {
-    const startsAt = new Date(payload.serviceBooking?.startsAt || payload.bookingSnapshot?.startsAt || '');
-    const durationMinutes = Math.max(5, Number(product.durationMinutes || payload.serviceBooking?.durationMinutes || 60));
-    /*
-      LE CRÉNEAU RÉSERVÉ = L'HEURE CHOISIE + LA DURÉE DE LA PRESTATION.
-      La fin n'est plus reprise du navigateur : c'est la fiche prestation qui
-      dit combien de temps bloquer au planning. Seule une prestation sans
-      durée renseignée garde la fin proposée par le créneau choisi.
-    */
-    const endsAt = product.durationMinutes
-      ? new Date(startsAt.getTime() + durationMinutes * 60_000)
-      : new Date(payload.serviceBooking?.endsAt || startsAt.getTime() + durationMinutes * 60_000);
-    if (Number.isNaN(startsAt.getTime()) || Number.isNaN(endsAt.getTime()) || endsAt <= startsAt) {
-      throw ApiError.badRequest('Choisissez un créneau disponible pour cette prestation');
-    }
-    await assertNoOverlap({ startsAt, endsAt });
-    bookingSnapshot = {
-      startsAt,
-      endsAt,
-      durationMinutes,
-      timezone: 'Europe/Paris',
-    };
+  const hasSlot = Boolean(payload.serviceBooking?.startsAt || payload.bookingSnapshot?.startsAt);
+  if (product.kind === 'SERVICE' && (hasSlot || !allowUnscheduled)) {
+    bookingSnapshot = await serviceBookingSnapshot(product, payload);
   }
   const giftCard = product.kind === 'GIFT_CARD'
     ? giftCardLinePayload(product, { giftCard: payload.giftCard || payload })
@@ -1169,6 +1152,47 @@ async function buildOrderLine(payload = {}) {
     optionKeys: Array.isArray(payload.optionKeys) ? payload.optionKeys : [],
     giftCard,
   };
+}
+
+/** Le créneau réservé d'une prestation : l'heure choisie + la durée de la fiche, contrôlé contre le planning. */
+async function serviceBookingSnapshot(product, payload = {}) {
+  const startsAt = new Date(payload.serviceBooking?.startsAt || payload.bookingSnapshot?.startsAt || '');
+  const durationMinutes = Math.max(5, Number(product.durationMinutes || payload.serviceBooking?.durationMinutes || 60));
+  /*
+    LE CRÉNEAU RÉSERVÉ = L'HEURE CHOISIE + LA DURÉE DE LA PRESTATION.
+    La fin n'est plus reprise du navigateur : c'est la fiche prestation qui
+    dit combien de temps bloquer au planning. Seule une prestation sans
+    durée renseignée garde la fin proposée par le créneau choisi.
+  */
+  const endsAt = product.durationMinutes
+    ? new Date(startsAt.getTime() + durationMinutes * 60_000)
+    : new Date(payload.serviceBooking?.endsAt || startsAt.getTime() + durationMinutes * 60_000);
+  if (Number.isNaN(startsAt.getTime()) || Number.isNaN(endsAt.getTime()) || endsAt <= startsAt) {
+    throw ApiError.badRequest('Choisissez un créneau disponible pour cette prestation');
+  }
+  await assertNoOverlap({ startsAt, endsAt });
+  return {
+    startsAt,
+    endsAt,
+    durationMinutes,
+    timezone: 'Europe/Paris',
+  };
+}
+
+/**
+ * CHOISIR (OU CHANGER) LE CRÉNEAU d'une prestation déjà au panier.
+ */
+export async function setCartItemBooking(customerId, lineId, payload = {}) {
+  const cart = await Cart.findOne({ customerId });
+  const line = cart?.lines?.id(lineId);
+  if (!line) throw ApiError.notFound('Article introuvable dans le panier');
+  const product = await CommerceProduct.findOne({ _id: line.productId, status: PRODUCT_STATUS.PUBLISHED });
+  if (!product) throw ApiError.notFound('Article indisponible');
+  if (product.kind !== 'SERVICE') throw ApiError.badRequest('Seule une prestation se planifie depuis le panier');
+  line.bookingSnapshot = await serviceBookingSnapshot(product, payload);
+  cart.markModified('lines');
+  await cart.save();
+  return hydrateCart(cart);
 }
 
 /** Identifiant de la ligne unique d'un achat rapide — il préfixe ses consentements. */
@@ -1206,6 +1230,13 @@ export async function createCheckout(customerId, payload = {}) {
 }
 
 async function checkoutHydratedLines(customerId, hydrated, payload = {}, { checkoutSource = 'CART' } = {}) {
+  const unscheduled = hydrated.lines.filter((line) => line.product?.kind === 'SERVICE' && !line.bookingSnapshot?.startsAt);
+  if (unscheduled.length > 0) {
+    throw ApiError.badRequest(
+      unscheduled.length > 1 ? 'Choisissez un créneau pour chaque prestation de votre panier.' : `Choisissez un créneau pour « ${unscheduled[0].product.title} ».`,
+      { code: 'SLOT_REQUIRED', lineIds: unscheduled.map((line) => line.id) },
+    );
+  }
   const accepted = new Set(Array.isArray(payload.consents) ? payload.consents : []);
   const missingConsents = hydrated.lines.flatMap((line) => (
     (line.consentRequirements || [])
