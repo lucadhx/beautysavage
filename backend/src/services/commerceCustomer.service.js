@@ -56,18 +56,34 @@ export function isPendingInstituteAccount(customer) {
  * expiré, inscription sur une adresse déjà connue) : chaque appel invalide le
  * lien précédent.
  */
+/**
+ * POSE UN NOUVEAU LIEN sans invalider les précédents encore valides : ils
+ * passent dans `previousTokens` (cinq au plus) jusqu'à leur expiration ou au
+ * premier lien utilisé.
+ */
+export async function rotatePasswordResetToken(customerId, { secret, expiresAt, requestedAt = new Date() }) {
+  const current = await Customer.findById(customerId).select('+passwordReset.tokenHash +passwordReset.previousTokens').lean();
+  const now = Date.now();
+  const kept = [
+    ...(current?.passwordReset?.previousTokens || []),
+    ...(current?.passwordReset?.tokenHash && !current.passwordReset.usedAt ? [{ tokenHash: current.passwordReset.tokenHash, expiresAt: current.passwordReset.expiresAt }] : []),
+  ].filter((t) => t?.tokenHash && t.expiresAt && new Date(t.expiresAt).getTime() > now).slice(-5);
+  await Customer.updateOne({ _id: customerId }, { $set: {
+    passwordReset: {
+      tokenHash: crypto.createHash('sha256').update(secret).digest('hex'),
+      expiresAt,
+      requestedAt,
+      usedAt: null,
+      previousTokens: kept,
+    },
+  } });
+}
+
 export async function sendCustomerAccessLink(customer, { origin = 'RESEND', siteUrl = '' } = {}) {
   const setupSecret = crypto.randomBytes(32).toString('hex');
   const requestedAt = new Date();
   const expiresAt = new Date(requestedAt.getTime() + ACCOUNT_SETUP_LINK_DAYS * 24 * 60 * 60 * 1000);
-  await Customer.updateOne({ _id: customer._id }, { $set: {
-    passwordReset: {
-      tokenHash: crypto.createHash('sha256').update(setupSecret).digest('hex'),
-      expiresAt,
-      requestedAt,
-      usedAt: null,
-    },
-  } });
+  await rotatePasswordResetToken(customer._id, { secret: setupSecret, expiresAt, requestedAt });
   const event = await emitAndDispatch({
     type: 'customer.account_created',
     entityType: 'Customer',

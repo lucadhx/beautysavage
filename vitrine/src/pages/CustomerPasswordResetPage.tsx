@@ -21,6 +21,23 @@ export default function CustomerPasswordResetPage() {
   const [error, setError] = React.useState('');
   const [busy, setBusy] = React.useState(false);
   const [done, setDone] = React.useState(false);
+  const [expired, setExpired] = React.useState(false);
+  const [email, setEmail] = React.useState('');
+  const [sent, setSent] = React.useState('');
+
+  async function requestNewLink(event: React.FormEvent) {
+    event.preventDefault();
+    if (!email.trim()) return;
+    setBusy(true);
+    try {
+      await customerApi.requestPasswordReset(email.trim());
+      setSent(`C’est envoyé : ouvrez le DERNIER e-mail reçu à ${email.trim()} et cliquez sur son bouton.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Envoi impossible pour le moment.');
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -37,6 +54,7 @@ export default function CustomerPasswordResetPage() {
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Lien invalide ou expiré.');
+      setExpired((err as { code?: string })?.code === 'RESET_LINK_INVALID');
     } finally {
       setBusy(false);
     }
@@ -71,6 +89,21 @@ export default function CustomerPasswordResetPage() {
             {busy && <Loader2 className="h-4 w-4 animate-spin" />} {welcome ? 'Activer mon espace' : 'Enregistrer'}
           </button>
           <Link to="/connexion-client" className="mt-4 inline-flex text-sm font-semibold">Retour à la connexion</Link>
+        </form>
+      )}
+      {!done && (expired || !token) && (
+        <form onSubmit={requestNewLink} className="mt-4 rounded-2xl border p-5" style={{ borderColor: 'var(--v-border)', background: 'var(--v-surface)' }} data-testid="new-link-form">
+          <p className="text-sm font-semibold">Recevoir un nouveau lien</p>
+          {sent ? (
+            <p className="mt-2 text-sm" style={{ color: 'var(--v-muted-foreground)' }} data-testid="new-link-sent">{sent}</p>
+          ) : (
+            <>
+              <input className="v-field mt-3 w-full rounded-md px-3 py-3" type="email" required placeholder="Votre adresse e-mail" value={email} onChange={(e) => setEmail(e.target.value)} data-testid="new-link-email" />
+              <button disabled={busy} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-md border px-5 py-3 font-semibold disabled:opacity-50" style={{ borderColor: 'var(--v-border)' }} data-testid="new-link-submit">
+                {busy && <Loader2 className="h-4 w-4 animate-spin" />} M’envoyer un nouveau lien
+              </button>
+            </>
+          )}
         </form>
       )}
     </section>

@@ -34,6 +34,17 @@ const customerSchema = new mongoose.Schema(
       expiresAt: { type: Date, default: null },
       requestedAt: { type: Date, default: null },
       usedAt: { type: Date, default: null },
+      /**
+       * Liens encore valides envoyés AVANT le dernier. Une cliente qui clique
+       * trois fois sur « Recevoir mon lien » reçoit trois e-mails : celui
+       * qu'elle ouvre doit fonctionner, quel qu'il soit. Le premier utilisé
+       * les désactive tous.
+       */
+      previousTokens: {
+        type: [{ _id: false, tokenHash: String, expiresAt: Date }],
+        default: [],
+        select: false,
+      },
     },
   },
   { timestamps: true }

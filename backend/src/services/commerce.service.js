@@ -27,7 +27,7 @@ import { activePromotion, effectivePriceCents } from './commercePromotion.js';
 import { paymentSplit, publicPaymentRule } from './commercePaymentRules.js';
 import { configuredSiteUrl } from '../utils/siteOrigin.js';
 import { view as commissionView } from './commissionPayment.service.js';
-import { emitAppointmentBooked, isPendingInstituteAccount, sendCustomerAccessLink } from './commerceCustomer.service.js';
+import { emitAppointmentBooked, isPendingInstituteAccount, rotatePasswordResetToken, sendCustomerAccessLink } from './commerceCustomer.service.js';
 import { emitAndDispatch } from './events/domainEvent.service.js';
 import {
   activeInstituteMode,
@@ -1071,13 +1071,9 @@ export async function requestCustomerPasswordReset(email, { siteUrl = '' } = {})
     return response;
   }
   const token = crypto.randomBytes(32).toString('hex');
-  customer.passwordReset = {
-    tokenHash: crypto.createHash('sha256').update(token).digest('hex'),
-    expiresAt: new Date(Date.now() + 60 * 60 * 1000),
-    requestedAt: new Date(),
-    usedAt: null,
-  };
-  await customer.save();
+  // Les liens déjà envoyés et encore valides restent utilisables (voir rotatePasswordResetToken).
+  await rotatePasswordResetToken(customer._id, { secret: token, expiresAt: new Date(Date.now() + 60 * 60 * 1000), requestedAt: new Date() });
+  customer.passwordReset = (await Customer.findById(customer._id).lean()).passwordReset;
   const resetUrl = `${siteUrl || await configuredSiteUrl()}/espace-client/mot-de-passe?token=${token}`;
   await emitAndDispatch({
     type: 'customer.password_reset.requested',
@@ -1098,17 +1094,25 @@ export async function requestCustomerPasswordReset(email, { siteUrl = '' } = {})
 
 export async function resetCustomerPassword(payload = {}) {
   const tokenHash = crypto.createHash('sha256').update(String(payload.token || '')).digest('hex');
+  const now = new Date();
+  // Le dernier lien envoyé, ou l'un des précédents encore valides.
   const customer = await Customer.findOne({
-    'passwordReset.tokenHash': tokenHash,
-    'passwordReset.expiresAt': { $gt: new Date() },
     'passwordReset.usedAt': null,
-  }).select('+password +passwordReset.tokenHash');
-  if (!customer) throw ApiError.badRequest('Lien de réinitialisation invalide ou expiré');
+    $or: [
+      { 'passwordReset.tokenHash': tokenHash, 'passwordReset.expiresAt': { $gt: now } },
+      { 'passwordReset.previousTokens': { $elemMatch: { tokenHash, expiresAt: { $gt: now } } } },
+    ],
+  }).select('+password +passwordReset.tokenHash +passwordReset.previousTokens');
+  if (!customer) {
+    throw ApiError.badRequest('Ce lien n’est plus valable (déjà utilisé ou expiré). Demandez-en un nouveau ci-dessous.', { code: 'RESET_LINK_INVALID' });
+  }
   const password = String(payload.password || '');
   if (password.length < 8) throw ApiError.badRequest('Mot de passe trop court');
   customer.password = password;
   customer.passwordReset.usedAt = new Date();
   customer.passwordReset.tokenHash = '';
+  // Un lien utilisé désactive tous les autres.
+  customer.passwordReset.previousTokens = [];
   // Le lien est arrivé dans SA boîte : l'adresse est prouvée, aucun code OTP
   // n'est redemandé (compte ouvert par l'institut comme mot de passe oublié).
   if (!customer.emailVerified) {
