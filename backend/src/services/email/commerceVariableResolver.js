@@ -53,11 +53,28 @@ export async function resolveSaleConfirmationClient({ event }) {
     saleNumber: sale.saleNumber,
     itemsHtml: `<ul>${itemsHtml}</ul>`,
     totalAmount: euro(sale.totalCents),
-    // La facture Stripe de la cliente si elle est déjà émise ; sinon ses achats,
-    // d'où « Ma facture » l'ouvre dès qu'elle l'est. Jamais le PDF maison.
-    invoiceUrl: sale.stripe?.hostedInvoiceUrl || await customerAccountUrl('/espace-client?onglet=achats'),
+    ...(await stripeInvoiceLink(sale)),
     paymentStatus: 'Payé',
   };
+}
+
+/**
+ * « VOIR MA FACTURE » = LA FACTURE STRIPE, jamais le site.
+ *
+ * Stripe annonce l'encaissement avant d'avoir fini d'émettre la facture : si
+ * elle n'est pas encore lisible, on demande à être REJOUÉ (quelques secondes
+ * plus tard elle l'est). Une commande réglée sans Stripe (carte cadeau seule,
+ * prestation gratuite) n'a pas de facture Stripe : le bouton disparaît.
+ */
+async function stripeInvoiceLink(sale) {
+  const paidByStripe = Boolean(sale.stripe?.checkoutSessionId) && Number(sale.stripeAmountCents || 0) > 0;
+  if (!paidByStripe) return {};
+  const { stripeInvoiceUrl } = await import('../commerce.service.js');
+  const url = sale.stripe?.hostedInvoiceUrl || await stripeInvoiceUrl(sale);
+  if (!url) {
+    throw new EmailVariableResolverError('INVOICE_NOT_READY', `Facture Stripe de ${sale.saleNumber} pas encore émise.`, true);
+  }
+  return { invoiceUrl: url };
 }
 
 export async function resolveGiftCardIssuedClient({ event }) {

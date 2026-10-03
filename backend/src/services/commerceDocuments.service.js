@@ -65,7 +65,7 @@ export async function ensureGiftCardMasterPdf() {
   return MASTER_PDF;
 }
 
-export async function generateGiftCardPdf({ cardId, codeMasked, code, senderName, recipientName, amountCents, message }) {
+export async function generateGiftCardPdf({ cardId, codeMasked, code, senderName, recipientName, amountCents, message, siteUrl = '' }) {
   await ensureGiftCardMasterPdf();
   const pdfDoc = await PDFDocument.create();
   const jpgBytes = await fs.readFile(MASTER_JPG);
@@ -96,7 +96,8 @@ export async function generateGiftCardPdf({ cardId, codeMasked, code, senderName
     page.drawText(pdfSafe(message).slice(0, 120), { x: 949, y: jpg.height - 770, size: 20, font: serif, color: muted, maxWidth: 440, lineHeight: 26 });
   }
   page.drawText(`Code : ${code || codeMasked}`, { x: 949, y: jpg.height - 945, size: 18, font: sans, color: muted });
-  page.drawText('Valable sur beautysavage.ly-solution.com', { x: 949, y: jpg.height - 975, size: 15, font: sans, color: muted });
+  const siteHost = String(siteUrl || '').replace(/^https?:\/\//i, '').replace(/\/.*$/, '') || 'beautysavage.ly-solution.com';
+  page.drawText(pdfSafe(`Valable sur ${siteHost}`), { x: 949, y: jpg.height - 975, size: 15, font: sans, color: muted });
 
   return writeUpload(`gift-cards/${cardId}.pdf`, await pdfDoc.save());
 }

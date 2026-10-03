@@ -11,7 +11,7 @@ export default function CommerceCartesCadeauxPage() {
   const [cards, setCards] = React.useState<GiftCard[]>([]);
   const [giftProduct, setGiftProduct] = React.useState<CommerceProduct | null>(null);
   const [minimumEuros, setMinimumEuros] = React.useState('0');
-  const [form, setForm] = React.useState({ amountEuros: '50', recipientName: '', recipientEmail: '', message: '' });
+  const [form, setForm] = React.useState({ amountEuros: '50', recipientName: '', message: '' });
   const [issueOpen, setIssueOpen] = React.useState(false);
   const [adjustDraft, setAdjustDraft] = React.useState<{ card: GiftCard; type: 'DEBIT' | 'CREDIT' | 'VOID'; amountEuros: string; reason: string } | null>(null);
   const [message, setMessage] = React.useState('');
@@ -49,7 +49,6 @@ export default function CommerceCartesCadeauxPage() {
     const created = await api.issueCommerceGiftCard({
       amountCents: Math.round(Number(form.amountEuros || 0) * 100),
       recipientName: form.recipientName,
-      recipientEmail: form.recipientEmail,
       message: form.message,
     });
     setMessage(created.oneTimeCode ? `Carte émise. Code à remettre une seule fois : ${created.oneTimeCode}` : 'Carte émise.');
@@ -139,10 +138,9 @@ export default function CommerceCartesCadeauxPage() {
         className="max-w-2xl"
       >
         <div className="grid gap-4">
-          <div className="grid gap-3 md:grid-cols-3">
+          <div className="grid gap-3 md:grid-cols-2">
             <Field label="Montant EUR"><Input type="number" min="10" step="1" value={form.amountEuros} onChange={(e) => setForm({ ...form, amountEuros: e.target.value })} /></Field>
             <Field label="Beneficiaire"><Input value={form.recipientName} onChange={(e) => setForm({ ...form, recipientName: e.target.value })} /></Field>
-            <Field label="E-mail beneficiaire"><Input type="email" value={form.recipientEmail} onChange={(e) => setForm({ ...form, recipientEmail: e.target.value })} /></Field>
           </div>
           <Field label="Message"><Textarea value={form.message} onChange={(e) => setForm({ ...form, message: e.target.value })} /></Field>
           <div className="flex justify-end gap-2">

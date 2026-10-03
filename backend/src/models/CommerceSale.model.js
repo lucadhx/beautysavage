@@ -46,6 +46,8 @@ const commerceSaleSchema = new mongoose.Schema(
     totalCents: { type: Number, required: true, min: 0 },
     stripeAmountCents: { type: Number, default: 0, min: 0 },
     giftCardAmountCents: { type: Number, default: 0, min: 0 },
+    /** Le site sur lequel la commande a été passée (recette ou production) : la carte cadeau y renvoie. */
+    siteUrl: { type: String, default: '' },
     lines: [saleLineSchema],
     giftCardAllocations: [{
       giftCardId: { type: mongoose.Schema.Types.ObjectId, ref: 'GiftCard', default: null },

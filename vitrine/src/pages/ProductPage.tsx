@@ -34,7 +34,6 @@ export default function ProductPage() {
   const [giftCard, setGiftCard] = React.useState({
     senderName: '',
     recipientName: '',
-    recipientEmail: '',
     message: '',
     amountEuros: '50',
   });
@@ -77,7 +76,6 @@ export default function ProductPage() {
       giftCard: {
         senderName: giftCard.senderName,
         recipientName: giftCard.recipientName,
-        recipientEmail: giftCard.recipientEmail,
         message: giftCard.message,
         amountCents: Math.round(Math.max(Math.round((product.price?.amountCents || 0) / 100), Number(giftCard.amountEuros || 0)) * 100),
       },
@@ -403,9 +401,9 @@ function GiftCardConfigurator({
   minimumEuros,
   onChange,
 }: {
-  value: { senderName: string; recipientName: string; recipientEmail: string; message: string; amountEuros: string };
+  value: { senderName: string; recipientName: string; message: string; amountEuros: string };
   minimumEuros: number;
-  onChange: (value: { senderName: string; recipientName: string; recipientEmail: string; message: string; amountEuros: string }) => void;
+  onChange: (value: { senderName: string; recipientName: string; message: string; amountEuros: string }) => void;
 }) {
   const amountEuros = Math.max(minimumEuros, Number(value.amountEuros || 0));
   const amount = formatter.format(amountEuros);
@@ -425,10 +423,6 @@ function GiftCardConfigurator({
         <label className="grid gap-1 text-sm font-medium">
           Pour
           <input className="v-field rounded-md px-3 py-3" maxLength={32} value={value.recipientName} onChange={(e) => change({ recipientName: e.target.value.slice(0, 32) })} />
-        </label>
-        <label className="grid gap-1 text-sm font-medium">
-          E-mail bénéficiaire
-          <input className="v-field rounded-md px-3 py-3" type="email" maxLength={120} value={value.recipientEmail} onChange={(e) => change({ recipientEmail: e.target.value.slice(0, 120) })} />
         </label>
         <label className="grid gap-1 text-sm font-medium">
           Message

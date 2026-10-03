@@ -1337,6 +1337,7 @@ async function checkoutHydratedLines(customerId, hydrated, payload = {}, { check
         lines,
         giftCardAllocations,
         checkoutSource,
+        siteUrl: String(payload.siteUrl || '').replace(/\/+$/, '') || await configuredSiteUrl(),
         stripe: {
           checkoutSessionId: '',
           mode: instituteMode,
@@ -1588,8 +1589,8 @@ async function issueGiftCardsFromSale(sale) {
         amountCents: giftCard.amountCents || line.unitPriceCents,
         senderName: giftCard.senderName,
         recipientName: giftCard.recipientName,
-        recipientEmail: giftCard.recipientEmail,
         message: giftCard.message,
+        siteUrl: sale.siteUrl,
         reason: `Achat ${sale.saleNumber}`,
         saleId: sale._id,
         idempotencyKey: `sale:${sale._id}:line:${line._id}:gift:${i}`,
@@ -2632,6 +2633,8 @@ export async function issueGiftCard(payload = {}, actor = {}) {
     recipientName: card.recipientName,
     amountCents: card.initialAmountCents,
     message: card.message,
+    // Le site d'achat (recette ou production) ; une carte émise au Manager : le site de cette instance.
+    siteUrl: payload.siteUrl || await configuredSiteUrl(),
   });
   await card.save();
   return { ...card.toObject(), oneTimeCode: actor.revealCode ? code : undefined };
