@@ -40,7 +40,7 @@ const PROVIDERS: Record<Provider, { title: string; Icon: typeof CreditCard; fiel
     Icon: Mail,
     fields: [
       { key: 'senderName', label: 'Nom expéditeur', placeholder: () => 'BeautySavage', secret: false },
-      { key: 'senderEmail', label: 'Adresse expéditeur', placeholder: () => 'contact@institut.fr', secret: false, type: 'email' },
+      { key: 'senderEmail', label: 'Adresse expéditeur', placeholder: () => 'contact@institut.fr', secret: false, type: 'email', hint: 'Les e-mails aux clientes (codes, confirmations, cartes cadeaux) partent de cette adresse, qui doit être validée dans Brevo.' },
       { key: 'secretKey', label: 'Clé API Brevo', placeholder: () => 'xkeysib-…', secret: true },
     ],
   },
@@ -113,7 +113,7 @@ function ProviderCard({ provider, live, saved, onSaved }: { provider: Provider; 
       const payload: Record<string, string> = { provider };
       for (const f of def.fields) if (f.secret ? draft[f.key].trim() : draft[f.key].trim() !== baseline[f.key].trim()) payload[f.key] = draft[f.key].trim();
       const result = await api.saveCommerceIntegration(payload);
-      const webhookError = provider === 'STRIPE_INSTITUTE' && result?.webhookLastError ? ` Le webhook n’a pas pu être créé : ${result.webhookLastError}` : '';
+      const webhookError = result?.webhookLastError ? ` Le webhook n’a pas pu être créé : ${result.webhookLastError}` : '';
       setFeedback(webhookError ? { tone: 'error', text: `Clés enregistrées.${webhookError}` } : { tone: 'ok', text: 'Enregistré.' });
       setDraft(blank(provider, result ?? saved));
       await onSaved();
@@ -193,7 +193,16 @@ function ProviderCard({ provider, live, saved, onSaved }: { provider: Provider; 
               <span className="ml-auto font-mono text-xs text-muted-foreground">{s.filled ? s.value : 'vide'}</span>
             </li>
           ))}
-          {provider === 'STRIPE_INSTITUTE' && saved?.webhookLastError && (
+          {provider === 'BREVO_INSTITUTE' && (
+            <li className="flex items-center gap-2 text-sm" data-testid="state-BREVO_INSTITUTE-webhook" data-filled={Boolean(saved?.webhookUrl)}>
+              <span className={cn('grid h-5 w-5 shrink-0 place-items-center rounded-full', saved?.webhookUrl ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-500')} aria-hidden>
+                {saved?.webhookUrl ? <Check className="h-3.5 w-3.5" strokeWidth={3} /> : <X className="h-3.5 w-3.5" strokeWidth={3} />}
+              </span>
+              <span className={saved?.webhookUrl ? 'font-medium' : 'text-muted-foreground'}>Suivi de remise (webhook)</span>
+              <span className="ml-auto text-xs text-muted-foreground">{saved?.webhookUrl ? 'créé automatiquement' : 'créé au prochain test'}</span>
+            </li>
+          )}
+          {saved?.webhookLastError && (
             <li className="mt-1 text-xs text-rose-700">Webhook : {saved.webhookLastError}</li>
           )}
           {saved?.lastTestAt && (

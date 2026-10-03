@@ -152,7 +152,23 @@ check('aucun montage /integrated-apis', !/integrated-apis/.test(routes));
 check('aucun montage de configuration Brevo', !/brevo/i.test(routes));
 
 const webhookRoutes = codeSeul(lire(BACKEND, 'src/routes/webhook.routes.js'));
-check('aucune route de webhook Brevo entrant', !/brevo/i.test(webhookRoutes));
+/**
+ * L'EXCEPTION « COMPTES DE L'INSTITUT » EST NOMMÉE, PAS SUBIE.
+ *
+ * Les e-mails destinés aux CLIENTS de l'institut partent par SON compte Brevo,
+ * avec SES modèles (instituteEmail.service.js), et ses paiements par SON
+ * compte Stripe. Ce ne sont pas des fournisseurs de la plateforme : la règle
+ * « autorité Panel » ne les concerne pas. L'exception est limitée à ces
+ * fichiers et à la seule route `/brevo-institute` ; tout autre appel ou
+ * webhook direct reste interdit.
+ */
+const INSTITUTE_ACCOUNT_FILES = [
+  'src/services/email/instituteEmail.service.js',
+  'src/services/commerce.service.js',
+  'src/services/instituteStripe.service.js',
+].map((f) => join(BACKEND, f));
+const horsInstitut = (f) => !INSTITUTE_ACCOUNT_FILES.includes(f);
+check('aucune route de webhook Brevo entrant (hors compte de l’institut)', !/brevo/i.test(webhookRoutes.replace(/['"`]\/brevo-institute(\/health)?['"`]/g, '').replace(/brevoInstituteWebhook/g, '')));
 check('…mais Stripe reçoit toujours', /\/stripe/.test(webhookRoutes));
 
 /* ══ 4 · AUCUN APPEL FOURNISSEUR DIRECT ═════════════════════════════════ */
@@ -166,6 +182,7 @@ const HOTES_INTERDITS = [
 
 for (const { hote, provider } of HOTES_INTERDITS) {
   const coupables = sourcesRuntime()
+    .filter(horsInstitut)
     .filter((f) => codeSeul(readFileSync(f, 'utf8')).includes(hote))
     .map((f) => f.replace(BACKEND, ''));
   check(`aucun appel runtime vers ${hote} (${provider})`, coupables.length === 0,
@@ -179,7 +196,7 @@ for (const { hote, provider } of HOTES_INTERDITS) {
  * c'est du trafic ENTRANT, qui ne compose aucune requête et n'exige aucune clé
  * d'appel. Ce qui est interdit, c'est de fabriquer un appel sortant.
  */
-const appelsSortantsStripe = sourcesRuntime().filter((f) => {
+const appelsSortantsStripe = sourcesRuntime().filter(horsInstitut).filter((f) => {
   const src = codeSeul(readFileSync(f, 'utf8'));
   return /fetch\(\s*[`'"]https:\/\/api\.stripe\.com/.test(src);
 }).map((f) => f.replace(BACKEND, ''));

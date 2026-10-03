@@ -53,8 +53,10 @@ export async function resolveSaleConfirmationClient({ event }) {
     saleNumber: sale.saleNumber,
     itemsHtml: `<ul>${itemsHtml}</ul>`,
     totalAmount: euro(sale.totalCents),
-    ...(sale.invoice?.pdfUrl ? { invoiceUrl: sale.invoice.pdfUrl } : {}),
-    paymentStatus: 'Payee',
+    // La facture Stripe de la cliente si elle est déjà émise ; sinon ses achats,
+    // d'où « Ma facture » l'ouvre dès qu'elle l'est. Jamais le PDF maison.
+    invoiceUrl: sale.stripe?.hostedInvoiceUrl || await customerAccountUrl('/espace-client?onglet=achats'),
+    paymentStatus: 'Payé',
   };
 }
 

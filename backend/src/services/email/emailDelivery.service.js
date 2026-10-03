@@ -12,6 +12,9 @@ import { normalizeProviderMessageId } from '../../utils/providerMessageId.js';
 import { getEmailReadiness } from './emailReadiness.service.js';
 import { validateProvidedVariables } from './emailTemplateContract.service.js';
 import { maskEmail, safeErrorMessage } from '../../utils/eventPayloadSafety.js';
+import {
+  INSTITUTE_PROVIDER, shouldSendAsInstitute, renderInstituteEmail, sendViaInstituteBrevo,
+} from './instituteEmail.service.js';
 import { logger } from '../../utils/logger.js';
 import {
   DELIVERY_STATUS,
@@ -95,11 +98,11 @@ export class EmailDeliveryError extends Error {
  * Sans `actionExecutionId` (envoi de test DEV), chaque appel crée une livraison :
  * c'est voulu, un test est justement une action qu'on veut pouvoir répéter.
  */
-async function createOrGetDelivery({ templateId, templateVersion, providerMode, sender, recipient, subjectSnapshot, eventId, actionExecutionId }) {
+async function createOrGetDelivery({ templateId, templateVersion, providerMode, sender, recipient, subjectSnapshot, eventId, actionExecutionId, provider = 'BREVO' }) {
   const base = {
     templateId,
     templateVersion,
-    provider: 'BREVO',
+    provider,
     providerMode,
     sender: { name: sender.name, emailMasked: maskEmail(sender.email) },
     recipientKey: recipient.key,
@@ -259,6 +262,18 @@ export async function sendTemplate({
         deliveryId: existing.deliveryId,
       });
     }
+  }
+
+  // --- 1 bis. E-mail CLIENT : c'est l'institut qui l'envoie ----------------
+  // Modèle local + clé Brevo de l'institut, sans passer par le Panel (voir
+  // instituteEmail.service.js). Sans clé ni expéditeur, on continue plus bas
+  // par le chemin historique : le message part quand même.
+  const institute = await shouldSendAsInstitute(templateId).catch((err) => {
+    logger.warn(`Envoi e-mail — configuration Brevo de l'institut illisible (${err.message}) : envoi par la plateforme.`);
+    return null;
+  });
+  if (institute) {
+    return sendAsInstitute({ templateId, recipient, variables, replyTo, eventId, actionExecutionId, sender: institute });
   }
 
   // --- 2. Readiness — le point de passage obligé -----------------------------
@@ -548,6 +563,64 @@ export async function sendTemplate({
     delivery.lastErrorSafe = { code, message, retryable };
     await delivery.save();
 
+    throw new EmailDeliveryError(code, message, { retryable, deliveryId: delivery.deliveryId });
+  }
+}
+
+/**
+ * Envoi d'un e-mail CLIENT par la clé Brevo de l'institut — mêmes garanties
+ * que le chemin du Panel : une livraison par exécution (index sur
+ * `actionExecutionId`), SENDING avant l'appel, et un délai dépassé n'est
+ * jamais rejoué automatiquement (un doublon arrive chez une vraie cliente).
+ */
+async function sendAsInstitute({ templateId, recipient, variables, replyTo, eventId, actionExecutionId, sender }) {
+  if (!recipient?.email) {
+    throw new EmailDeliveryError(D.NOT_OPERATIONAL, 'Destinataire sans adresse e-mail.', { retryable: false });
+  }
+  let rendered;
+  try {
+    rendered = await renderInstituteEmail(templateId, variables);
+  } catch (err) {
+    throw new EmailDeliveryError('INSTITUTE_RENDER_FAILED', safeErrorMessage(err?.message || 'Rendu impossible.'), { retryable: false });
+  }
+  const delivery = await createOrGetDelivery({
+    templateId,
+    templateVersion: 0,
+    providerMode: sender.mode,
+    sender: { email: sender.email, name: sender.name || sender.email },
+    recipient,
+    subjectSnapshot: rendered.subject,
+    eventId,
+    actionExecutionId,
+    provider: INSTITUTE_PROVIDER,
+  });
+  if (delivery.status === DELIVERY_STATUS.SENT) return result(delivery, { alreadySent: true });
+
+  // Une livraison née sur le chemin du Panel (échec antérieur) bascule ici.
+  delivery.provider = INSTITUTE_PROVIDER;
+  delivery.providerMode = sender.mode;
+  delivery.sender = { name: sender.name || sender.email, emailMasked: maskEmail(sender.email) };
+  delivery.subjectSnapshot = rendered.subject;
+  delivery.status = DELIVERY_STATUS.SENDING;
+  delivery.attempts += 1;
+  await delivery.save();
+
+  try {
+    const { messageId } = await sendViaInstituteBrevo({ sender, recipient, rendered, replyTo, deliveryId: delivery.deliveryId, templateId });
+    delivery.status = DELIVERY_STATUS.SENT;
+    delivery.providerMessageId = messageId || null;
+    delivery.sentAt = new Date();
+    delivery.lastErrorSafe = { code: '', message: '', retryable: false };
+    await delivery.save();
+    logger.info(`E-mail client envoyé par l'institut — modèle ${templateId}, destinataire ${maskEmail(recipient.email)}, livraison ${delivery.deliveryId}.`);
+    return result(delivery);
+  } catch (err) {
+    const code = err?.code || D.PROVIDER_ERROR;
+    const retryable = err?.retryable === true;
+    const message = safeErrorMessage(err?.message || 'Envoi impossible.');
+    delivery.status = DELIVERY_STATUS.FAILED;
+    delivery.lastErrorSafe = { code, message, retryable };
+    await delivery.save();
     throw new EmailDeliveryError(code, message, { retryable, deliveryId: delivery.deliveryId });
   }
 }

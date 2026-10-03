@@ -4,6 +4,7 @@ import { verifyStripeWebhookAnyMode } from '../services/stripe/stripe.service.js
 import { handleStripeWebhook } from '../services/contractWebhook.service.js';
 import { failInstituteStripeCheckout, finalizeInstituteStripeCheckout, recordInstituteStripeRefund } from '../services/commerce.service.js';
 import { verifyInstituteStripeWebhook } from '../services/instituteStripe.service.js';
+import { applyInstituteBrevoEvents, verifyInstituteBrevoToken } from '../services/email/instituteEmail.service.js';
 import { emailDebug, redactHeaders } from '../utils/emailDebug.js';
 
 /**
@@ -110,3 +111,22 @@ export const stripeInstituteWebhook = asyncHandler(async (req, res) => {
  * L'applicateur local vit dans `email/emailDeliveryEvent.applier.js`, et il est
  * CONSERVE : c'est lui qui recoit `EMAIL_DELIVERED` / `EMAIL_BOUNCED`.
  */
+
+/**
+ * Suivi des e-mails CLIENTS envoyés par la clé Brevo de l'institut. Le jeton
+ * de l'URL (créé avec le webhook) authentifie l'appel ; Brevo n'a besoin que
+ * d'un 200 rapide, et une erreur de traitement ne doit pas le faire réessayer
+ * pendant des jours.
+ */
+export const brevoInstituteWebhook = asyncHandler(async (req, res) => {
+  if (!(await verifyInstituteBrevoToken(req.query?.token))) {
+    return res.status(401).json({ success: false, message: 'Jeton invalide' });
+  }
+  try {
+    const body = Buffer.isBuffer(req.body) ? JSON.parse(req.body.toString('utf8') || '{}') : (req.body || {});
+    await applyInstituteBrevoEvents(body);
+  } catch (err) {
+    logger.warn(`[email-institut] événement Brevo non appliqué : ${err.message}`);
+  }
+  return res.json({ received: true });
+});

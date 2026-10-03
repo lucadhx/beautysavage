@@ -13,6 +13,7 @@ const raw = express.raw({ type: '*/*', limit: '2mb' });
 
 router.post('/stripe', raw, ctrl.stripeWebhook);
 router.post('/stripe-institute', raw, ctrl.stripeInstituteWebhook);
+router.post('/brevo-institute', raw, ctrl.brevoInstituteWebhook);
 /**
  * Sonde de JOIGNABILITÉ, appelée par notre propre backend sur l'URL publique
  * pour vérifier que le chemin d'arrivée est ouvert (tunnel de dev encore debout,
@@ -23,5 +24,6 @@ router.post('/stripe-institute', raw, ctrl.stripeInstituteWebhook);
 // anonymes, sans effet de bord, ne révèlent rien.
 router.get('/stripe/health', (req, res) => res.json({ ok: true }));
 router.get('/stripe-institute/health', (req, res) => res.json({ ok: true }));
+router.get('/brevo-institute/health', (req, res) => res.json({ ok: true }));
 
 export default router;

@@ -19,6 +19,7 @@ import { logger } from '../utils/logger.js';
 import { maskEmail } from '../utils/eventPayloadSafety.js';
 import { EVENT_ACTOR_TYPE } from '../utils/domainEventConstants.js';
 import { decryptSecret, encryptSecret, lastFourOf, maskFromLastFour } from '../utils/integratedApiCrypto.js';
+import { provisionInstituteBrevoWebhook } from './email/instituteEmail.service.js';
 import { signCustomerToken } from '../middlewares/customerAuth.middleware.js';
 import { assertNoOverlap, cancelEvent, sessionBlocks } from './calendar.service.js';
 import { activeCommissionRule, applyCommissionCap, computeSaleCommission } from './commissionRules.js';
@@ -2313,6 +2314,14 @@ export async function saveInstituteIntegration(payload) {
     });
     if (ok) await InstituteIntegration.updateOne({ provider }, { $set: { [`${prefix}.verified`]: true, [`${prefix}.lastTestAt`]: new Date() } });
   }
+  // Nouvelle clé Brevo : le webhook de suivi des e-mails clients est créé s'il
+  // n'existe pas encore (réutilisé sinon). Un échec n'empêche pas d'enregistrer
+  // la clé ; il est noté et affiché sur la carte.
+  if (provider === 'BREVO_INSTITUTE' && payload.secretKey) {
+    await provisionInstituteBrevoWebhook().catch(async (err) => {
+      await InstituteIntegration.updateOne({ provider }, { $set: { [`${prefix}.webhookLastError`]: err instanceof Error ? err.message : 'Création du webhook Brevo impossible' } });
+    });
+  }
   // Réponse masquée : jamais de secret, même chiffré, vers le navigateur.
   return (await getInstituteIntegrations()).find((item) => item.provider === provider) || null;
 }
@@ -2354,6 +2363,15 @@ export async function testInstituteIntegration(provider) {
       ok = true;
       message = `Connexion Brevo réussie${json.email ? ` (compte ${json.email})` : ''}.`;
       if (!slot.senderEmail) message += ' Renseignez l’adresse expéditeur.';
+      // Clé valide sans suivi de remise : on le crée maintenant (clé saisie avant
+      // l'existence de cette création automatique, ou webhook supprimé chez Brevo).
+      if (!slot.webhookUrl) {
+        await provisionInstituteBrevoWebhook()
+          .then((r) => { if (r?.created || r?.reused) message += ' Suivi de remise des e-mails activé.'; })
+          .catch(async (err) => {
+            await InstituteIntegration.updateOne({ provider }, { $set: { [`${prefix}.webhookLastError`]: err instanceof Error ? err.message : 'Création du webhook Brevo impossible' } });
+          });
+      }
     }
   } catch (err) {
     message = err instanceof Error ? err.message : 'Test impossible.';
