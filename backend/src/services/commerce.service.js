@@ -1825,7 +1825,7 @@ async function commissionsChargedCents(excludeSaleId = null) {
 
 async function recalculateMonthlyCommissionForSale(sale) {
   const rule = await activeCommissionRule();
-  const snapshot = applyCommissionCap(computeSaleCommission(sale, rule), rule, rule.capCents ? await commissionsChargedCents(sale._id) : 0);
+  const snapshot = applyCommissionCap(computeSaleCommission(sale, rule), rule, rule.capHtCents ? await commissionsChargedCents(sale._id) : 0);
   await CommerceSale.updateOne({ _id: sale._id }, { $set: { commission: snapshot } });
   if (!snapshot.subject || snapshot.amountCents <= 0) return null;
   let period = commissionPeriod(sale.finalizedAt || sale.updatedAt || new Date());
@@ -1839,8 +1839,8 @@ async function recalculateMonthlyCommissionForSale(sale) {
     { periodKey: period.key, label, status: 'DUE' },
     {
       $setOnInsert: { periodStart: period.start, periodEnd: period.end, dueAt: commissionDueAt(period), currency: 'EUR' },
-      $set: { ratePercent: snapshot.ratePercent, basis: snapshot.basis, rateBps: Math.round(snapshot.ratePercent * 100) },
-      $inc: { amountCents: snapshot.amountCents, basisCents: snapshot.basisCents },
+      $set: { ratePercent: snapshot.ratePercent, basis: snapshot.basis, rateBps: Math.round(snapshot.ratePercent * 100), rateType: snapshot.rateType || 'HT', vatRate: snapshot.vatRate ?? null },
+      $inc: { amountCents: snapshot.amountCents, basisCents: snapshot.basisCents, vatCents: snapshot.vatCents || 0, amountTtcCents: snapshot.amountTtcCents || snapshot.amountCents },
       $addToSet: { saleIds: sale._id },
       $push: {
         'sourceSnapshot.lines': {
@@ -1848,7 +1848,12 @@ async function recalculateMonthlyCommissionForSale(sale) {
           saleNumber: sale.saleNumber,
           basisCents: snapshot.basisCents,
           amountCents: snapshot.amountCents,
+          vatCents: snapshot.vatCents || 0,
+          amountTtcCents: snapshot.amountTtcCents || snapshot.amountCents,
           ratePercent: snapshot.ratePercent,
+          rateType: snapshot.rateType || 'HT',
+          rateHtPercent: snapshot.rateHtPercent ?? snapshot.ratePercent,
+          vatRate: snapshot.vatRate ?? null,
           basis: snapshot.basis,
           ...(snapshot.capped ? { capped: true } : {}),
         },
@@ -1880,30 +1885,37 @@ async function removeSaleFromCommission(sale) {
  * vente sans photo reçoit la règle en vigueur. Les mois en paiement ou payés
  * ne sont jamais réécrits.
  */
-export async function recalculateMonthlyCommissions() {
+/**
+ * `reprice` : les mois NON FACTURÉS (dus) sont recalculés avec la règle du
+ * contrat en vigueur — le bouton « Recalculer » après un changement de taux,
+ * de type HT/TTC ou de TVA. Sans lui, chaque vente garde la règle de sa date.
+ */
+export async function recalculateMonthlyCommissions({ reprice = false } = {}) {
   const rule = await activeCommissionRule();
   const locked = new Set((await CommerceCommission.find({ status: { $ne: 'DUE' } }).select('periodKey').lean()).map((d) => d.periodKey));
   const paidSales = await CommerceSale.find({ paymentStatus: 'PAID' }).sort({ finalizedAt: 1, createdAt: 1 }).lean();
   const groups = new Map();
   // Le plafond se remplit d'abord avec ce qui est déjà facturé (mois payés ou en paiement).
-  let charged = rule.capCents
+  let charged = rule.capHtCents
     ? (await CommerceCommission.find({ status: { $nin: ['DUE', 'CANCELLED'] } }).select('amountCents').lean()).reduce((s, d) => s + Number(d.amountCents || 0), 0)
     : 0;
   for (const sale of paidSales) {
     const period = commissionPeriod(sale.finalizedAt || sale.updatedAt || sale.createdAt || new Date());
     if (locked.has(period.key)) continue;
-    const before = sale.commission || computeSaleCommission(sale, rule);
+    const before = (!reprice && sale.commission) || computeSaleCommission(sale, rule);
     const snapshot = applyCommissionCap(before, rule, charged);
-    if (!sale.commission || snapshot.amountCents !== sale.commission.amountCents || snapshot.capReached !== sale.commission.capReached) {
+    if (!sale.commission || reprice || snapshot.amountCents !== sale.commission.amountCents || snapshot.capReached !== sale.commission.capReached || snapshot.vatCents !== sale.commission.vatCents) {
       await CommerceSale.updateOne({ _id: sale._id }, { $set: { commission: snapshot } });
     }
     charged += snapshot.amountCents;
     if (!snapshot.subject || snapshot.amountCents <= 0) continue;
-    const group = groups.get(period.key) || { period, basisCents: 0, amountCents: 0, saleIds: [], lines: [], ratePercent: snapshot.ratePercent, basis: snapshot.basis };
+    const group = groups.get(period.key) || { period, basisCents: 0, amountCents: 0, vatCents: 0, amountTtcCents: 0, saleIds: [], lines: [], ratePercent: snapshot.ratePercent, basis: snapshot.basis, rateType: snapshot.rateType || 'HT', vatRate: snapshot.vatRate ?? null };
     group.basisCents += snapshot.basisCents;
     group.amountCents += snapshot.amountCents;
+    group.vatCents += snapshot.vatCents || 0;
+    group.amountTtcCents += snapshot.amountTtcCents || snapshot.amountCents;
     group.saleIds.push(sale._id);
-    group.lines.push({ saleId: String(sale._id), saleNumber: sale.saleNumber, basisCents: snapshot.basisCents, amountCents: snapshot.amountCents, ratePercent: snapshot.ratePercent, basis: snapshot.basis, ...(snapshot.capped ? { capped: true } : {}) });
+    group.lines.push({ saleId: String(sale._id), saleNumber: sale.saleNumber, basisCents: snapshot.basisCents, amountCents: snapshot.amountCents, vatCents: snapshot.vatCents || 0, amountTtcCents: snapshot.amountTtcCents || snapshot.amountCents, ratePercent: snapshot.ratePercent, rateType: snapshot.rateType || 'HT', rateHtPercent: snapshot.rateHtPercent ?? snapshot.ratePercent, vatRate: snapshot.vatRate ?? null, basis: snapshot.basis, ...(snapshot.capped ? { capped: true } : {}) });
     groups.set(period.key, group);
   }
   // Les anciennes fiches « Commission formations en ligne … » encore dues sont remplacées.
@@ -1919,6 +1931,10 @@ export async function recalculateMonthlyCommissions() {
           periodEnd: group.period.end,
           dueAt: commissionDueAt(group.period),
           amountCents: group.amountCents,
+          vatCents: group.vatCents,
+          amountTtcCents: group.amountTtcCents,
+          rateType: group.rateType,
+          vatRate: group.vatRate,
           basisCents: group.basisCents,
           ratePercent: group.ratePercent,
           basis: group.basis,
@@ -2532,7 +2548,8 @@ export async function resendCustomerAccessLink(customerId) {
 
 export async function listCommissions() {
   const docs = await CommerceCommission.find().populate('saleIds', 'saleNumber totalCents createdAt').sort({ periodStart: -1, createdAt: -1 }).lean();
-  return docs.map(commissionView);
+  const { vatRate } = await activeCommissionRule();
+  return docs.map((doc) => commissionView(doc, { fallbackVatRate: vatRate }));
 }
 
 export async function getInstituteIntegrations() {

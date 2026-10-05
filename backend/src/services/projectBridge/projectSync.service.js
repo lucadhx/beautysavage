@@ -500,6 +500,8 @@ async function describeCurrent(contract, stockage) {
      * trop, ou 2000 fois trop peu.
      */
     taxRate: Number.isFinite(contract.taxRate) ? contract.taxRate : null,
+    /** TVA facturée SUR les commissions (facture Stripe du Panel). Absente = celle du contrat. */
+    ...(contract.commission?.configuredAt && Number.isFinite(contract.commission?.vatRate) ? { commissionVatRate: contract.commission.vatRate } : {}),
     /**
      * LE DÉLAI DE GRÂCE (L10.6B-1) — la politique commerciale du contrat.
      *

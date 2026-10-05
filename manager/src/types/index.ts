@@ -2656,7 +2656,13 @@ export interface ContractCommission {
   productKinds: string[];
   basis: 'HT' | 'TTC';
   salesVatRate: number;
-  /** Plafond total des commissions (HT, centimes) ; null = sans plafond. */
+  /** Plafond total des commissions (centimes, HT ou TTC selon `capType`) ; null = sans plafond. */
   capCents?: number | null;
+  /** Le taux est exprimé HT, ou TTC (TVA sur la commission incluse). */
+  rateType?: 'HT' | 'TTC';
+  /** TVA facturée sur la commission (%) ; null = celle du contrat. */
+  vatRate?: number | null;
+  /** Le plafond est exprimé HT ou TTC. */
+  capType?: 'HT' | 'TTC';
   configuredAt: string | null;
 }

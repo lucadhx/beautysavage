@@ -85,8 +85,15 @@ function PlatformCommission({ sale }: { sale: CommerceSale }) {
   const c = sale.commission as (CommerceSale['commission'] & { capReached?: boolean; capped?: boolean }) | null | undefined;
   if (c?.capReached && !(c.amountCents > 0)) return <span className="text-amber-700" data-testid="sale-commission">Plafond atteint — non prélevée</span>;
   if (!c || !c.subject || c.amountCents <= 0) return <span className="text-rose-600" data-testid="sale-commission">Non assujetti</span>;
+  const x = c as typeof c & { rateType?: 'HT' | 'TTC'; vatCents?: number; amountTtcCents?: number; vatRate?: number };
   const rate = Number(c.ratePercent).toLocaleString('fr-FR', { maximumFractionDigits: 2 });
-  return <span data-testid="sale-commission">{cents(c.amountCents)} <span className="text-xs font-normal text-muted-foreground">({rate} % {c.basis}{c.capped ? ', écrêtée' : ''})</span></span>;
+  const vat = Number(x.vatCents ?? 0);
+  return (
+    <span className="grid justify-items-end gap-0.5" data-testid="sale-commission">
+      <span>{cents(x.amountTtcCents || c.amountCents + vat)} <span className="text-xs font-normal text-muted-foreground">TTC</span></span>
+      <span className="text-xs font-normal text-muted-foreground">{cents(c.amountCents)} HT + {cents(vat)} TVA · {rate} % {x.rateType || 'HT'}{c.capped ? ', écrêtée' : ''}</span>
+    </span>
+  );
 }
 
 export function SaleDetail({ sale, onRefund }: { sale: CommerceSale; onRefund: () => void }) {

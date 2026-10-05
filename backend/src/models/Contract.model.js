@@ -297,6 +297,15 @@ const contractSchema = new mongoose.Schema(
       productKinds: { type: [String], default: () => ['DISTANCE_TRAINING'] },
       basis: { type: String, enum: ['HT', 'TTC'], default: 'TTC' },
       salesVatRate: { type: Number, default: 20, min: 0, max: 100 },
+      /**
+       * Le taux est-il exprimé HT ou TTC ? « 7,5 % TTC » = commission + TVA sur
+       * la commission valent 7,5 % de l'assiette (soit 6,25 % HT avec 20 % de TVA).
+       */
+      rateType: { type: String, enum: ['HT', 'TTC'], default: 'HT' },
+      /** TVA facturée SUR la commission (en %). `null` = celle du contrat (`taxRate`). */
+      vatRate: { type: Number, default: null, min: 0, max: 100 },
+      /** Le plafond `capCents` est-il exprimé HT ou TTC ? */
+      capType: { type: String, enum: ['HT', 'TTC'], default: 'HT' },
       /** Plafond TOTAL des commissions (HT, centimes) ; `null` = sans plafond. Atteint, plus rien n'est prélevé. */
       capCents: { type: Number, default: null, min: 0 },
       configuredAt: { type: Date, default: null },

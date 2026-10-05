@@ -101,6 +101,11 @@ export interface CommerceCommission {
   rateBps?: number;
   ratePercent?: number | null;
   basis?: 'HT' | 'TTC' | null;
+  /** Taux exprimé HT ou TTC, TVA sur la commission ; `amountCents` est le HT. */
+  rateType?: 'HT' | 'TTC' | null;
+  vatRate?: number | null;
+  vatCents?: number;
+  amountTtcCents?: number;
   periodStart?: string | null;
   periodEnd?: string | null;
   /** Le mois est terminé : il se paie (le mois en cours, jamais). */
@@ -109,7 +114,7 @@ export interface CommerceCommission {
   invoiceUrl?: string;
   stripeInvoice?: { id?: string; number?: string; invoicePdfUrl?: string; hostedInvoiceUrl?: string } | null;
   checkout?: { openedAt?: string; expiresAt?: string; processing?: boolean } | null;
-  sourceSnapshot?: { lines?: Array<{ saleId?: string; saleNumber?: string; basisCents?: number; amountCents?: number; ratePercent?: number; basis?: string }> } | null;
+  sourceSnapshot?: { lines?: Array<{ saleId?: string; saleNumber?: string; basisCents?: number; amountCents?: number; vatCents?: number; amountTtcCents?: number; ratePercent?: number; rateType?: 'HT' | 'TTC'; rateHtPercent?: number; vatRate?: number | null; basis?: string; capped?: boolean }> } | null;
 }
 
 export interface CommerceReview {

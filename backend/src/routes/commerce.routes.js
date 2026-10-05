@@ -128,7 +128,7 @@ managerCommerceRoutes.post('/sales/:id/refund', authorize(ROLES.ADMIN, ROLES.DEV
 managerCommerceRoutes.get('/customers', asyncHandler(async (_req, res) => ok(res, await commerce.listManagerCustomers())));
 managerCommerceRoutes.post('/customers/:id/access-link', asyncHandler(async (req, res) => ok(res, await commerce.resendCustomerAccessLink(req.params.id))));
 managerCommerceRoutes.get('/commissions', asyncHandler(async (_req, res) => ok(res, await commerce.listCommissions())));
-managerCommerceRoutes.post('/commissions/recalculate', authorize(ROLES.ADMIN, ROLES.DEV), asyncHandler(async (_req, res) => ok(res, await commerce.recalculateMonthlyCommissions())));
+managerCommerceRoutes.post('/commissions/recalculate', authorize(ROLES.ADMIN, ROLES.DEV), asyncHandler(async (_req, res) => ok(res, await commerce.recalculateMonthlyCommissions({ reprice: true }))));
 managerCommerceRoutes.get('/commissions/summary', asyncHandler(async (_req, res) => ok(res, await commissionPayment.commissionSummary())));
 // Payer une commission = une page de paiement Stripe ; personne ne la « marque payée » à la main.
 managerCommerceRoutes.post('/commissions/:id/checkout', authorize(ROLES.ADMIN, ROLES.DEV), rateLimit({ windowMs: 60_000, max: 10 }), asyncHandler(async (req, res) => ok(res, await commissionPayment.openCommissionCheckout(req.params.id))));

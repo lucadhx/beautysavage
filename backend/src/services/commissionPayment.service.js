@@ -52,7 +52,7 @@ function shortOperation(prefix, id, attempt) {
 }
 
 /** Les lignes envoyées au Panel : une vente, sa base, son taux, son montant. */
-function linesOf(commission) {
+export function linesOf(commission) {
   return (commission.sourceSnapshot?.lines || [])
     .filter((line) => Number(line.amountCents) > 0)
     .map((line) => ({
@@ -60,7 +60,8 @@ function linesOf(commission) {
       saleNumber: String(line.saleNumber || line.saleId).slice(0, 40),
       basisCents: Math.round(Number(line.basisCents) || 0),
       amountCents: Math.round(Number(line.amountCents) || 0),
-      ratePercent: Number(line.ratePercent ?? commission.ratePercent ?? 0),
+      // Le taux HT EFFECTIF : un taux « TTC » (7,5 %) est facturé à son HT (6,25 %), la TVA s'ajoutant.
+      ratePercent: Math.round(Number(line.rateHtPercent ?? line.ratePercent ?? commission.ratePercent ?? 0) * 1e6) / 1e6,
       ...(line.capped ? { capped: true } : {}),
     }));
 }
@@ -271,10 +272,19 @@ export async function reconcileCommissionPayments() {
 }
 
 /** Ce que la page des commissions affiche. */
-export function view(commission) {
+export function view(commission, { fallbackVatRate = null } = {}) {
   const c = commission?.toObject ? commission.toObject() : commission;
+  // HT / TVA / TTC du mois : somme des lignes (comme la facture Stripe, ligne par ligne).
+  // Un mois antérieur à l'enregistrement de la TVA prend celle du contrat en vigueur.
+  const lines = c?.sourceSnapshot?.lines || [];
+  const vatRate = c?.vatRate ?? lines.find((l) => l.vatRate != null)?.vatRate ?? fallbackVatRate;
+  const fromLines = lines.reduce((s, l) => s + (Number(l.vatCents) || (vatRate != null ? Math.round(Number(l.amountCents || 0) * vatRate / 100) : 0)), 0);
+  const vatCents = c?.vatCents || (lines.length ? fromLines : (vatRate != null ? Math.round(Number(c?.amountCents || 0) * vatRate / 100) : 0));
   return {
     ...c,
+    vatRate,
+    vatCents,
+    amountTtcCents: Number(c?.amountCents || 0) + vatCents,
     payable: commissionPayable(c),
     invoiceUrl: c?.stripeInvoice?.hostedInvoiceUrl || c?.stripeInvoice?.invoicePdfUrl || '',
     checkout: c?.sourceSnapshot?.checkout ? { openedAt: c.sourceSnapshot.checkout.openedAt, expiresAt: c.sourceSnapshot.checkout.expiresAt, processing: Boolean(c.sourceSnapshot.checkout.processing) } : null,
@@ -371,18 +381,33 @@ export async function notifyFinishedCommissionMonths(now = new Date()) {
 export async function commissionSummary() {
   const [rule, docs] = await Promise.all([
     activeCommissionRule(),
-    CommerceCommission.find({ status: { $ne: 'CANCELLED' } }).select('status amountCents').lean(),
+    CommerceCommission.find({ status: { $ne: 'CANCELLED' } }).select('status amountCents vatCents vatRate sourceSnapshot').lean(),
   ]);
+  const vatOf = (d) => view(d, { fallbackVatRate: rule.vatRate }).vatCents;
   const totalCents = docs.reduce((s, d) => s + Number(d.amountCents || 0), 0);
-  const paidCents = docs.filter((d) => d.status === 'PAID').reduce((s, d) => s + Number(d.amountCents || 0), 0);
-  const capCents = rule.capCents || null;
+  const paidDocs = docs.filter((d) => d.status === 'PAID');
+  const paidCents = paidDocs.reduce((s, d) => s + Number(d.amountCents || 0), 0);
+  const totalVatCents = docs.reduce((s, d) => s + vatOf(d), 0);
+  const paidVatCents = paidDocs.reduce((s, d) => s + vatOf(d), 0);
+  // Le plafond est COMPARÉ en HT ; on l'affiche dans l'unité où il a été saisi.
+  const capCents = rule.capHtCents || null;
   return {
     capCents,
+    capTtcCents: capCents ? Math.round(capCents * (1 + rule.vatRate / 100)) : null,
+    capType: rule.capType || 'HT',
+    capInputCents: rule.capCents || null,
     totalCents,
+    totalTtcCents: totalCents + totalVatCents,
     paidCents,
+    paidTtcCents: paidCents + paidVatCents,
     remainingToPayCents: totalCents - paidCents,
+    remainingToPayTtcCents: (totalCents + totalVatCents) - (paidCents + paidVatCents),
     capLeftCents: capCents ? Math.max(0, capCents - totalCents) : null,
     capReached: Boolean(capCents && totalCents >= capCents),
-    rule: { ratePercent: rule.ratePercent, basis: rule.basis, productKinds: rule.productKinds, source: rule.source },
+    vatRate: rule.vatRate,
+    rule: {
+      ratePercent: rule.ratePercent, rateType: rule.rateType, rateHtPercent: rule.rateHtPercent, rateTtcPercent: rule.rateTtcPercent,
+      vatRate: rule.vatRate, basis: rule.basis, salesVatRate: rule.salesVatRate, productKinds: rule.productKinds, source: rule.source,
+    },
   };
 }

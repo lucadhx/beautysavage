@@ -18,6 +18,12 @@ const commerceCommissionSchema = new mongoose.Schema(
     paymentReference: { type: String, default: '' },
     /** La règle du mois (les lignes gardent chacune la leur dans `sourceSnapshot.lines`). */
     ratePercent: { type: Number, default: null },
+    /** Taux exprimé HT ou TTC (TVA sur la commission incluse), et cette TVA. */
+    rateType: { type: String, enum: ['HT', 'TTC', null], default: null },
+    vatRate: { type: Number, default: null },
+    /** `amountCents` est le HT ; voici la TVA et le TTC (somme des lignes, comme Stripe). */
+    vatCents: { type: Number, default: 0, min: 0 },
+    amountTtcCents: { type: Number, default: 0, min: 0 },
     basis: { type: String, enum: ['HT', 'TTC', null], default: null },
     /**
      * LA FACTURE STRIPE DU MOIS — émise par la plateforme, une ligne par vente

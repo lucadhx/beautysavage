@@ -21,10 +21,14 @@ export function CommissionCoverage({ commission }: { commission: ContractCommiss
     <div className="grid gap-3" data-testid="commission-coverage">
       <div className="flex flex-wrap items-center gap-2 text-sm">
         <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 font-semibold text-primary">
-          <Percent className="h-3.5 w-3.5" /> {rate} % {rule.basis}
+          <Percent className="h-3.5 w-3.5" /> {rate} % {rule.rateType || 'HT'}
         </span>
+        {rule.rateType === 'TTC' && (
+          <span className="text-muted-foreground" data-testid="coverage-rate-ht">soit {(Number(rule.ratePercent) / (1 + (rule.vatRate ?? 20) / 100)).toLocaleString('fr-FR', { maximumFractionDigits: 4 })} % HT</span>
+        )}
+        <span className="text-muted-foreground">TVA sur commission {rule.vatRate ?? 20} % · assiette {rule.basis}</span>
         <span className="text-muted-foreground">
-          {rule.capCents ? `Plafond total : ${formatCents(rule.capCents)} HT` : 'Sans plafond'}
+          {rule.capCents ? `Plafond total : ${formatCents(rule.capCents)} ${rule.capType || 'HT'}` : 'Sans plafond'}
         </span>
         {!configured && <span className="text-xs text-amber-700">Règle par défaut (commission non configurée)</span>}
       </div>

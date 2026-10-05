@@ -1103,7 +1103,7 @@ export const api = {
   /** Relit l'état du paiement auprès de Stripe (retour de paiement, vérification). */
   /** Compteur du plafond : total prélevé, payé, reste à payer, place sous le plafond. */
   commissionSummary: () =>
-    request<{ capCents: number | null; totalCents: number; paidCents: number; remainingToPayCents: number; capLeftCents: number | null; capReached: boolean }>('/commerce/commissions/summary'),
+    request<CommissionSummary>('/commerce/commissions/summary'),
   syncCommissionPayment: (id: string) =>
     request<any>(`/commerce/commissions/${id}/sync`, { method: 'POST' }),
   commerceIntegrations: () => request<any[]>('/commerce/integrations'),
@@ -1273,7 +1273,7 @@ export const api = {
      * `recurrence` est la forme à envoyer. `interval` (l'UNITÉ seule) reste
      * accepté par le serveur, lu « tous les 1 » — il n'est plus émis d'ici.
      */
-    data: { name?: string; launchFee?: { enabled: boolean; amountExcludingTax?: number }; subscription?: { enabled: boolean; amountExcludingTax?: number; recurrence?: Recurrence; interval?: 'MONTH' | 'YEAR' }; taxRate?: number; signatureRequirement?: 'REQUIRED' | 'NOT_REQUIRED'; commission?: { enabled?: boolean; ratePercent: number; productKinds: string[]; basis: 'HT' | 'TTC'; salesVatRate?: number; capCents?: number | null } }
+    data: { name?: string; launchFee?: { enabled: boolean; amountExcludingTax?: number }; subscription?: { enabled: boolean; amountExcludingTax?: number; recurrence?: Recurrence; interval?: 'MONTH' | 'YEAR' }; taxRate?: number; signatureRequirement?: 'REQUIRED' | 'NOT_REQUIRED'; commission?: { enabled?: boolean; ratePercent: number; productKinds: string[]; basis: 'HT' | 'TTC'; salesVatRate?: number; capCents?: number | null; rateType?: 'HT' | 'TTC'; vatRate?: number | null; capType?: 'HT' | 'TTC' } }
   ) => request<Contract>(`/contracts/${id}/draft`, { method: 'PUT', body: data }),
   /**
    * Politique de grâce en cas d'impayé. `null` retire la politique — l'impayé
@@ -1801,4 +1801,21 @@ export interface SalePaymentDetails {
   paidAt?: string | null;
   dashboardUrl?: string;
   invoiceUrl?: string;
+}
+
+/** Le compteur des commissions : HT (ce qui est comparé au plafond) et TTC (ce qui est payé). */
+export interface CommissionSummary {
+  capCents: number | null;
+  capTtcCents?: number | null;
+  capType?: 'HT' | 'TTC';
+  totalCents: number;
+  totalTtcCents?: number;
+  paidCents: number;
+  paidTtcCents?: number;
+  remainingToPayCents: number;
+  remainingToPayTtcCents?: number;
+  capLeftCents: number | null;
+  capReached: boolean;
+  vatRate?: number;
+  rule?: { ratePercent: number; rateType?: 'HT' | 'TTC'; rateHtPercent?: number; rateTtcPercent?: number; vatRate?: number; basis: 'HT' | 'TTC'; salesVatRate?: number; productKinds: string[]; source: string };
 }

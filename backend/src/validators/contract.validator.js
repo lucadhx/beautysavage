@@ -89,6 +89,9 @@ const updateDraftBody = z
         basis: z.enum(['HT', 'TTC']),
         salesVatRate: z.number().min(0).max(100).optional(),
         capCents: z.number().int().min(0).max(1_000_000_000).nullable().optional(),
+        rateType: z.enum(['HT', 'TTC']).optional(),
+        vatRate: z.number().min(0).max(100).nullable().optional(),
+        capType: z.enum(['HT', 'TTC']).optional(),
       })
       .strict()
       .optional(),

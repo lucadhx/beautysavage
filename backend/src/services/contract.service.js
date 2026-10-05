@@ -171,6 +171,9 @@ export async function updateDraft(contract, payload, actor) {
       basis: commission.basis === 'HT' ? 'HT' : 'TTC',
       salesVatRate: Number.isFinite(Number(commission.salesVatRate)) ? Number(commission.salesVatRate) : 20,
       capCents: Number.isInteger(commission.capCents) && commission.capCents > 0 ? commission.capCents : null,
+      rateType: commission.rateType === 'TTC' ? 'TTC' : 'HT',
+      vatRate: Number.isFinite(Number(commission.vatRate)) && commission.vatRate !== null ? Number(commission.vatRate) : null,
+      capType: commission.capType === 'TTC' ? 'TTC' : 'HT',
       configuredAt: new Date(),
     };
   }
@@ -1344,6 +1347,9 @@ export function serializeContract(contract, { role } = {}) {
           basis: c.commission.basis || 'TTC',
           salesVatRate: c.commission.salesVatRate ?? 20,
           capCents: c.commission.capCents ?? null,
+          rateType: c.commission.rateType || 'HT',
+          vatRate: c.commission.vatRate ?? null,
+          capType: c.commission.capType || 'HT',
           configuredAt: c.commission.configuredAt || null,
         }
       : null,

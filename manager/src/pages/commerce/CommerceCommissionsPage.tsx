@@ -1,8 +1,9 @@
 import * as React from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { AlertTriangle, CheckCircle2, ChevronDown, Clock, CreditCard, ExternalLink, FileText, Loader2, RefreshCw, X } from 'lucide-react';
-import { api } from '@/lib/api';
+import { AlertTriangle, CheckCircle2, ChevronDown, Clock, CreditCard, ExternalLink, FileText, Loader2, Percent, RefreshCw, X } from 'lucide-react';
+import { api, type CommissionSummary } from '@/lib/api';
+import { pct } from '@/lib/commissionMath';
 import { cn } from '@/lib/utils';
 import { CardsSkeleton, TableSkeleton } from '@/components/ui/Skeleton';
 import {
@@ -32,7 +33,18 @@ const nextMonthFirst = (c: CommerceCommission) => {
 
 const ruleText = (c: CommerceCommission) => {
   const rate = c.ratePercent ?? (c.rateBps ? c.rateBps / 100 : null);
-  return rate === null || rate === undefined ? '' : `${String(rate).replace('.', ',')} % ${c.basis || 'TTC'}`;
+  if (rate === null || rate === undefined) return '';
+  const type = c.rateType || 'HT';
+  const vat = c.vatRate ?? null;
+  const ht = type === 'TTC' && vat != null ? ` (${pct(rate / (1 + vat / 100), 4)} HT)` : '';
+  return `${pct(rate)} ${type}${ht} · assiette ${c.basis || 'TTC'}`;
+};
+
+/** HT / TVA / TTC d'un mois (anciens mois sans TVA enregistrée : le HT seul). */
+const totals = (c: CommerceCommission) => {
+  const ht = Number(c.amountCents || 0);
+  const vat = Number(c.vatCents || 0);
+  return { ht, vat, ttc: Number(c.amountTtcCents || 0) || ht + vat };
 };
 
 /** L'écran de vérification au retour de Stripe — le paiement n'est « payé » qu'une fois ENREGISTRÉ. */
@@ -141,7 +153,7 @@ export default function CommerceCommissionsPage() {
     setRecalculating(true);
     try {
       await api.recalculateCommerceCommissions();
-      setMessage({ tone: 'info', text: 'Commissions recalculées depuis les ventes payées (les mois payés ou en paiement ne bougent pas).' });
+      setMessage({ tone: 'info', text: 'Commissions recalculées avec la règle du contrat (taux, HT/TTC, TVA) : les mois payés ou en paiement ne bougent pas.' });
       await refresh();
     } catch (err) {
       setMessage({ tone: 'error', text: err instanceof Error ? err.message : 'Recalcul impossible' });
@@ -152,6 +164,7 @@ export default function CommerceCommissionsPage() {
 
   const toPay = commissions.filter((c) => c.status !== 'PAID' && c.payable);
   const toPayAmount = toPay.reduce((sum, c) => sum + (c.amountCents || 0), 0);
+  const toPayTtc = toPay.reduce((sum, c) => sum + totals(c).ttc, 0);
   const current = commissions.find((c) => c.status === 'DUE' && !c.payable);
 
   return (
@@ -170,12 +183,13 @@ export default function CommerceCommissionsPage() {
           {message.text}
         </p>
       )}
+      {summary?.rule && <RuleBanner summary={summary} />}
       {summary && <CapGauge summary={summary} />}
       {!loaded ? <CardsSkeleton count={3} /> : (
         <div className="grid gap-4 md:grid-cols-3">
           <Metric label="Mois à payer" value={toPay.length} detail="Mois terminés non réglés" />
-          <Metric label="Montant à payer (HT)" value={cents(toPayAmount)} detail="La TVA du contrat s’ajoute sur la facture" />
-          <Metric label="Mois en cours" value={cents(current?.amountCents)} detail={current ? `Payable à partir du ${nextMonthFirst(current)}` : 'Aucune vente assujettie ce mois-ci'} />
+          <Metric label="Montant à payer (TTC)" value={cents(toPayTtc)} detail={`${cents(toPayAmount)} HT + ${cents(toPayTtc - toPayAmount)} de TVA`} />
+          <Metric label="Mois en cours (TTC)" value={cents(current ? totals(current).ttc : 0)} detail={current ? `${cents(current.amountCents)} HT · payable à partir du ${nextMonthFirst(current)}` : 'Aucune vente assujettie ce mois-ci'} />
         </div>
       )}
       <Panel title="Mois par mois">
@@ -189,7 +203,7 @@ export default function CommerceCommissionsPage() {
               return (
                 <li key={c._id} className="rounded-xl border bg-card" data-testid="commission-row" data-status={c.status}>
                   <div className="flex flex-wrap items-center gap-3 p-4">
-                    <div className="min-w-0 flex-1">
+                    <div className="min-w-0 basis-full sm:basis-auto sm:flex-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="font-semibold">{monthLabel(c)}</span>
                         <CommissionBadge c={c} />
@@ -199,9 +213,9 @@ export default function CommerceCommissionsPage() {
                         {c.status === 'PAID' && c.paidAt ? ` · payée le ${dateShort(c.paidAt)}` : ''}
                       </p>
                     </div>
-                    <div className="text-right">
-                      <div className="text-lg font-semibold tabular-nums">{cents(c.amountCents)}</div>
-                      <div className="text-[11px] uppercase tracking-wide text-muted-foreground">HT</div>
+                    <div className="flex-1 sm:flex-none sm:text-right" data-testid="commission-amounts">
+                      <div className="text-lg font-semibold tabular-nums">{cents(totals(c).ttc)} <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">TTC</span></div>
+                      <div className="text-xs tabular-nums text-muted-foreground">{cents(totals(c).ht)} HT · TVA {cents(totals(c).vat)}{c.vatRate != null ? ` (${pct(c.vatRate)})` : ''}</div>
                     </div>
                     <div className="flex w-full justify-end sm:w-auto">
                       <CommissionAction c={c} opening={opening === c._id} disabled={Boolean(opening)} onPay={() => pay(c)} />
@@ -216,17 +230,35 @@ export default function CommerceCommissionsPage() {
                       <AnimatePresence initial={false}>
                         {expanded && (
                           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
-                            <table className="w-full text-sm" data-testid="commission-lines">
+                            <div className="overflow-x-auto">
+                            <table className="w-full min-w-[20rem] text-sm" data-testid="commission-lines">
+                              <thead className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                                <tr className="border-t">
+                                  <th className="px-4 py-2 text-left font-medium">Vente</th>
+                                  <th className="hidden px-4 py-2 text-left font-medium sm:table-cell">Règle</th>
+                                  <th className="px-4 py-2 text-right font-medium">HT</th>
+                                  <th className="hidden px-4 py-2 text-right font-medium sm:table-cell">TVA</th>
+                                  <th className="px-4 py-2 text-right font-medium">TTC</th>
+                                </tr>
+                              </thead>
                               <tbody>
-                                {lines.map((line) => (
-                                  <tr key={line.saleId || line.saleNumber} className="border-t">
-                                    <td className="px-4 py-2 font-mono text-xs">{line.saleNumber}</td>
-                                    <td className="px-4 py-2 text-xs text-muted-foreground">{line.ratePercent} % de {cents(line.basisCents)} {line.basis}</td>
-                                    <td className="px-4 py-2 text-right tabular-nums">{cents(line.amountCents)}</td>
-                                  </tr>
-                                ))}
+                                {lines.map((line) => {
+                                  const ht = Number(line.amountCents || 0);
+                                  const vat = Number(line.vatCents ?? (line.vatRate != null ? Math.round(ht * line.vatRate / 100) : 0));
+                                  return (
+                                    <tr key={line.saleId || line.saleNumber} className="border-t">
+                                      <td className="px-4 py-2 font-mono text-xs">{line.saleNumber}{line.capped ? <span className="ml-1 rounded bg-amber-100 px-1 text-[10px] text-amber-800">écrêtée</span> : null}
+                                        <div className="font-sans text-[11px] text-muted-foreground sm:hidden">{pct(line.ratePercent || 0)} {line.rateType || 'HT'} de {cents(line.basisCents)}</div></td>
+                                      <td className="hidden px-4 py-2 text-xs text-muted-foreground sm:table-cell">{pct(line.ratePercent || 0)} {line.rateType || 'HT'}{line.rateType === 'TTC' && line.rateHtPercent ? ` (${pct(line.rateHtPercent, 4)} HT)` : ''} de {cents(line.basisCents)} {line.basis}</td>
+                                      <td className="px-4 py-2 text-right tabular-nums">{cents(ht)}</td>
+                                      <td className="hidden px-4 py-2 text-right tabular-nums text-muted-foreground sm:table-cell">{cents(vat)}</td>
+                                      <td className="px-4 py-2 text-right font-medium tabular-nums">{cents(Number(line.amountTtcCents || 0) || ht + vat)}</td>
+                                    </tr>
+                                  );
+                                })}
                               </tbody>
                             </table>
+                            </div>
                           </motion.div>
                         )}
                       </AnimatePresence>
@@ -262,15 +294,38 @@ function CommissionBadge({ c }: { c: CommerceCommission }) {
   return <span className={cn('inline-flex rounded-full border px-2.5 py-1 text-xs font-medium', tone)} data-testid="commission-badge">{label}</span>;
 }
 
+/** La règle du contrat, en clair : taux HT/TTC, équivalent, TVA, assiette. */
+function RuleBanner({ summary }: { summary: CommissionSummary }) {
+  const r = summary.rule!;
+  const type = r.rateType || 'HT';
+  const vat = r.vatRate ?? summary.vatRate ?? 20;
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border bg-card px-4 py-3 text-sm" data-testid="commission-rule">
+      <span className="flex items-center gap-2 font-semibold"><span className="grid h-8 w-8 place-items-center rounded-lg bg-primary/10 text-primary"><Percent className="h-4 w-4" /></span>{pct(r.ratePercent)} {type}</span>
+      <span className="text-muted-foreground">= {pct(type === 'TTC' ? (r.rateHtPercent ?? r.ratePercent / (1 + vat / 100)) : (r.rateTtcPercent ?? r.ratePercent * (1 + vat / 100)), 4)} {type === 'TTC' ? 'HT' : 'TTC'}</span>
+      <span className="text-muted-foreground">TVA sur commission {pct(vat)}</span>
+      <span className="text-muted-foreground">Assiette : prix {r.basis}</span>
+      {r.source === 'DEFAULT' && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-800">Règle par défaut</span>}
+    </div>
+  );
+}
+
 /**
  * LE COMPTEUR DU PLAFOND — le total prélevé au centre d'un anneau qui se
- * remplit jusqu'au plafond du contrat ; en petit, ce qu'il reste à payer.
+ * remplit jusqu'au plafond du contrat, dans l'unité où il a été saisi (HT
+ * ou TTC) ; en petit, l'autre unité et ce qu'il reste à payer.
  */
-function CapGauge({ summary }: { summary: { capCents: number | null; totalCents: number; paidCents: number; remainingToPayCents: number; capLeftCents: number | null; capReached: boolean } }) {
+function CapGauge({ summary }: { summary: CommissionSummary }) {
   const R = 52;
   const C = 2 * Math.PI * R;
   const ratio = summary.capCents ? Math.min(1, summary.totalCents / summary.capCents) : 0;
   const tone = summary.capReached ? '#d97706' : '#2563eb';
+  const ttcUnit = summary.capType === 'TTC';
+  const vat = summary.vatRate ?? 20;
+  const total = ttcUnit ? (summary.totalTtcCents ?? summary.totalCents) : summary.totalCents;
+  const cap = ttcUnit ? (summary.capTtcCents ?? summary.capCents) : summary.capCents;
+  const left = summary.capLeftCents == null ? null : ttcUnit ? Math.round(summary.capLeftCents * (1 + vat / 100)) : summary.capLeftCents;
+  const unit = ttcUnit ? 'TTC' : 'HT';
   return (
     <div className="flex flex-col items-center gap-5 rounded-xl border bg-card p-5 sm:flex-row" data-testid="commission-cap">
       <div className="relative h-36 w-36 shrink-0">
@@ -284,16 +339,17 @@ function CapGauge({ summary }: { summary: { capCents: number | null; totalCents:
         </svg>
         <div className="absolute inset-0 grid place-content-center text-center">
           <motion.span initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.3 }} className="text-lg font-semibold tabular-nums" data-testid="cap-total">
-            {cents(summary.totalCents)}
+            {cents(total)}
           </motion.span>
-          <span className="text-[11px] text-muted-foreground">{summary.capCents ? `sur ${cents(summary.capCents)}` : 'sans plafond'}</span>
+          <span className="text-[11px] text-muted-foreground">{cap ? `sur ${cents(cap)} ${unit}` : `${unit} · sans plafond`}</span>
         </div>
       </div>
       <div className="grid gap-1 text-center sm:text-left">
         <p className="font-semibold">Commissions prélevées au total</p>
-        <p className="text-sm text-muted-foreground" data-testid="cap-remaining">Reste à payer : <span className="font-semibold text-foreground">{cents(summary.remainingToPayCents)}</span> · déjà payé {cents(summary.paidCents)}</p>
+        <p className="text-sm text-muted-foreground" data-testid="cap-both">{cents(summary.totalCents)} HT · {cents(summary.totalTtcCents ?? summary.totalCents)} TTC</p>
+        <p className="text-sm text-muted-foreground" data-testid="cap-remaining">Reste à payer : <span className="font-semibold text-foreground">{cents(summary.remainingToPayTtcCents ?? summary.remainingToPayCents)} TTC</span> ({cents(summary.remainingToPayCents)} HT) · déjà payé {cents(summary.paidTtcCents ?? summary.paidCents)} TTC</p>
         {summary.capCents && !summary.capReached && (
-          <p className="text-xs text-muted-foreground">Encore {cents(summary.capLeftCents)} avant le plafond ({Math.round(ratio * 100)} %).</p>
+          <p className="text-xs text-muted-foreground">Encore {cents(left)} {unit} avant le plafond ({Math.round(ratio * 100)} %).</p>
         )}
         {summary.capReached && (
           <p className="mt-1 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900" data-testid="cap-reached">
