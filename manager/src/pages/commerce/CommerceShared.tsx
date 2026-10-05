@@ -53,9 +53,24 @@ export interface CommerceSale {
   creditNote?: { number?: string; issuedAt?: string; pdfUrl?: string };
   stripeAmountCents?: number;
   giftCardAmountCents?: number;
-  stripe?: { checkoutSessionId?: string; paymentIntentId?: string; mode?: string };
+  stripe?: { checkoutSessionId?: string; paymentIntentId?: string; mode?: string; invoiceId?: string; hostedInvoiceUrl?: string };
   giftCardAllocations?: { codeMasked?: string; amountCents?: number }[];
-  lines?: { productSnapshot?: { title?: string; kind?: ProductKind }; quantity?: number; totalCents?: number }[];
+  lines?: {
+    _id?: string;
+    productSnapshot?: { title?: string; kind?: ProductKind; options?: { key: string; label: string; priceCents?: number }[] };
+    quantity?: number;
+    unitPriceCents?: number;
+    totalCents?: number;
+    balanceDueCents?: number;
+    optionKeys?: string[];
+    sessionId?: string | null;
+    bookingSnapshot?: { startsAt?: string; endsAt?: string; durationMinutes?: number } | null;
+    giftCardSnapshot?: { recipientName?: string; senderName?: string; amountCents?: number } | null;
+  }[];
+  partialRefunds?: { lineId?: string; at?: string; amountCents?: number; stripeCents?: number; giftCents?: number; reason?: string }[];
+  finalizedAt?: string | null;
+  siteUrl?: string;
+  checkoutSource?: 'CART' | 'QUICK_BUY' | string;
   /** Commission de la vente (photographiée au paiement, ou règle en vigueur pour les anciennes ventes). */
   commission?: { subject: boolean; ratePercent: number; basis: 'HT' | 'TTC'; basisCents: number; amountCents: number } | null;
   finalizeIssues?: string[];
@@ -180,6 +195,8 @@ const STATUS_LABELS: Record<string, string> = {
   REFUNDED: 'Rembourse',
   CANCELLED: 'Annule',
   CANCELED: 'Annule',
+  HELD: 'En attente de paiement',
+  PARTIALLY_REFUNDED: 'Rembourse en partie',
   DRAFT: 'Brouillon',
   DISABLED: 'Desactive',
   ARCHIVED: 'Archive',
@@ -255,6 +272,8 @@ const STATUS_TONE: Record<string, string> = {
   ACCEPTED: 'border-emerald-300 bg-emerald-100 text-emerald-900',
   REFUNDED: 'border-sky-300 bg-sky-100 text-sky-900',
   SCHEDULED: 'border-sky-300 bg-sky-100 text-sky-900',
+  HELD: 'border-amber-300 bg-amber-50 text-amber-900',
+  PARTIALLY_REFUNDED: 'border-sky-300 bg-sky-100 text-sky-900',
   REJECTED: 'border-red-300 bg-red-100 text-red-900',
   FAILED: 'border-red-300 bg-red-100 text-red-900',
   CANCELLED: 'border-red-300 bg-red-100 text-red-900',

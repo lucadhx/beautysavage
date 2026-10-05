@@ -1202,7 +1202,13 @@ async function serviceBookingSnapshot(product, payload = {}) {
   if (Number.isNaN(startsAt.getTime()) || Number.isNaN(endsAt.getTime()) || endsAt <= startsAt) {
     throw ApiError.badRequest('Choisissez un créneau disponible pour cette prestation');
   }
-  await assertNoOverlap({ startsAt, endsAt });
+  try {
+    await assertNoOverlap({ startsAt, endsAt });
+  } catch (err) {
+    if (err?.details?.code !== 'CALENDAR_OVERLAP') throw err;
+    // Message pour la CLIENTE (le détail du conflit reste côté institut).
+    throw ApiError.conflict('Ce créneau n’est plus disponible : il vient d’être réservé. Choisissez-en un autre.', { code: 'SLOT_TAKEN' });
+  }
   return {
     startsAt,
     endsAt,
@@ -1375,6 +1381,15 @@ async function checkoutHydratedLines(customerId, hydrated, payload = {}, { check
   }
 
   if (stripeReady && !sale.stripe.checkoutSessionId) {
+    // Le créneau et les places sont RETENUS avant d'ouvrir le paiement : pendant
+    // ces 30 minutes, personne d'autre ne peut les réserver.
+    try {
+      await holdSaleSlots(sale, customer);
+    } catch (err) {
+      await releaseSaleHolds(sale, 'Créneau indisponible à l’ouverture du paiement');
+      await closeUnpaidSale(sale, 'FAILED');
+      throw err;
+    }
     // Le site d'où vient la cliente (fourni par la route, origine vérifiée), sinon celui de cette instance.
     const site = String(payload.siteUrl || '').replace(/\/+$/, '') || await configuredSiteUrl();
     try {
@@ -1393,7 +1408,8 @@ async function checkoutHydratedLines(customerId, hydrated, payload = {}, { check
         lineItems: stripeLineItems(sale),
         discounts: coupon ? [{ coupon: coupon.id }] : null,
         successUrl: `${site}/paiement/succes?session_id={CHECKOUT_SESSION_ID}`,
-        expiresInMinutes: sale.giftCardAllocations?.length ? 30 : null,
+        // 30 min (minimum Stripe) dès qu'un créneau, une place ou une carte cadeau est retenu.
+        expiresInMinutes: (sale.giftCardAllocations?.length || saleHasDatedLines(sale)) ? 30 : null,
         // Un achat rapide annulé ramène sur la fiche, pas sur un panier qu'il n'a jamais touché.
         cancelUrl: checkoutSource === 'QUICK_BUY' && payload.returnPath && /^\/[a-z0-9/_-]*$/i.test(String(payload.returnPath))
           ? `${site}${payload.returnPath}?paiement=annule`
@@ -1405,6 +1421,7 @@ async function checkoutHydratedLines(customerId, hydrated, payload = {}, { check
       await sale.save();
     } catch (err) {
       await releaseGiftCardReservations(sale.giftCardAllocations || []);
+      await releaseSaleHolds(sale, 'Page de paiement non créée');
       sale.giftCardAllocations = [];
       sale.giftCardAmountCents = 0;
       sale.stripeAmountCents = sale.totalCents;
@@ -1519,6 +1536,11 @@ async function releaseGiftCardReservations(allocations = []) {
 }
 
 async function incrementReservedSessions(sale, issues = null) {
+  // Places déjà comptées à l'ouverture du paiement (retenue) : rien à ajouter.
+  if (sale.seatsHeld) {
+    sale.seatsHeld = false;
+    return;
+  }
   for (const line of sale.lines || []) {
     if (line.productSnapshot?.kind !== 'IN_PERSON_TRAINING' || !line.sessionId) continue;
     const product = await CommerceProduct.findById(line.productId);
@@ -1536,6 +1558,149 @@ async function incrementReservedSessions(sale, issues = null) {
   }
 }
 
+/* ───────────────────────── Retenue pendant le paiement ───────────────────────── */
+
+export const SLOT_HOLD_MINUTES = 32; // un peu plus que la page Stripe (30 min) : le temps que son expiration arrive
+
+function saleHasDatedLines(sale) {
+  return (sale.lines || []).some((line) => (
+    (line.productSnapshot?.kind === 'SERVICE' && line.bookingSnapshot?.startsAt)
+    || (line.productSnapshot?.kind === 'IN_PERSON_TRAINING' && line.sessionId)
+  ));
+}
+
+/**
+ * RETIENT les créneaux (prestations) et les places (formations) d'une vente
+ * avant d'ouvrir le paiement. Un créneau déjà pris, une session complète :
+ * refus immédiat, avant que la cliente ne paie quoi que ce soit.
+ */
+async function holdSaleSlots(sale, customer) {
+  if (!saleHasDatedLines(sale)) return;
+  const holdExpiresAt = new Date(Date.now() + SLOT_HOLD_MINUTES * 60_000);
+  for (const line of sale.lines || []) {
+    if (line.productSnapshot?.kind !== 'SERVICE' || !line.bookingSnapshot?.startsAt) continue;
+    const startsAt = new Date(line.bookingSnapshot.startsAt);
+    const endsAt = new Date(line.bookingSnapshot.endsAt);
+    const source = { saleId: String(sale._id), lineId: String(line._id), kind: 'SERVICE_CHECKOUT' };
+    const mine = await CalendarEvent.findOne({ 'source.saleId': source.saleId, 'source.lineId': source.lineId, status: 'HELD' });
+    if (mine) { mine.holdExpiresAt = holdExpiresAt; await mine.save(); continue; }
+    try {
+      await assertNoOverlap({ startsAt, endsAt });
+    } catch (err) {
+      if (err?.details?.code === 'CALENDAR_OVERLAP') {
+        throw ApiError.conflict(`Le créneau du ${startsAt.toLocaleString('fr-FR', { timeZone: 'Europe/Paris', dateStyle: 'full', timeStyle: 'short' })} vient d’être réservé. Choisissez-en un autre.`, { code: 'SLOT_TAKEN', lineId: String(line._id) });
+      }
+      throw err;
+    }
+    await CalendarEvent.create({
+      type: 'SERVICE_BOOKING',
+      title: line.productSnapshot?.title || 'Rendez-vous institut',
+      productId: line.productId,
+      saleId: sale._id,
+      lineId: String(line._id),
+      customerSnapshot: {
+        customerId: String(sale.customerId),
+        name: [customer?.firstName, customer?.lastName].filter(Boolean).join(' ') || customer?.email || 'Cliente',
+        email: customer?.email || '',
+        phone: customer?.phone || '',
+      },
+      startsAt,
+      endsAt,
+      status: 'HELD',
+      holdExpiresAt,
+      paymentSnapshot: { totalCents: line.fullTotalCents ?? line.totalCents ?? 0, paidCents: 0, currency: sale.currency || 'EUR' },
+      notes: `En attente de paiement — ${sale.saleNumber}.`,
+      source,
+    });
+  }
+  // Places de formation : comptées tout de suite (et rendues si le paiement n'aboutit pas).
+  if (!sale.seatsHeld) {
+    const taken = [];
+    for (const line of sale.lines || []) {
+      if (line.productSnapshot?.kind !== 'IN_PERSON_TRAINING' || !line.sessionId) continue;
+      const qty = line.quantity || 1;
+      const product = await CommerceProduct.findById(line.productId);
+      const session = product?.sessions.id(line.sessionId);
+      if (!session || session.status !== 'ACTIVE' || (session.reservedCount || 0) + qty > (session.capacity || 0)) {
+        for (const t of taken) await CommerceProduct.updateOne({ _id: t.productId, 'sessions._id': t.sessionId }, { $inc: { 'sessions.$.reservedCount': -t.qty } });
+        throw ApiError.conflict('Cette session de formation vient d’être complétée. Choisissez-en une autre.', { code: 'SESSION_FULL', lineId: String(line._id) });
+      }
+      await CommerceProduct.updateOne({ _id: line.productId, 'sessions._id': line.sessionId }, { $inc: { 'sessions.$.reservedCount': qty } });
+      taken.push({ productId: line.productId, sessionId: line.sessionId, qty });
+    }
+    sale.seatsHeld = taken.length > 0;
+  }
+  sale.holdExpiresAt = holdExpiresAt;
+  await sale.save();
+}
+
+/** Rend les créneaux et places retenus par une vente qui n'aboutit pas. Aucun e-mail : rien n'était confirmé. */
+async function releaseSaleHolds(sale, reason) {
+  await CalendarEvent.updateMany(
+    { 'source.saleId': String(sale._id), status: 'HELD' },
+    { $set: { status: 'CANCELLED', holdExpiresAt: null, 'cancellation.reason': reason, 'cancellation.cancelledAt': new Date() } },
+  );
+  if (sale.seatsHeld) {
+    for (const line of sale.lines || []) {
+      if (line.productSnapshot?.kind !== 'IN_PERSON_TRAINING' || !line.sessionId) continue;
+      await CommerceProduct.updateOne({ _id: line.productId, 'sessions._id': line.sessionId }, { $inc: { 'sessions.$.reservedCount': -(line.quantity || 1) } });
+    }
+    sale.seatsHeld = false;
+    await sale.save();
+  }
+}
+
+/** Ménage : retenues dont l'échéance est passée sans paiement. */
+export async function releaseExpiredHolds(now = new Date()) {
+  const expiredSales = await CommerceSale.find({
+    holdExpiresAt: { $lt: now },
+    paymentStatus: { $nin: ['PAID', 'PROCESSING', 'REFUNDED', 'PARTIALLY_REFUNDED'] },
+    $or: [{ seatsHeld: true }, { holdExpiresAt: { $ne: null } }],
+  }).limit(100);
+  for (const sale of expiredSales) {
+    await releaseSaleHolds(sale, 'Paiement non abouti dans le délai');
+    sale.holdExpiresAt = null;
+    await sale.save();
+  }
+  const r = await CalendarEvent.updateMany(
+    { status: 'HELD', holdExpiresAt: { $lt: now } },
+    { $set: { status: 'CANCELLED', holdExpiresAt: null, 'cancellation.reason': 'Paiement non abouti dans le délai', 'cancellation.cancelledAt': now } },
+  );
+  return { sales: expiredSales.length, events: r.modifiedCount || 0 };
+}
+
+/**
+ * FILET DE SÉCURITÉ : payé, mais le créneau n'est plus libre (retenue expirée
+ * puis créneau pris). Remboursement automatique de la ligne, trace au
+ * planning (annulée) et e-mail à la cliente — jamais de double réservation.
+ */
+async function refundUnavailableSlot(sale, line, customer, { startsAt, endsAt, source }) {
+  const { refundPart } = await import('./customerAgenda.service.js');
+  const amountCents = Number(line.totalCents || 0);
+  const reason = 'Créneau plus disponible au moment du paiement : remboursement intégral';
+  const refund = amountCents > 0 ? await refundPart(sale, amountCents, reason) : { stripeCents: 0, giftCents: 0, stripeRefundId: '' };
+  sale.partialRefunds = [...(sale.partialRefunds || []), { lineId: String(line._id), at: new Date(), amountCents, ...refund, reason }];
+  const refunded = sale.partialRefunds.reduce((s, r) => s + Number(r.amountCents || 0), 0);
+  if (refunded >= Number(sale.totalCents || 0)) { sale.status = 'REFUNDED'; sale.paymentStatus = 'REFUNDED'; }
+  sale.markModified('partialRefunds');
+  await sale.save();
+  const trace = await CalendarEvent.create({
+    type: 'SERVICE_BOOKING',
+    title: line.productSnapshot?.title || 'Rendez-vous institut',
+    productId: line.productId,
+    saleId: sale._id,
+    lineId: String(line._id),
+    customerSnapshot: { customerId: String(sale.customerId), name: [customer?.firstName, customer?.lastName].filter(Boolean).join(' ') || customer?.email || 'Cliente', email: customer?.email || '', phone: customer?.phone || '' },
+    startsAt,
+    endsAt,
+    status: 'CANCELLED',
+    paymentSnapshot: { totalCents: amountCents, paidCents: amountCents, currency: sale.currency || 'EUR' },
+    notes: `${sale.saleNumber} : ${reason}.`,
+    source: { ...source, kind: 'SERVICE_CHECKOUT_REFUNDED' },
+  });
+  await cancelEvent(trace._id, { reason: 'Ce créneau a été réservé par une autre personne pendant votre paiement. Vous êtes intégralement remboursée ; choisissez un nouveau créneau sur le site.', refundedCents: amountCents });
+}
+
 async function createServiceBookingsFromSale(sale, customer, issues = null) {
   for (const line of sale.lines || []) {
     if (line.productSnapshot?.kind !== 'SERVICE' || !line.bookingSnapshot?.startsAt || !line.bookingSnapshot?.endsAt) continue;
@@ -1543,18 +1708,31 @@ async function createServiceBookingsFromSale(sale, customer, issues = null) {
     const endsAt = new Date(line.bookingSnapshot.endsAt);
     if (Number.isNaN(startsAt.getTime()) || Number.isNaN(endsAt.getTime()) || endsAt <= startsAt) continue;
     const source = { saleId: String(sale._id), lineId: String(line._id), kind: 'SERVICE_CHECKOUT' };
-    const existing = await CalendarEvent.findOne({ 'source.saleId': source.saleId, 'source.lineId': source.lineId }).lean();
-    if (existing) continue;
-    // Le créneau a pu être pris entre la réservation et le paiement : l'argent
-    // est encaissé, le rendez-vous est donc créé QUAND MÊME et signalé.
-    let overlapNote = '';
-    try {
-      await assertNoOverlap({ startsAt, endsAt });
-    } catch (err) {
-      if (!issues) throw err;
-      overlapNote = ' ⚠ Créneau déjà occupé au moment du paiement : à replacer.';
-      issues.push(`Rendez-vous « ${line.productSnapshot?.title || 'prestation'} » en chevauchement : à replacer`);
+    const existing = await CalendarEvent.findOne({ 'source.saleId': source.saleId, 'source.lineId': source.lineId, status: { $ne: 'CANCELLED' } });
+    // La RETENUE devient le rendez-vous : le créneau était à elle depuis l'ouverture du paiement.
+    if (existing?.status === 'HELD') {
+      existing.status = 'SCHEDULED';
+      existing.holdExpiresAt = null;
+      existing.notes = `Reservation issue de ${sale.saleNumber}.`;
+      await existing.save();
+      await emitAppointmentBooked(existing.toObject(), { saleNumber: sale.saleNumber, origin: 'CHECKOUT' });
+      continue;
     }
+    if (existing) continue;
+    /**
+     * Plus de retenue (expirée) et le créneau a été pris entre-temps : on ne
+     * crée JAMAIS un doublon. La ligne est remboursée automatiquement et la
+     * cliente prévenue (e-mail « rendez-vous annulé », motif et montant).
+     */
+    try {
+      await assertNoOverlap({ startsAt, endsAt, ignoreSaleId: sale._id });
+    } catch (err) {
+      if (err?.details?.code !== 'CALENDAR_OVERLAP') throw err;
+      await refundUnavailableSlot(sale, line, customer, { startsAt, endsAt, source });
+      if (issues) issues.push(`Créneau « ${line.productSnapshot?.title || 'prestation'} » plus disponible au paiement : ligne remboursée automatiquement`);
+      continue;
+    }
+    const overlapNote = '';
     const booked = await CalendarEvent.create({
       type: 'SERVICE_BOOKING',
       title: line.productSnapshot?.title || 'Rendez-vous institut',
@@ -1885,6 +2063,7 @@ export async function finalizePaidSale(saleOrId, stripePayload = {}) {
 /** Libère ce que la vente tenait (cartes cadeaux réservées) quand elle ne sera jamais payée. */
 async function closeUnpaidSale(sale, paymentStatus) {
   if (sale.paymentStatus === 'PAID' || sale.finalizedAt) return sale;
+  await releaseSaleHolds(sale, paymentStatus === 'EXPIRED' ? 'Paiement non abouti (page expirée)' : 'Paiement non abouti');
   await releaseGiftCardReservations(sale.giftCardAllocations || []);
   // Libérées une fois pour toutes : une seconde clôture ne les relâcherait pas deux fois.
   sale.giftCardAllocations = [];
@@ -2044,6 +2223,7 @@ export async function stripeInvoiceUrl(sale) {
  * enregistrée, ni une vente bloquée « en attente » pour toujours.
  */
 export async function reconcileInstituteCheckouts({ olderThanMs = 2 * 60_000, limit = 50 } = {}) {
+  await releaseExpiredHolds().catch((err) => logger.warn(`[checkout] ménage des retenues : ${err.message}`));
   const now = Date.now();
   const candidates = await CommerceSale.find({
     $or: [
@@ -2255,6 +2435,20 @@ export async function listManagerSales() {
   })));
 }
 
+/** Fiche de vente : le paiement vu par Stripe (commission, net, carte, reçu). */
+export async function getSalePaymentDetails(saleId) {
+  const sale = await CommerceSale.findById(saleId).lean();
+  if (!sale) throw ApiError.notFound('Vente introuvable');
+  const pi = sale.stripe?.paymentIntentId;
+  if (!pi || pi === 'gift_card_only') return { available: false, reason: Number(sale.stripeAmountCents || 0) > 0 ? 'NO_PAYMENT_INTENT' : 'NO_CARD_PAYMENT' };
+  try {
+    const { retrieveInstitutePaymentDetails } = await import('./instituteStripe.service.js');
+    return { available: true, ...(await retrieveInstitutePaymentDetails(pi)), invoiceUrl: sale.stripe?.hostedInvoiceUrl || await stripeInvoiceUrl(sale) };
+  } catch (err) {
+    return { available: false, reason: 'STRIPE_UNREACHABLE', message: err.message };
+  }
+}
+
 export async function refundSale(saleId, payload = {}, userId = null) {
   const sale = await CommerceSale.findById(saleId);
   if (!sale) throw ApiError.notFound('Vente introuvable');
@@ -2312,8 +2506,9 @@ export async function refundSale(saleId, payload = {}, userId = null) {
  */
 async function cancelSaleAppointments(sale, reason) {
   const saleId = String(sale._id);
+  await releaseSaleHolds(sale, reason);
   const events = await CalendarEvent.find({
-    status: { $ne: 'CANCELLED' },
+    status: { $nin: ['CANCELLED', 'HELD'] },
     $or: [{ saleId: sale._id }, { 'source.saleId': saleId }],
   }).select('_id').lean();
   for (const event of events) {

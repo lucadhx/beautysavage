@@ -48,6 +48,10 @@ const commerceSaleSchema = new mongoose.Schema(
     giftCardAmountCents: { type: Number, default: 0, min: 0 },
     /** Le site sur lequel la commande a été passée (recette ou production) : la carte cadeau y renvoie. */
     siteUrl: { type: String, default: '' },
+    /** Créneaux et places RETENUS pendant le paiement en ligne, jusqu'à cette échéance. */
+    holdExpiresAt: { type: Date, default: null },
+    /** Les places de formation de cette vente sont déjà comptées dans `reservedCount` (retenue). */
+    seatsHeld: { type: Boolean, default: false },
     lines: [saleLineSchema],
     giftCardAllocations: [{
       giftCardId: { type: mongoose.Schema.Types.ObjectId, ref: 'GiftCard', default: null },

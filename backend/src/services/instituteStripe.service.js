@@ -169,6 +169,36 @@ export async function retrieveInstituteInvoice(invoiceId) {
   return stripeRequest(secretKey, 'GET', `/invoices/${encodeURIComponent(invoiceId)}`, null);
 }
 
+/**
+ * Le paiement tel que Stripe l'a encaissé : montant, COMMISSION Stripe, net
+ * versé, moyen de paiement, reçu. Lecture seule.
+ */
+export async function retrieveInstitutePaymentDetails(paymentIntentId) {
+  const { secretKey, mode } = await getStripeInstituteIntegration();
+  const pi = await stripeRequest(secretKey, 'GET', `/payment_intents/${encodeURIComponent(paymentIntentId)}?expand[]=latest_charge.balance_transaction`, null);
+  const charge = pi.latest_charge && typeof pi.latest_charge === 'object' ? pi.latest_charge : null;
+  const bt = charge?.balance_transaction && typeof charge.balance_transaction === 'object' ? charge.balance_transaction : null;
+  const card = charge?.payment_method_details?.card || null;
+  const method = charge?.payment_method_details?.type || pi.payment_method_types?.[0] || '';
+  return {
+    paymentIntentId: pi.id,
+    status: pi.status,
+    mode,
+    amountCents: Number(pi.amount_received ?? pi.amount ?? 0),
+    currency: String(pi.currency || 'eur').toUpperCase(),
+    feeCents: bt ? Number(bt.fee || 0) : null,
+    netCents: bt ? Number(bt.net || 0) : null,
+    feeDetails: (bt?.fee_details || []).map((f) => ({ amountCents: Number(f.amount || 0), description: f.description || f.type || '' })),
+    availableOn: bt?.available_on ? new Date(bt.available_on * 1000).toISOString() : null,
+    refundedCents: Number(charge?.amount_refunded || 0),
+    method,
+    card: card ? { brand: card.brand || '', last4: card.last4 || '', expMonth: card.exp_month || null, expYear: card.exp_year || null, country: card.country || '', wallet: card.wallet?.type || '' } : null,
+    receiptUrl: charge?.receipt_url || '',
+    paidAt: charge?.created ? new Date(charge.created * 1000).toISOString() : null,
+    dashboardUrl: `https://dashboard.stripe.com/${mode === 'PROD' ? '' : 'test/'}payments/${pi.id}`,
+  };
+}
+
 export async function retrieveInstituteCheckoutSession(sessionId) {
   const { secretKey } = await getStripeInstituteIntegration();
   return stripeRequest(secretKey, 'GET', `/checkout/sessions/${encodeURIComponent(sessionId)}`, null);

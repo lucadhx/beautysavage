@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ArrowRight, CalendarDays, Check, CheckCircle2, CreditCard, ChevronDown, Gift, ImageIcon, Loader2, PawPrint, Play, ShoppingBag, X } from 'lucide-react';
+import { ArrowRight, CalendarDays, Check, CheckCircle2, Clock, CreditCard, ChevronDown, Gift, ImageIcon, Loader2, PawPrint, Play, ShoppingBag, X } from 'lucide-react';
 import { QUICK_BUY_LINE_ID, commerceApi, customerApi, type CommerceProduct, type OrderLineInput } from '@/lib/api';
 import { useCustomer } from '@/context/CustomerContext';
 import { resolvePreviewMediaUrl } from '@/lib/media';
@@ -717,6 +717,11 @@ function BookingDialog({
               <div className="rounded-md border p-4" style={{ borderColor: 'var(--v-border)' }}>
                 <p className="font-semibold">{product.title}</p>
                 <p className="mt-1 text-sm" style={{ color: 'var(--v-muted-foreground)' }}>{detail}</p>
+                {needsChoice && (
+                  <p className="mt-2 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium" style={{ background: 'color-mix(in srgb, var(--v-accent) 14%, transparent)' }} data-testid="hold-notice">
+                    <Clock className="h-3.5 w-3.5" /> {product.kind === 'SERVICE' ? 'Ce créneau vous est réservé 30 minutes, le temps de régler.' : 'Votre place vous est réservée 30 minutes, le temps de régler.'}
+                  </p>
+                )}
                 {optionKeys.length > 0 && (
                   <p className="mt-1 text-sm" style={{ color: 'var(--v-muted-foreground)' }} data-testid="booking-options-recap">
                     + {(product.options || []).filter((o) => optionKeys.includes(o.key)).map((o) => o.label).join(', ')}

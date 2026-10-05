@@ -38,10 +38,13 @@ const calendarEventSchema = new mongoose.Schema(
     timezone: { type: String, default: 'Europe/Paris' },
     status: {
       type: String,
-      enum: ['SCHEDULED', 'COMPLETED', 'CANCELLED', 'NO_SHOW'],
+      // HELD = créneau RETENU pendant le paiement en ligne (30 min) : il compte
+      // comme occupé tant que `holdExpiresAt` n'est pas passé, puis s'efface.
+      enum: ['SCHEDULED', 'COMPLETED', 'CANCELLED', 'NO_SHOW', 'HELD'],
       default: 'SCHEDULED',
       index: true,
     },
+    holdExpiresAt: { type: Date, default: null },
     paymentSnapshot: { type: moneySnapshotSchema, default: () => ({}) },
     notes: { type: String, default: '' },
     cancellation: {

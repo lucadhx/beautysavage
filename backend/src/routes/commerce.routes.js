@@ -123,6 +123,7 @@ managerCommerceRoutes.post('/videos/resolve-streamable', authorize(ROLES.ADMIN, 
 managerCommerceRoutes.post('/videos/resolve-drive', authorize(ROLES.ADMIN, ROLES.DEV), asyncHandler(async (req, res) => ok(res, await commerce.resolveGoogleDriveVideo(req.body))));
 managerCommerceRoutes.post('/training-files', authorize(ROLES.ADMIN, ROLES.DEV), uploadTrainingDeliverable.single('file'), translateUploadErrors, asyncHandler(async (req, res) => created(res, await commerce.uploadTrainingResourceFile(req.file))));
 managerCommerceRoutes.get('/sales', asyncHandler(async (_req, res) => ok(res, await commerce.listManagerSales())));
+managerCommerceRoutes.get('/sales/:id/payment', asyncHandler(async (req, res) => ok(res, await commerce.getSalePaymentDetails(req.params.id))));
 managerCommerceRoutes.post('/sales/:id/refund', authorize(ROLES.ADMIN, ROLES.DEV), asyncHandler(async (req, res) => ok(res, await commerce.refundSale(req.params.id, req.body, req.user?._id || null))));
 managerCommerceRoutes.get('/customers', asyncHandler(async (_req, res) => ok(res, await commerce.listManagerCustomers())));
 managerCommerceRoutes.post('/customers/:id/access-link', asyncHandler(async (req, res) => ok(res, await commerce.resendCustomerAccessLink(req.params.id))));

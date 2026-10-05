@@ -72,7 +72,7 @@ function trainingItem(sale, line, product, now) {
 export async function listCustomerAppointments(customerId, now = new Date()) {
   const id = String(customerId);
   const [events, sales] = await Promise.all([
-    CalendarEvent.find({ 'customerSnapshot.customerId': id, type: 'SERVICE_BOOKING' }).sort({ startsAt: 1 }).lean(),
+    CalendarEvent.find({ 'customerSnapshot.customerId': id, type: 'SERVICE_BOOKING', status: { $ne: 'HELD' } }).sort({ startsAt: 1 }).lean(),
     CommerceSale.find({ customerId, paymentStatus: 'PAID', 'lines.sessionId': { $ne: null } }).lean(),
   ]);
   const productIds = [...new Set([
@@ -98,7 +98,7 @@ export async function listCustomerAppointments(customerId, now = new Date()) {
 }
 
 /** Rembourse `amountCents` d'une vente : carte bancaire d'abord, le reste sur les cartes cadeaux utilisées. */
-async function refundPart(sale, amountCents, reason) {
+export async function refundPart(sale, amountCents, reason) {
   if (amountCents <= 0) return { stripeCents: 0, giftCents: 0, stripeRefundId: '' };
   const alreadyStripe = (sale.partialRefunds || []).reduce((s, r) => s + Number(r.stripeCents || 0), 0);
   const stripeRoom = sale.stripe?.paymentIntentId && sale.stripe.paymentIntentId !== 'gift_card_only'

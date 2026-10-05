@@ -20,6 +20,8 @@ interface CalendarEvent {
   startsAt: string;
   endsAt: string;
   status: string;
+  /** Créneau retenu pendant un paiement en ligne (status HELD) : occupé jusqu'à cette heure. */
+  holdExpiresAt?: string | null;
   customerSnapshot?: { name?: string; email?: string; phone?: string };
   paymentSnapshot?: { totalCents?: number; paidCents?: number; depositCents?: number; balanceDueCents?: number; balancePaidCents?: number; balancePaymentMethod?: string };
   notes?: string;
@@ -462,7 +464,8 @@ export default function CommerceCalendarPage() {
                                 click.stopPropagation();
                                 selectEvent(event);
                               }}
-                              className={`absolute left-1 right-1 z-10 overflow-hidden rounded-md border px-2 py-1 text-left text-xs shadow-sm transition hover:shadow-md ${eventClasses(event.type)} ${event.status === 'CANCELLED' ? 'opacity-55 line-through' : ''}`}
+                              className={`absolute left-1 right-1 z-10 overflow-hidden rounded-md border px-2 py-1 text-left text-xs shadow-sm transition hover:shadow-md ${event.status === 'HELD' ? 'border-dashed border-amber-400 bg-amber-50/80 text-amber-950' : eventClasses(event.type)} ${event.status === 'CANCELLED' ? 'opacity-55 line-through' : ''}`}
+                              data-status={event.status}
                               style={position}
                             >
                               <div className="flex items-center justify-between gap-2">
@@ -470,7 +473,9 @@ export default function CommerceCalendarPage() {
                                 {event.source?.generatedFrom === 'commerceProduct.sessions' && <Lock className="h-3 w-3 shrink-0" />}
                               </div>
                               <div>{timeLabel(event.startsAt)} - {timeLabel(event.endsAt)}</div>
-                              {isFormationSession(event) ? (
+                              {event.status === 'HELD' ? (
+                                <div className="font-semibold" data-testid="held-label">En attente de paiement{event.holdExpiresAt ? ` · jusqu'à ${timeLabel(event.holdExpiresAt)}` : ''}</div>
+                              ) : isFormationSession(event) ? (
                                 <div className="font-medium">{event.reservedCount || 0}/{event.capacity || 0} inscrite(s)</div>
                               ) : (
                                 <>
@@ -924,9 +929,17 @@ function EventPanel({
         </dl>
         {selected.notes && <p className="rounded-md border bg-muted/30 p-3 text-sm">{selected.notes}</p>}
         <div className="flex flex-wrap gap-2">
-          {selected.status !== 'CANCELLED' && <Button onClick={onEdit} data-testid="event-edit"><Pencil className="h-4 w-4" /> Modifier</Button>}
-          <Button variant="outline" onClick={onBalance}><CreditCard className="h-4 w-4" /> Encaisser solde</Button>
-          <Button variant="destructive" onClick={onCancel}><Ban className="h-4 w-4" /> Annuler / rembourser</Button>
+          {selected.status === 'HELD' ? (
+            <p className="rounded-md border border-dashed border-amber-400 bg-amber-50 p-3 text-sm text-amber-950" data-testid="held-notice">
+              Créneau retenu pendant le paiement en ligne de la cliente{selected.holdExpiresAt ? `, jusqu'à ${timeLabel(selected.holdExpiresAt)}` : ''}. Il devient un rendez-vous si elle paie, et se libère tout seul sinon.
+            </p>
+          ) : (
+            <>
+              {selected.status !== 'CANCELLED' && <Button onClick={onEdit} data-testid="event-edit"><Pencil className="h-4 w-4" /> Modifier</Button>}
+              <Button variant="outline" onClick={onBalance}><CreditCard className="h-4 w-4" /> Encaisser solde</Button>
+              <Button variant="destructive" onClick={onCancel}><Ban className="h-4 w-4" /> Annuler / rembourser</Button>
+            </>
+          )}
         </div>
       </CardContent>
     </Card>

@@ -1089,6 +1089,7 @@ export const api = {
       { auth: false },
     ),
   commerceSales: () => request<any[]>('/commerce/sales'),
+  commerceSalePayment: (id: string) => request<SalePaymentDetails>(`/commerce/sales/${id}/payment`),
   refundCommerceSale: (id: string, data: { amountCents?: number; reason?: string }) =>
     request<any>(`/commerce/sales/${id}/refund`, { method: 'POST', body: data }),
   commerceCustomers: () => request<any[]>('/commerce/customers'),
@@ -1778,3 +1779,26 @@ export const api = {
 };
 
 export type Api = typeof api;
+
+/** Le paiement d'une vente vu par Stripe (fiche de vente). */
+export interface SalePaymentDetails {
+  available: boolean;
+  reason?: string;
+  message?: string;
+  paymentIntentId?: string;
+  status?: string;
+  mode?: 'TEST' | 'PROD';
+  amountCents?: number;
+  currency?: string;
+  feeCents?: number | null;
+  netCents?: number | null;
+  feeDetails?: { amountCents: number; description: string }[];
+  availableOn?: string | null;
+  refundedCents?: number;
+  method?: string;
+  card?: { brand: string; last4: string; expMonth: number | null; expYear: number | null; country: string; wallet: string } | null;
+  receiptUrl?: string;
+  paidAt?: string | null;
+  dashboardUrl?: string;
+  invoiceUrl?: string;
+}

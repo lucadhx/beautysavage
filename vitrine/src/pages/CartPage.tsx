@@ -188,6 +188,11 @@ export default function CartPage() {
               </button>
               {unscheduled.length > 0 && <p className="-mt-2 text-center text-xs font-medium" style={{ color: '#9a3412' }} data-testid="cart-unscheduled-hint">{unscheduled.length > 1 ? `${unscheduled.length} prestations attendent leur créneau.` : 'Une prestation attend son créneau.'}</p>}
               {missing.length > 0 && <p className="-mt-2 text-center text-xs" style={{ color: 'var(--v-muted-foreground)' }}>Pensez à cocher les conditions sous {missing.length > 1 ? 'les articles' : 'l’article'}.</p>}
+              {lines.some((l) => (l.product.kind === 'SERVICE' && l.bookingSnapshot?.startsAt) || (l.product.kind === 'IN_PERSON_TRAINING' && l.sessionId)) && (
+                <p className="-mt-2 flex items-center justify-center gap-1.5 text-center text-xs" style={{ color: 'var(--v-muted-foreground)' }} data-testid="cart-hold-notice">
+                  <Clock className="h-3.5 w-3.5 shrink-0" /> Vos créneaux et places vous sont réservés 30 minutes pendant le paiement.
+                </p>
+              )}
               <p className="flex items-center justify-center gap-1.5 text-xs" style={{ color: 'var(--v-muted-foreground)' }}><LockKeyhole className="h-3.5 w-3.5" /> Paiement sécurisé</p>
             </div>
           </aside>

@@ -146,6 +146,7 @@ export async function listEvents(query = {}) {
   const stored = await CalendarEvent.find({
     startsAt: { $lt: to },
     endsAt: { $gt: from },
+    ...activeHoldFilter(),
   }).sort({ startsAt: 1 }).lean();
   const generated = await generatedFormationEvents(from, to);
   return [...stored.map(publicEvent), ...generated].sort((a, b) => new Date(a.startsAt) - new Date(b.startsAt));
@@ -230,12 +231,23 @@ export async function listAvailability(query = {}) {
   return slots;
 }
 
-export async function assertNoOverlap({ startsAt, endsAt, ignoreId = null, ignoreProductId = null }) {
+/**
+ * Un créneau RETENU (paiement en cours) occupe le planning jusqu'à son
+ * échéance ; passé celle-ci il n'existe plus, même avant le ménage.
+ */
+export function activeHoldFilter(now = new Date()) {
+  return { $or: [{ status: { $ne: 'HELD' } }, { holdExpiresAt: { $gt: now } }] };
+}
+
+export async function assertNoOverlap({ startsAt, endsAt, ignoreId = null, ignoreProductId = null, ignoreSaleId = null }) {
   const query = {
     status: { $ne: 'CANCELLED' },
     startsAt: { $lt: endsAt },
     endsAt: { $gt: startsAt },
+    ...activeHoldFilter(),
   };
+  // La retenue de CETTE vente ne gêne pas sa propre confirmation.
+  if (ignoreSaleId) query['source.saleId'] = { $ne: String(ignoreSaleId) };
   if (ignoreId && mongoose.isValidObjectId(ignoreId)) query._id = { $ne: ignoreId };
   const conflict = await CalendarEvent.findOne(query).lean();
   if (conflict) {

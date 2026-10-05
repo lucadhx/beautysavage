@@ -16,9 +16,9 @@ import {
   StatusBadge,
   cents,
   dateShort,
-  statusLabel,
   type CommerceSale,
 } from './CommerceShared';
+import { SaleDetail } from './SaleDetail';
 
 function buyer(sale: CommerceSale) {
   if (typeof sale.customerId === 'object' && sale.customerId) {
@@ -68,7 +68,7 @@ export default function CommerceVentesPage() {
     return (
       <CommercePageFrame
         title={selected ? `Commande ${selected.saleNumber}` : 'Commande'}
-        description="Fiche de vente detaillee : lignes, factures, avoirs, allocations Stripe et cartes cadeaux."
+        description="Cliente, articles, règlement, paiement Stripe (commission et net versé) et facture."
         actions={<button type="button" onClick={() => navigate('/commerce/ventes')} className="rounded-md border px-3 py-2 text-sm font-semibold hover:bg-muted">Retour aux ventes</button>}
       >
         {message && <p className="rounded-md border p-3 text-sm text-muted-foreground">{message}</p>}
@@ -79,7 +79,7 @@ export default function CommerceVentesPage() {
             <p className="text-sm text-muted-foreground">Commande introuvable.</p>
           </Panel>
         ) : (
-          <SaleDetailCard sale={selected} onRefund={() => setRefundTarget(selected)} />
+          <SaleDetail sale={selected} onRefund={() => setRefundTarget(selected)} />
         )}
         <ConfirmDialog
           open={Boolean(refundTarget)}
@@ -172,7 +172,7 @@ export default function CommerceVentesPage() {
               </thead>
               <tbody>
                 {filteredSales.map((sale) => (
-                  <tr key={sale._id} className="border-t">
+                  <tr key={sale._id} className="cursor-pointer border-t transition-colors hover:bg-muted/40" onClick={(e) => { if (!(e.target as HTMLElement).closest('a,button,[role="menu"]')) navigate(`/commerce/ventes/${sale._id}`); }} data-testid="sale-row">
                     <td className="px-4 py-3">
                       <div className="font-medium">{sale.saleNumber}</div>
                       <div className="text-xs text-muted-foreground">{sale.lines?.length || 0} ligne(s)</div>
@@ -248,75 +248,3 @@ function salesChartData(sales: CommerceSale[]) {
   return [...groups.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([, value]) => value);
 }
 
-/**
- * LA CASE « COMMISSION » — le montant et sa règle (« 10 % TTC »), ou, pour
- * une vente d'un type non coché dans la configuration du contrat, « Non
- * assujetti » en rouge.
- */
-function commissionValue(sale: CommerceSale): React.ReactNode {
-  const c = sale.commission as (CommerceSale['commission'] & { capReached?: boolean; capped?: boolean }) | null | undefined;
-  if (c?.capReached && !(c.amountCents > 0)) {
-    return <span className="text-amber-700" data-testid="sale-commission">Plafond atteint — non prélevée</span>;
-  }
-  if (!c || !c.subject || c.amountCents <= 0) {
-    return <span className="text-rose-600" data-testid="sale-commission">Non assujetti</span>;
-  }
-  const rate = Number(c.ratePercent).toLocaleString('fr-FR', { maximumFractionDigits: 2 });
-  return <span data-testid="sale-commission">{cents(c.amountCents)} <span className="font-normal text-muted-foreground">({rate} % {c.basis}{c.capped ? ', écrêtée au plafond' : ''})</span></span>;
-}
-
-function SaleDetailCard({ sale, onRefund }: { sale: CommerceSale; onRefund: () => void }) {
-  return (
-    <Panel title={`Detail ${sale.saleNumber}`}>
-      <div className="grid gap-4 lg:grid-cols-3">
-        <Detail label="Date" value={dateShort(sale.createdAt)} />
-        <Detail label="Montant total" value={cents(sale.totalCents)} />
-        <Detail label="Paiement" value={statusLabel(sale.paymentStatus)} />
-        <Detail label="Stripe encaisse" value={cents(sale.stripeAmountCents)} />
-        <Detail label="Cartes cadeaux" value={cents(sale.giftCardAmountCents)} />
-        <Detail label="Commission" value={commissionValue(sale)} />
-        <Detail label="Session Stripe" value={sale.stripe?.checkoutSessionId || 'Non renseigne'} />
-        <Detail label="Payment intent" value={sale.stripe?.paymentIntentId || 'Non renseigne'} />
-      </div>
-      {(sale.finalizeIssues?.length ?? 0) > 0 && (
-        <div className="mt-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900" data-testid="sale-issues">
-          <p className="font-semibold">À traiter — survenu après l’encaissement</p>
-          <ul className="mt-1 list-disc pl-5">{sale.finalizeIssues!.map((issue, i) => <li key={i}>{issue}</li>)}</ul>
-        </div>
-      )}
-      <div className="mt-4 grid gap-3">
-        <h3 className="text-sm font-semibold">Lignes vendues</h3>
-        {(sale.lines || []).map((line, index) => (
-          <div key={index} className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3 text-sm">
-            <span>{line.productSnapshot?.title || 'Produit'} x{line.quantity || 1}</span>
-            <strong>{cents(line.totalCents)}</strong>
-          </div>
-        ))}
-        {(sale.giftCardAllocations || []).length > 0 && (
-          <div className="rounded-md border bg-muted/20 p-3 text-sm">
-            <h3 className="mb-2 font-semibold">Allocations cartes cadeaux</h3>
-            {sale.giftCardAllocations?.map((allocation, index) => (
-              <div key={index} className="flex justify-between gap-3">
-                <span>{allocation.codeMasked || 'Carte cadeau'}</span>
-                <strong>{cents(allocation.amountCents)}</strong>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-      <div className="mt-4 flex flex-wrap gap-2">
-        {sale.invoiceUrl && <a href={sale.invoiceUrl} target="_blank" rel="noreferrer" className="rounded-md border px-3 py-2 text-sm font-semibold hover:bg-muted">Ouvrir la facture Stripe</a>}
-        <button type="button" onClick={onRefund} disabled={sale.paymentStatus === 'REFUNDED'} className="rounded-md border border-red-200 px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50">Rembourser</button>
-      </div>
-    </Panel>
-  );
-}
-
-function Detail({ label, value }: { label: string; value: React.ReactNode }) {
-  return (
-    <div className="rounded-lg border bg-card p-4">
-      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className="mt-2 break-all text-sm font-semibold">{value}</p>
-    </div>
-  );
-}
