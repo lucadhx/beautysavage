@@ -178,8 +178,7 @@ export default function CommerceVentesPage() {
                       <div className="text-xs text-muted-foreground">{sale.lines?.length || 0} ligne(s)</div>
                       <div className="mt-0.5 text-xs text-muted-foreground sm:hidden">{buyer(sale)} · {dateShort(sale.createdAt)}</div>
                       <div className="mt-1 flex flex-wrap gap-2 text-xs">
-                        {sale.invoice?.pdfUrl && <a className="underline" href={sale.invoice.pdfUrl} target="_blank" rel="noreferrer">Facture</a>}
-                        {sale.creditNote?.pdfUrl && <a className="underline" href={sale.creditNote.pdfUrl} target="_blank" rel="noreferrer">Avoir</a>}
+                        {sale.invoiceUrl && <a className="underline" href={sale.invoiceUrl} target="_blank" rel="noreferrer" data-testid="sale-invoice">Facture</a>}
                       </div>
                     </td>
                     <td className="m-hide px-4 py-3">{buyer(sale)}</td>
@@ -196,8 +195,7 @@ export default function CommerceVentesPage() {
                           <Dropdown.Menu>
                             <Dropdown.Section>
                               <Dropdown.Item onAction={() => navigate(`/commerce/ventes/${sale._id}`)}>Voir le detail</Dropdown.Item>
-                              {sale.invoice?.pdfUrl && <Dropdown.Item onAction={() => window.open(sale.invoice?.pdfUrl, '_blank')}>Ouvrir la facture</Dropdown.Item>}
-                              {sale.creditNote?.pdfUrl && <Dropdown.Item onAction={() => window.open(sale.creditNote?.pdfUrl, '_blank')}>Ouvrir l avoir</Dropdown.Item>}
+                              {sale.invoiceUrl && <Dropdown.Item onAction={() => window.open(sale.invoiceUrl, '_blank')}>Ouvrir la facture Stripe</Dropdown.Item>}
                             </Dropdown.Section>
                             <Dropdown.Separator />
                             <Dropdown.Section>
@@ -307,8 +305,7 @@ function SaleDetailCard({ sale, onRefund }: { sale: CommerceSale; onRefund: () =
         )}
       </div>
       <div className="mt-4 flex flex-wrap gap-2">
-        {sale.invoice?.pdfUrl && <a href={sale.invoice.pdfUrl} target="_blank" rel="noreferrer" className="rounded-md border px-3 py-2 text-sm font-semibold hover:bg-muted">Ouvrir la facture</a>}
-        {sale.creditNote?.pdfUrl && <a href={sale.creditNote.pdfUrl} target="_blank" rel="noreferrer" className="rounded-md border px-3 py-2 text-sm font-semibold hover:bg-muted">Ouvrir l'avoir</a>}
+        {sale.invoiceUrl && <a href={sale.invoiceUrl} target="_blank" rel="noreferrer" className="rounded-md border px-3 py-2 text-sm font-semibold hover:bg-muted">Ouvrir la facture Stripe</a>}
         <button type="button" onClick={onRefund} disabled={sale.paymentStatus === 'REFUNDED'} className="rounded-md border border-red-200 px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50">Rembourser</button>
       </div>
     </Panel>

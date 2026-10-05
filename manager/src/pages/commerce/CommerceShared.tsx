@@ -48,6 +48,8 @@ export interface CommerceSale {
   customerId?: { _id?: string; email?: string; firstName?: string; lastName?: string } | string | null;
   refund?: { amountCents?: number; reason?: string; refundedAt?: string };
   invoice?: { number?: string; issuedAt?: string; pdfUrl?: string };
+  /** La facture Stripe de la cliente (page hébergée par Stripe) — seul lien « Facture » affiché. */
+  invoiceUrl?: string;
   creditNote?: { number?: string; issuedAt?: string; pdfUrl?: string };
   stripeAmountCents?: number;
   giftCardAmountCents?: number;

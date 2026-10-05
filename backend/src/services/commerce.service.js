@@ -2231,13 +2231,28 @@ export async function deleteProduct(productId) {
   return { deleted: true, archived: false };
 }
 
+/**
+ * Une VENTE est un paiement abouti. Une page de paiement ouverte puis
+ * abandonnée (CHECKOUT_CREATED, expirée, échouée) n'en est pas une : elle ne
+ * figure pas dans les ventes (et ne bloque aucun créneau — le planning n'est
+ * écrit qu'au paiement).
+ */
+export const REAL_SALE_PAYMENT_STATUSES = ['PAID', 'REFUNDED', 'PARTIALLY_REFUNDED'];
+
 export async function listManagerSales() {
   const [sales, rule] = await Promise.all([
-    CommerceSale.find().populate('customerId', 'email firstName lastName').sort({ createdAt: -1 }).lean(),
+    CommerceSale.find({ paymentStatus: { $in: REAL_SALE_PAYMENT_STATUSES } })
+      .populate('customerId', 'email firstName lastName').sort({ createdAt: -1 }).lean(),
     activeCommissionRule(),
   ]);
-  // Une vente payée avant la photo de commission reçoit la règle en vigueur (affichage seulement).
-  return sales.map((sale) => (sale.commission ? sale : { ...sale, commission: computeSaleCommission(sale, rule) }));
+  return Promise.all(sales.map(async (sale) => ({
+    // Une vente payée avant la photo de commission reçoit la règle en vigueur (affichage seulement).
+    ...(sale.commission ? sale : { ...sale, commission: computeSaleCommission(sale, rule) }),
+    // « Facture » = la facture STRIPE de la cliente, jamais un PDF maison.
+    invoiceUrl: sale.stripe?.checkoutSessionId && Number(sale.stripeAmountCents || 0) > 0
+      ? (sale.stripe?.hostedInvoiceUrl || await stripeInvoiceUrl(sale))
+      : '',
+  })));
 }
 
 export async function refundSale(saleId, payload = {}, userId = null) {

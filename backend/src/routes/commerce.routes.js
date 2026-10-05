@@ -7,6 +7,7 @@ import { asyncHandler } from '../utils/asyncHandler.js';
 import { ok, created } from '../utils/apiResponse.js';
 import { ROLES } from '../utils/constants.js';
 import { rateLimit } from '../middlewares/rateLimit.js';
+import { authRateLimit } from '../middlewares/authRateLimit.js';
 import { requireSiteOpenForPurchase } from '../middlewares/purchaseGate.middleware.js';
 import * as commissionPayment from '../services/commissionPayment.service.js';
 import { siteUrlFor } from '../utils/siteOrigin.js';
@@ -47,17 +48,22 @@ publicCommerceRoutes.get('/products/:slug', asyncHandler(async (req, res) => ok(
 publicCommerceRoutes.get('/reviews', asyncHandler(async (req, res) => ok(res, await commerce.listPublishedReviews(req.query))));
 
 export const customerRoutes = Router();
-const customerLoginLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 8,
-  message: 'Trop de tentatives de connexion client. Reessayez dans quelques minutes.',
-});
-customerRoutes.post('/register', asyncHandler(async (req, res) => created(res, await commerce.registerCustomer(req.body))));
+/**
+ * MÊME PROTECTION QUE LE MANAGER (`authRateLimit`) : compteurs persistés en
+ * base, par IP ET par identité, actifs sur TEST comme sur PROD. L'ancien
+ * `rateLimit` était en mémoire, par IP seule, et désactivé hors PROD.
+ */
+const customerLoginLimiter = authRateLimit({ scope: 'customer-login' });
+const customerRegisterLimiter = authRateLimit({ scope: 'customer-register' });
+const customerOtpLimiter = authRateLimit({ scope: 'customer-otp', identityFrom: () => null });
+const customerResetRequestLimiter = authRateLimit({ scope: 'customer-reset-request' });
+const customerResetConfirmLimiter = authRateLimit({ scope: 'customer-reset-confirm', identityFrom: () => null });
+customerRoutes.post('/register', customerRegisterLimiter, asyncHandler(async (req, res) => created(res, await commerce.registerCustomer(req.body))));
 customerRoutes.post('/login', customerLoginLimiter, asyncHandler(async (req, res) => ok(res, await commerce.loginCustomer(req.body.email, req.body.password))));
-customerRoutes.post('/email-verification/confirm', customerLoginLimiter, asyncHandler(async (req, res) => ok(res, await commerce.verifyCustomerEmail(req.body.code || req.body.token))));
+customerRoutes.post('/email-verification/confirm', customerOtpLimiter, asyncHandler(async (req, res) => ok(res, await commerce.verifyCustomerEmail(req.body.code || req.body.token))));
 customerRoutes.post('/email-verification/request', authenticateCustomer, asyncHandler(async (req, res) => ok(res, await commerce.requestCustomerEmailVerification(req.customer._id))));
-customerRoutes.post('/password-reset/request', customerLoginLimiter, asyncHandler(async (req, res) => ok(res, await commerce.requestCustomerPasswordReset(req.body.email, { siteUrl: await siteUrlFor(req) }))));
-customerRoutes.post('/password-reset/confirm', customerLoginLimiter, asyncHandler(async (req, res) => ok(res, await commerce.resetCustomerPassword(req.body))));
+customerRoutes.post('/password-reset/request', customerResetRequestLimiter, asyncHandler(async (req, res) => ok(res, await commerce.requestCustomerPasswordReset(req.body.email, { siteUrl: await siteUrlFor(req) }))));
+customerRoutes.post('/password-reset/confirm', customerResetConfirmLimiter, asyncHandler(async (req, res) => ok(res, await commerce.resetCustomerPassword(req.body))));
 customerRoutes.get('/me', authenticateCustomer, asyncHandler(async (req, res) => ok(res, req.customer)));
 customerRoutes.get('/cart', authenticateCustomer, asyncHandler(async (req, res) => ok(res, await commerce.getCustomerCart(req.customer._id))));
 customerRoutes.post('/cart/items', authenticateCustomer, requireSiteOpenForPurchase, asyncHandler(async (req, res) => ok(res, await commerce.addCartItem(req.customer._id, req.body))));
