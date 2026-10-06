@@ -631,6 +631,19 @@ export async function createOrReuseSubscriptionCheckout(contract, { successUrl, 
    *   · `expired`  → la tentative est close sans paiement : on en ouvre une
    *                  nouvelle, donc une nouvelle clé d'idempotence.
    */
+  /**
+   * UNE SESSION DE L'AUTRE MONDE N'EST JAMAIS REPRISE.
+   *
+   * Le préfixe Stripe dit le monde : `cs_test_` ou `cs_live_`. Une instance
+   * PROD qui garde une session `cs_test_` (créée avant que sa fiche Panel ne
+   * passe en monde PROD) la relirait avec la clé live et ne la trouverait pas.
+   * Le client ne paierait jamais : le paiement resterait en mode test. On ouvre
+   * une tentative neuve, donc une nouvelle clé d'idempotence, dans le bon monde.
+   */
+  const storedSessionId = contract.stripe.subscription.checkoutSessionId;
+  if (storedSessionId && sessionWorld(storedSessionId) && sessionWorld(storedSessionId) !== mode) {
+    await ouvrirNouvelleTentative(contract);
+  }
   const existingSessionId = contract.stripe.subscription.checkoutSessionId;
   if (existingSessionId) {
     /**
@@ -777,6 +790,13 @@ async function retrouverSubscriptionId(contract) {
  * ou introuvable. Jamais sur une intention de l'utilisateur — sans quoi deux
  * clics créeraient deux souscriptions.
  */
+/** Monde Stripe d'une session, lu sur son préfixe ; `null` si illisible. */
+function sessionWorld(sessionId) {
+  if (String(sessionId).startsWith('cs_test_')) return 'TEST';
+  if (String(sessionId).startsWith('cs_live_')) return 'PROD';
+  return null;
+}
+
 async function ouvrirNouvelleTentative(contract) {
   contract.stripe.subscription.attempt = (contract.stripe.subscription.attempt || 0) + 1;
   contract.stripe.subscription.checkoutSessionId = null;
