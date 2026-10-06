@@ -84,8 +84,7 @@ section('Frais de lancement non requis');
     launchFeeRequired: false, launchFeeSatisfied: true,
     signature: { signatureState: 'FULLY_SIGNED' },
   }));
-  check('frais marqués « non requise »', statusOf(p, 'LAUNCH_FEE') === 'not-required');
-  check('mention explicite', byKey(p, 'LAUNCH_FEE').hint === 'Non requise');
+  check('étape des frais absente du parcours', !byKey(p, 'LAUNCH_FEE'));
   check("une étape non requise n'est jamais courante", p.steps[p.currentIndex].key === 'SUBSCRIPTION');
   check('exclue du total requis', p.total === 5);
   check('ne bloque pas la suite', statusOf(p, 'SUBSCRIPTION') === 'current');
@@ -112,7 +111,7 @@ section('Abonnement non requis');
     launchFeeSatisfied: true, subscriptionRequired: false, subscriptionSatisfied: true,
     signature: { signatureState: 'FULLY_SIGNED' },
   }));
-  check('abonnement « non requise »', statusOf(p, 'SUBSCRIPTION') === 'not-required');
+  check('étape abonnement absente du parcours', !byKey(p, 'SUBSCRIPTION'));
   check('activation courante', statusOf(p, 'ACTIVATION') === 'current');
   check('total requis = 5', p.total === 5);
 }
@@ -215,7 +214,7 @@ section('Erreur de paiement');
     stripe: { launchFee: { status: 'FAILED' }, subscription: { status: 'NONE' } },
     signature: { signatureState: 'FULLY_SIGNED' },
   }));
-  check('étape non requise jamais en erreur', statusOf(notRequired, 'LAUNCH_FEE') === 'not-required');
+  check('étape non requise jamais en erreur (absente)', !byKey(notRequired, 'LAUNCH_FEE'));
 }
 
 // --- Contrat annulé ---------------------------------------------------------
@@ -293,7 +292,7 @@ section('Robustesse');
 {
   // Un contrat incomplet (payload partiel) ne doit jamais faire planter le suivi.
   const p = deriveContractProgress({ status: 'DRAFT' });
-  check('payload minimal toléré', p.steps.length === 6 && p.currentIndex === 0);
+  check('payload minimal toléré', p.steps.length === 4 && p.currentIndex === 0);
 }
 
 console.log(`\n${pass} réussis, ${fail} échoués`);

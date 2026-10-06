@@ -141,7 +141,10 @@ export function deriveContractProgress(contract: Contract): ContractProgress {
         ]
       : [];
 
-  const raw: { key: ProgressStepKey; done: boolean; required: boolean; error?: string }[] = [
+  // Un paiement que ce contrat ne prévoit pas (frais à 0, pas d'abonnement)
+  // n'est pas une étape « non requise » : comme une signature non applicable,
+  // elle N'EXISTE PAS dans ce parcours. Grisée, elle passait pour un blocage.
+  const raw: { key: ProgressStepKey; done: boolean; required: boolean; error?: string }[] = ([
     { key: 'PREPARATION', done: prepared, required: true },
     ...signatureSteps,
     {
@@ -157,7 +160,7 @@ export function deriveContractProgress(contract: Contract): ContractProgress {
       error: subBroken && !subDone ? 'Abonnement en échec' : undefined,
     },
     { key: 'ACTIVATION', done: activated, required: true },
-  ];
+  ] as { key: ProgressStepKey; done: boolean; required: boolean; error?: string }[]).filter((s) => s.required);
 
   // L'étape courante = la première requise non franchie. Une étape non requise
   // n'est jamais « courante » : elle n'attend rien de personne.

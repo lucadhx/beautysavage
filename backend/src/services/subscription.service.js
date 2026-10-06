@@ -770,7 +770,9 @@ async function retrouverSubscriptionId(contract) {
   try {
     const vue = await readCheckoutViaPanel({
       checkoutSessionId: sessionId,
-      operationId: `sub-find-${contract._id}-${sessionId}`,
+      // Le Panel borne l'identifiant à 96 caractères : une session `cs_live_`
+      // entière (66) le dépassait, et la lecture échouait en silence.
+      operationId: `sub-find-${contract._id}-a${contract.stripe?.subscription?.attempt || 0}-${sessionId.slice(-24)}`,
     });
     return vue.subscriptionId || null;
   } catch {
