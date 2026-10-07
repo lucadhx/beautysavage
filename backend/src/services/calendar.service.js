@@ -186,7 +186,7 @@ export function zonedWallTime(year, month, day, minutes, timeZone) {
   return new Date(instant);
 }
 
-export async function listAvailability(query = {}) {
+export async function listAvailability(query = {}, { customerId = null } = {}) {
   const from = asDate(query.from || new Date(), 'Date de debut');
   const to = asDate(query.to || new Date(Date.now() + 14 * 86400_000), 'Date de fin');
   assertRange(from, to);
@@ -196,7 +196,12 @@ export async function listAvailability(query = {}) {
   const timeZone = schedule.timezone || 'Europe/Paris';
   const step = Math.max(5, Number(schedule.slotStepMinutes || 15));
   const events = await listEvents({ from: from.toISOString(), to: to.toISOString() });
+  // Sa PROPRE retenue (paiement quitté puis repris) ne ferme pas le créneau à
+  // la cliente qui l'a posée : elle doit pouvoir réessayer. Pour toute autre
+  // personne, le créneau reste pris jusqu'à l'échéance de la retenue.
+  const owner = customerId ? String(customerId) : null;
   const busy = events.filter((event) => event.status !== 'CANCELLED')
+    .filter((event) => !(owner && event.status === 'HELD' && String(event.customerSnapshot?.customerId || '') === owner))
     .map((event) => ({ startsAt: new Date(event.startsAt), endsAt: new Date(event.endsAt) }));
 
   const slots = [];
@@ -239,13 +244,16 @@ export function activeHoldFilter(now = new Date()) {
   return { $or: [{ status: { $ne: 'HELD' } }, { holdExpiresAt: { $gt: now } }] };
 }
 
-export async function assertNoOverlap({ startsAt, endsAt, ignoreId = null, ignoreProductId = null, ignoreSaleId = null }) {
+export async function assertNoOverlap({ startsAt, endsAt, ignoreId = null, ignoreProductId = null, ignoreSaleId = null, ignoreHoldsOf = null }) {
   const query = {
     status: { $ne: 'CANCELLED' },
     startsAt: { $lt: endsAt },
     endsAt: { $gt: startsAt },
     ...activeHoldFilter(),
   };
+  // Les retenues de CETTE cliente ne la bloquent pas : elle reprend un
+  // paiement qu'elle avait quitté (la nouvelle commande remplacera la retenue).
+  if (ignoreHoldsOf) query.$nor = [{ status: 'HELD', 'customerSnapshot.customerId': String(ignoreHoldsOf) }];
   // La retenue de CETTE vente ne gêne pas sa propre confirmation.
   if (ignoreSaleId) query['source.saleId'] = { $ne: String(ignoreSaleId) };
   if (ignoreId && mongoose.isValidObjectId(ignoreId)) query._id = { $ne: ignoreId };

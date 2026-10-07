@@ -277,7 +277,8 @@ export const commerceApi = {
     const query = new URLSearchParams({ from: params.from, to: params.to });
     if (params.durationMinutes) query.set('durationMinutes', String(params.durationMinutes));
     if (params.bufferAfterMinutes) query.set('bufferAfterMinutes', String(params.bufferAfterMinutes));
-    return publicGet<{ startsAt: string; endsAt: string; durationMinutes: number }[]>(`/commerce/availability?${query.toString()}`);
+    // Le jeton client, s'il existe : sa propre retenue (paiement quitté) ne lui ferme pas le créneau.
+    return publicGet<{ startsAt: string; endsAt: string; durationMinutes: number }[]>(`/commerce/availability?${query.toString()}`, customerTokenStore.get());
   },
   reviews: (productId?: string) =>
     publicGet<unknown[]>(`/commerce/reviews${productId ? `?productId=${encodeURIComponent(productId)}` : ''}`),

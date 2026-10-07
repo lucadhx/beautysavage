@@ -1,7 +1,7 @@
 import { Readable } from 'node:stream';
 import { Router } from 'express';
 import { authenticate, authorize } from '../middlewares/auth.middleware.js';
-import { authenticateCustomer } from '../middlewares/customerAuth.middleware.js';
+import { authenticateCustomer, identifyCustomer } from '../middlewares/customerAuth.middleware.js';
 import { uploadTrainingDeliverable, translateUploadErrors } from '../middlewares/upload.middleware.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { ok, created } from '../utils/apiResponse.js';
@@ -21,7 +21,7 @@ export const publicCommerceRoutes = Router();
 publicCommerceRoutes.get('/catalog', asyncHandler(async (_req, res) => ok(res, await commerce.listCatalog())));
 // Collections de prestations (rayons de la page « Prestations »), dans l'ordre choisi.
 publicCommerceRoutes.get('/collections', asyncHandler(async (_req, res) => ok(res, await collections.listPublicCollections())));
-publicCommerceRoutes.get('/availability', requireSiteOpenForPurchase, asyncHandler(async (req, res) => ok(res, await calendar.listAvailability(req.query))));
+publicCommerceRoutes.get('/availability', requireSiteOpenForPurchase, identifyCustomer, asyncHandler(async (req, res) => ok(res, await calendar.listAvailability(req.query, { customerId: req.customer?._id }))));
 publicCommerceRoutes.get('/videos/streamable/:shortcode/playback-url', asyncHandler(async (req, res) => {
   res.set('Cache-Control', 'no-store');
   ok(res, await commerce.getStreamableTemporaryPlayback(req.params.shortcode));

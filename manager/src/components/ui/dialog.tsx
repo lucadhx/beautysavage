@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import { motion, useReducedMotion } from 'framer-motion';
 import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useScrollLock } from '@/lib/scrollLock';
@@ -109,15 +109,38 @@ export function Modal({
       };
   const fermer = () => { if (!busy) onClose(); };
 
+  /*
+    DÉMONTAGE GARANTI — la modale ne laisse JAMAIS de voile derrière elle.
+
+    La sortie reposait sur `AnimatePresence`, qui ne retire la couche qu'une
+    fois TOUTES les animations de sortie déclarées terminées. Après une
+    réservation manuelle avec choix d'un client, ce signal ne venait jamais :
+    fond et fenêtre finissaient transparents, mais la couche `fixed inset-0`
+    restait montée, invisible, et avalait chaque clic du planning jusqu'au
+    rechargement de la page.
+
+    La couche est désormais retirée par un minuteur, quoi qu'il arrive aux
+    animations, et elle cesse de capter les clics dès le début de la sortie.
+    Le contenu est figé pendant la sortie (titre et corps du dernier état
+    ouvert), comme le faisait `AnimatePresence`.
+  */
+  const [mounted, setMounted] = React.useState(open);
+  const shown = React.useRef({ title, description, children });
+  if (open) shown.current = { title, description, children };
+  React.useEffect(() => {
+    if (open) { setMounted(true); return; }
+    const t = window.setTimeout(() => setMounted(false), reduce ? 180 : 320);
+    return () => window.clearTimeout(t);
+  }, [open, reduce]);
+  if (!mounted && !open) return null;
+  const view = shown.current;
+
   return (
-    <AnimatePresence>
-      {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className={cn('fixed inset-0 z-50 flex items-center justify-center p-4', !open && 'pointer-events-none')} aria-hidden={!open || undefined}>
           <motion.div
             className="absolute inset-0 bg-black/50 backdrop-blur-sm"
             initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
+            animate={{ opacity: open ? 1 : 0 }}
             onClick={fermer}
           />
           {/*
@@ -133,19 +156,21 @@ export function Modal({
             ref={panelRef}
             role="dialog"
             aria-modal="true"
-            aria-label={title}
+            aria-label={view.title}
             tabIndex={-1}
             className={cn(
               'relative z-10 flex max-h-[calc(var(--m-viewport-h)-2rem)] w-full max-w-lg flex-col overflow-hidden rounded-lg border border-border bg-card shadow-xl focus:outline-none',
               className
             )}
-            {...panneau}
+            initial={panneau.initial}
+            animate={open ? panneau.animate : panneau.exit}
+            transition={panneau.transition}
           >
             <div className="flex shrink-0 items-start justify-between border-b border-border p-5">
               <div>
-                {title && <h2 className="text-lg font-semibold">{title}</h2>}
-                {description && (
-                  <p className="mt-0.5 text-sm text-muted-foreground">{description}</p>
+                {view.title && <h2 className="text-lg font-semibold">{view.title}</h2>}
+                {view.description && (
+                  <p className="mt-0.5 text-sm text-muted-foreground">{view.description}</p>
                 )}
               </div>
               <button
@@ -157,11 +182,9 @@ export function Modal({
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-5">{children}</div>
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-5">{view.children}</div>
           </motion.div>
         </div>
-      )}
-    </AnimatePresence>
   );
 }
 

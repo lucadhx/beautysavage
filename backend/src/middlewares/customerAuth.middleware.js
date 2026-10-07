@@ -25,6 +25,26 @@ export const authenticateCustomer = asyncHandler(async (req, _res, next) => {
   next();
 });
 
+/**
+ * Identifie la cliente SI elle est connectée, sans jamais refuser.
+ *
+ * Pour les lectures publiques qui doivent la reconnaître (ses propres
+ * retenues de créneau) mais rester ouvertes à tout visiteur. Un jeton absent,
+ * invalide ou expiré laisse simplement `req.customer` vide.
+ */
+export const identifyCustomer = asyncHandler(async (req, _res, next) => {
+  const header = req.headers.authorization || '';
+  const token = header.startsWith('Bearer ') ? header.slice(7) : null;
+  if (token) {
+    try {
+      const payload = jwt.verify(token, config.jwt.secret, { algorithms: ['HS256'], audience: 'beautysavage.customer' });
+      const customer = await Customer.findById(payload.sub).select('_id');
+      if (customer) req.customer = customer;
+    } catch { /* visiteur anonyme */ }
+  }
+  next();
+});
+
 export function signCustomerToken(customer) {
   return jwt.sign(
     { sub: String(customer._id), typ: 'CUSTOMER' },

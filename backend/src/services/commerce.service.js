@@ -1139,7 +1139,7 @@ export async function getCustomerCart(customerId) {
 export async function addCartItem(customerId, payload) {
   // Au panier, une prestation peut arriver SANS créneau : il se choisit depuis
   // le panier, et le paiement attend qu'il le soit (voir checkoutHydratedLines).
-  const line = await buildOrderLine(payload, { allowUnscheduled: true });
+  const line = await buildOrderLine(payload, { allowUnscheduled: true, customerId });
   const cart = await Cart.findOneAndUpdate(
     { customerId },
     { $push: { lines: line } },
@@ -1153,7 +1153,7 @@ export async function addCartItem(customerId, payload) {
  * libre, carte cadeau renseignée. Le panier et l'achat rapide passent tous deux
  * par ici : la règle d'admissibilité n'existe qu'à un endroit.
  */
-async function buildOrderLine(payload = {}, { allowUnscheduled = false } = {}) {
+async function buildOrderLine(payload = {}, { allowUnscheduled = false, customerId = null } = {}) {
   const product = await CommerceProduct.findOne({ _id: payload.productId, status: PRODUCT_STATUS.PUBLISHED });
   if (!product) throw ApiError.notFound('Article indisponible');
   let bookingSnapshot = null;
@@ -1167,7 +1167,7 @@ async function buildOrderLine(payload = {}, { allowUnscheduled = false } = {}) {
   }
   const hasSlot = Boolean(payload.serviceBooking?.startsAt || payload.bookingSnapshot?.startsAt);
   if (product.kind === 'SERVICE' && (hasSlot || !allowUnscheduled)) {
-    bookingSnapshot = await serviceBookingSnapshot(product, payload);
+    bookingSnapshot = await serviceBookingSnapshot(product, payload, { customerId });
   }
   const giftCard = product.kind === 'GIFT_CARD'
     ? giftCardLinePayload(product, { giftCard: payload.giftCard || payload })
@@ -1187,7 +1187,7 @@ async function buildOrderLine(payload = {}, { allowUnscheduled = false } = {}) {
 }
 
 /** Le créneau réservé d'une prestation : l'heure choisie + la durée de la fiche, contrôlé contre le planning. */
-async function serviceBookingSnapshot(product, payload = {}) {
+async function serviceBookingSnapshot(product, payload = {}, { customerId = null } = {}) {
   const startsAt = new Date(payload.serviceBooking?.startsAt || payload.bookingSnapshot?.startsAt || '');
   const durationMinutes = Math.max(5, Number(product.durationMinutes || payload.serviceBooking?.durationMinutes || 60));
   /*
@@ -1203,7 +1203,7 @@ async function serviceBookingSnapshot(product, payload = {}) {
     throw ApiError.badRequest('Choisissez un créneau disponible pour cette prestation');
   }
   try {
-    await assertNoOverlap({ startsAt, endsAt });
+    await assertNoOverlap({ startsAt, endsAt, ignoreHoldsOf: customerId });
   } catch (err) {
     if (err?.details?.code !== 'CALENDAR_OVERLAP') throw err;
     // Message pour la CLIENTE (le détail du conflit reste côté institut).
@@ -1227,7 +1227,7 @@ export async function setCartItemBooking(customerId, lineId, payload = {}) {
   const product = await CommerceProduct.findOne({ _id: line.productId, status: PRODUCT_STATUS.PUBLISHED });
   if (!product) throw ApiError.notFound('Article indisponible');
   if (product.kind !== 'SERVICE') throw ApiError.badRequest('Seule une prestation se planifie depuis le panier');
-  line.bookingSnapshot = await serviceBookingSnapshot(product, payload);
+  line.bookingSnapshot = await serviceBookingSnapshot(product, payload, { customerId });
   cart.markModified('lines');
   await cart.save();
   return hydrateCart(cart);
@@ -1245,7 +1245,7 @@ export const QUICK_BUY_LINE_ID = 'achat-rapide';
  * le même chemin de paiement que le panier.
  */
 export async function createQuickCheckout(customerId, payload = {}) {
-  const line = await buildOrderLine(payload.item || payload);
+  const line = await buildOrderLine(payload.item || payload, { customerId });
   const hydrated = await hydrateLines([{ _id: QUICK_BUY_LINE_ID, ...line }]);
   if (hydrated.lines.length === 0) throw ApiError.notFound('Article indisponible');
   return checkoutHydratedLines(customerId, hydrated, payload, { checkoutSource: 'QUICK_BUY' });
@@ -1584,6 +1584,26 @@ async function holdSaleSlots(sale, customer) {
     const source = { saleId: String(sale._id), lineId: String(line._id), kind: 'SERVICE_CHECKOUT' };
     const mine = await CalendarEvent.findOne({ 'source.saleId': source.saleId, 'source.lineId': source.lineId, status: 'HELD' });
     if (mine) { mine.holdExpiresAt = holdExpiresAt; await mine.save(); continue; }
+    /**
+     * LA CLIENTE REPREND SA PROPRE RÉSERVATION.
+     *
+     * Elle a quitté un paiement puis recommence : sa retenue précédente (autre
+     * vente) ne doit pas lui fermer le créneau. On la rend — cette nouvelle
+     * commande la remplace. Si l'ancien paiement aboutissait malgré tout, le
+     * filet de sécurité (remboursement automatique) empêche le doublon.
+     */
+    if (sale.customerId) {
+      await CalendarEvent.updateMany(
+        {
+          status: 'HELD',
+          'customerSnapshot.customerId': String(sale.customerId),
+          'source.saleId': { $ne: source.saleId },
+          startsAt: { $lt: endsAt },
+          endsAt: { $gt: startsAt },
+        },
+        { $set: { status: 'CANCELLED', holdExpiresAt: null, 'cancellation.reason': `Remplacée par une nouvelle commande (${sale.saleNumber || source.saleId})`, 'cancellation.cancelledAt': new Date() } },
+      );
+    }
     try {
       await assertNoOverlap({ startsAt, endsAt });
     } catch (err) {
