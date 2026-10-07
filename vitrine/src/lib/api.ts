@@ -272,7 +272,8 @@ export const commerceApi = {
    * garde son affichage en liste simple — rien ne casse.
    */
   collections: () => publicGet<ServiceCollection[]>('/commerce/collections').catch(() => [] as ServiceCollection[]),
-  product: (slug: string) => publicGet<CommerceProduct>(`/commerce/products/${slug}`),
+  // Jeton client s'il existe : ses propres places retenues (paiement quitté) restent libres pour elle.
+  product: (slug: string) => publicGet<CommerceProduct>(`/commerce/products/${slug}`, customerTokenStore.get()),
   availability: (params: { from: string; to: string; durationMinutes?: number; bufferAfterMinutes?: number }) => {
     const query = new URLSearchParams({ from: params.from, to: params.to });
     if (params.durationMinutes) query.set('durationMinutes', String(params.durationMinutes));

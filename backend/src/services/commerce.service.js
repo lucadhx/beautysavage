@@ -922,10 +922,18 @@ export async function listCatalog() {
   return products.map(publicProduct);
 }
 
-export async function getProductBySlug(slug) {
+export async function getProductBySlug(slug, { customerId = null } = {}) {
   const product = await CommerceProduct.findOne({ slug, status: PRODUCT_STATUS.PUBLISHED }).lean();
   if (!product) throw ApiError.notFound('Produit introuvable');
-  return publicProduct(product);
+  const view = publicProduct(product);
+  // La cliente qui retient une place (paiement quitté) la voit encore libre.
+  if (customerId && view.sessions?.length) {
+    for (const session of view.sessions) {
+      const own = await seatsHeldBy(customerId, session.id);
+      if (own) session.remaining = Math.min(session.capacity || 0, session.remaining + own);
+    }
+  }
+  return view;
 }
 
 export async function registerCustomer(payload) {
@@ -1163,7 +1171,9 @@ async function buildOrderLine(payload = {}, { allowUnscheduled = false, customer
   if (product.kind === 'IN_PERSON_TRAINING' && payload.sessionId) {
     const session = product.sessions.id(payload.sessionId);
     if (!session || session.status !== 'ACTIVE') throw ApiError.badRequest('Session indisponible');
-    if ((session.reservedCount || 0) >= (session.capacity || 0)) throw ApiError.conflict('Cette session est complète');
+    // Ses propres places retenues (paiement quitté) ne comptent pas contre elle.
+    const own = await seatsHeldBy(customerId, payload.sessionId);
+    if ((session.reservedCount || 0) - own >= (session.capacity || 0)) throw ApiError.conflict('Cette session est complète');
   }
   const hasSlot = Boolean(payload.serviceBooking?.startsAt || payload.bookingSnapshot?.startsAt);
   if (product.kind === 'SERVICE' && (hasSlot || !allowUnscheduled)) {
@@ -1569,6 +1579,26 @@ function saleHasDatedLines(sale) {
   ));
 }
 
+/** Une vente dont le paiement n'a pas abouti (ses retenues peuvent être rendues). */
+const UNSETTLED_PAYMENT = { $nin: ['PAID', 'PROCESSING', 'REFUNDED', 'PARTIALLY_REFUNDED'] };
+
+/**
+ * Places d'une session déjà RETENUES par cette cliente (paiement ouvert puis
+ * quitté). Elles ne doivent pas lui fermer la session : elle reprend son achat.
+ */
+async function seatsHeldBy(customerId, sessionId) {
+  if (!customerId || !sessionId) return 0;
+  const sales = await CommerceSale.find({
+    customerId,
+    seatsHeld: true,
+    paymentStatus: UNSETTLED_PAYMENT,
+    'lines.sessionId': sessionId,
+  }).select('lines').lean();
+  return sales.reduce((n, s) => n + (s.lines || [])
+    .filter((l) => String(l.sessionId || '') === String(sessionId))
+    .reduce((m, l) => m + (l.quantity || 1), 0), 0);
+}
+
 /**
  * RETIENT les créneaux (prestations) et les places (formations) d'une vente
  * avant d'ouvrir le paiement. Un créneau déjà pris, une session complète :
@@ -1635,6 +1665,30 @@ async function holdSaleSlots(sale, customer) {
   }
   // Places de formation : comptées tout de suite (et rendues si le paiement n'aboutit pas).
   if (!sale.seatsHeld) {
+    /**
+     * LA CLIENTE REPREND SON ACHAT DE FORMATION.
+     *
+     * Une commande précédente, quittée avant paiement, retient encore sa place
+     * (sur une session à une place, c'est la session entière). Cette nouvelle
+     * commande la remplace : l'ancienne rend ses retenues avant le comptage.
+     */
+    const sessionIds = (sale.lines || [])
+      .filter((l) => l.productSnapshot?.kind === 'IN_PERSON_TRAINING' && l.sessionId)
+      .map((l) => l.sessionId);
+    if (sale.customerId && sessionIds.length) {
+      const previous = await CommerceSale.find({
+        _id: { $ne: sale._id },
+        customerId: sale.customerId,
+        seatsHeld: true,
+        paymentStatus: UNSETTLED_PAYMENT,
+        'lines.sessionId': { $in: sessionIds },
+      });
+      for (const old of previous) {
+        await releaseSaleHolds(old, `Remplacée par une nouvelle commande (${sale.saleNumber || String(sale._id)})`);
+        old.holdExpiresAt = null;
+        await old.save();
+      }
+    }
     const taken = [];
     for (const line of sale.lines || []) {
       if (line.productSnapshot?.kind !== 'IN_PERSON_TRAINING' || !line.sessionId) continue;

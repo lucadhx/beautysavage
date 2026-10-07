@@ -44,7 +44,7 @@ publicCommerceRoutes.get('/videos/google-drive/:fileId/stream', asyncHandler(asy
   if (!upstream.body) return res.end();
   return Readable.fromWeb(upstream.body).on('error', next).pipe(res);
 }));
-publicCommerceRoutes.get('/products/:slug', asyncHandler(async (req, res) => ok(res, await commerce.getProductBySlug(req.params.slug))));
+publicCommerceRoutes.get('/products/:slug', identifyCustomer, asyncHandler(async (req, res) => ok(res, await commerce.getProductBySlug(req.params.slug, { customerId: req.customer?._id }))));
 publicCommerceRoutes.get('/reviews', asyncHandler(async (req, res) => ok(res, await commerce.listPublishedReviews(req.query))));
 
 export const customerRoutes = Router();
