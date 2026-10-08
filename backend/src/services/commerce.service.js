@@ -1775,6 +1775,31 @@ async function refundUnavailableSlot(sale, line, customer, { startsAt, endsAt, s
   await cancelEvent(trace._id, { reason: 'Ce créneau a été réservé par une autre personne pendant votre paiement. Vous êtes intégralement remboursée ; choisissez un nouveau créneau sur le site.', refundedCents: amountCents });
 }
 
+/**
+ * CE QUE LE PLANNING DOIT DIRE DU RÈGLEMENT d'une prestation payée en ligne.
+ *
+ * `line.totalCents` est ce qui a été encaissé (l'acompte, ou le prix entier) ;
+ * `line.fullTotalCents` le prix de la prestation ; `line.balanceDueCents` le
+ * solde à régler sur place. Un seul calcul, pour le rendez-vous créé au
+ * paiement ET pour la retenue qui devient rendez-vous.
+ */
+export function bookingPaymentSnapshot(line, sale, previous = {}) {
+  const totalCents = Number(line.fullTotalCents ?? line.totalCents ?? 0);
+  const onlineCents = Number(line.totalCents || 0);
+  // Un solde déjà encaissé à l'institut (bouton « Encaisser solde ») est conservé.
+  const balancePaidCents = Number(previous.balancePaidCents || 0);
+  const paidCents = onlineCents + balancePaidCents;
+  return {
+    totalCents,
+    paidCents,
+    depositCents: Number(line.balanceDueCents || 0) > 0 ? onlineCents : 0,
+    balanceDueCents: Math.max(0, totalCents - paidCents),
+    balancePaidCents,
+    balancePaymentMethod: previous.balancePaymentMethod || '',
+    currency: sale.currency || 'EUR',
+  };
+}
+
 async function createServiceBookingsFromSale(sale, customer, issues = null) {
   for (const line of sale.lines || []) {
     if (line.productSnapshot?.kind !== 'SERVICE' || !line.bookingSnapshot?.startsAt || !line.bookingSnapshot?.endsAt) continue;
@@ -1787,6 +1812,9 @@ async function createServiceBookingsFromSale(sale, customer, issues = null) {
     if (existing?.status === 'HELD') {
       existing.status = 'SCHEDULED';
       existing.holdExpiresAt = null;
+      // La retenue portait « payé 0 » (rien n'était encore encaissé) : le
+      // planning doit maintenant dire l'acompte versé et le solde restant.
+      existing.paymentSnapshot = bookingPaymentSnapshot(line, sale, existing.paymentSnapshot || {});
       existing.notes = `Reservation issue de ${sale.saleNumber}.`;
       await existing.save();
       await emitAppointmentBooked(existing.toObject(), { saleNumber: sale.saleNumber, origin: 'CHECKOUT' });
@@ -1822,13 +1850,7 @@ async function createServiceBookingsFromSale(sale, customer, issues = null) {
       startsAt,
       endsAt,
       status: 'SCHEDULED',
-      paymentSnapshot: {
-        totalCents: line.fullTotalCents ?? line.totalCents ?? 0,
-        paidCents: line.totalCents || 0,
-        depositCents: line.balanceDueCents > 0 ? (line.totalCents || 0) : 0,
-        balanceDueCents: line.balanceDueCents || 0,
-        currency: sale.currency || 'EUR',
-      },
+      paymentSnapshot: bookingPaymentSnapshot(line, sale),
       notes: `Reservation issue de ${sale.saleNumber}.${overlapNote}`,
       source,
     });

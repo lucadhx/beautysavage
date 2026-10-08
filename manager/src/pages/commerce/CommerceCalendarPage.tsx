@@ -37,10 +37,11 @@ interface CalendarEvent {
 interface FormationSessionSheet {
   product: { id: string; title: string; location: string; durationDays: number | null; formalities: string; priceCents: number };
   session: { id: string; startsAt: string; endsAt: string; status: string; capacity: number; reservedCount: number; cancellationReason: string };
-  participants: { customerId: string; name: string; email: string; phone: string; seats: number; paidCents: number; saleId: string; saleNumber: string; registeredAt: string }[];
+  participants: { customerId: string; name: string; email: string; phone: string; seats: number; paidCents: number; totalCents?: number; balanceDueCents?: number; saleId: string; saleNumber: string; registeredAt: string }[];
   seatsTaken: number;
   seatsLeft: number;
   revenueCents: number;
+  balanceDueCents?: number;
 }
 
 interface ServiceChoice {
@@ -1006,10 +1007,11 @@ function FormationSessionPanel({ selected }: { selected: CalendarEvent }) {
         </div>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className={`grid gap-3 ${sheet.balanceDueCents ? 'sm:grid-cols-4' : 'sm:grid-cols-3'}`}>
         <AmountCard label="Inscrites" value={String(sheet.participants.length)} />
         <AmountCard label="Places restantes" value={String(sheet.seatsLeft)} />
         <AmountCard label="Encaisse" value={cents(sheet.revenueCents)} />
+        {Boolean(sheet.balanceDueCents) && <AmountCard label="Solde a regler" value={cents(sheet.balanceDueCents)} />}
       </div>
 
       <section className="overflow-hidden rounded-lg border">
@@ -1037,7 +1039,10 @@ function FormationSessionPanel({ selected }: { selected: CalendarEvent }) {
                       {row.phone && <div>{row.phone}</div>}
                     </td>
                     <td className="px-4 py-2">{row.seats}</td>
-                    <td className="m-hide whitespace-nowrap px-4 py-2">{cents(row.paidCents)}</td>
+                    <td className="m-hide whitespace-nowrap px-4 py-2" data-testid="participant-paid">
+                      {cents(row.paidCents)}
+                      {Boolean(row.balanceDueCents) && <div className="text-xs text-amber-700">Acompte · reste {cents(row.balanceDueCents)}</div>}
+                    </td>
                     <td className="px-4 py-2">
                       <Link to={`/commerce/ventes/${row.saleId}`} className="text-primary hover:underline">{row.saleNumber}</Link>
                     </td>

@@ -380,6 +380,9 @@ export async function getFormationSession(productId, sessionId) {
         phone: customer?.phone || '',
         seats: Number(line.quantity || 1),
         paidCents: Number(line.totalCents || 0),
+        // Inscription à acompte : le prix de la formation et le solde restant.
+        totalCents: Number(line.fullTotalCents ?? line.totalCents ?? 0),
+        balanceDueCents: Number(line.balanceDueCents || 0),
         saleId: String(sale._id),
         saleNumber: sale.saleNumber,
         registeredAt: sale.finalizedAt || sale.createdAt,
@@ -410,6 +413,7 @@ export async function getFormationSession(productId, sessionId) {
     seatsTaken,
     seatsLeft: Math.max(0, Number(session.capacity || 0) - Math.max(seatsTaken, Number(session.reservedCount || 0))),
     revenueCents: participants.reduce((sum, row) => sum + row.paidCents, 0),
+    balanceDueCents: participants.reduce((sum, row) => sum + row.balanceDueCents, 0),
   };
 }
 
