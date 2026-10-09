@@ -654,14 +654,14 @@ function BookingDialog({
           <li
             key={key}
             aria-current={current ? 'step' : undefined}
-            className="flex items-center gap-3 px-4 py-3 transition-colors sm:px-5"
+            className={`flex min-w-0 items-center transition-colors sm:px-5 ${STEPS.length === 3 ? 'gap-2 px-2.5 py-2.5 sm:gap-3 sm:py-3' : 'gap-3 px-4 py-3'}`}
             style={{
               background: current ? 'color-mix(in srgb, var(--v-primary) 10%, var(--v-surface))' : 'transparent',
               boxShadow: current ? 'inset 0 -3px 0 var(--v-primary)' : undefined,
             }}
           >
             <span
-              className="grid h-10 w-10 shrink-0 place-items-center rounded-full"
+              className={`h-10 w-10 shrink-0 place-items-center rounded-full ${STEPS.length === 3 ? 'hidden sm:grid' : 'grid'}`}
               style={{
                 background: current || done ? 'var(--v-primary)' : 'color-mix(in srgb, var(--v-muted-foreground) 14%, transparent)',
                 color: current || done ? 'var(--v-primary-foreground)' : 'var(--v-muted-foreground)',
