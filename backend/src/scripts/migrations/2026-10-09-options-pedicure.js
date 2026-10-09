@@ -39,7 +39,7 @@ if (!DB) {
   process.exit(2);
 }
 
-/** Les fiches qui reçoivent les options (titres exacts en base au 2026-10-09). */
+/** Les pédicures AVEC semi-permanent reçoivent les options (titres exacts en base au 2026-10-09). */
 const PEDICURES = [
   'Pédicure express + semi permanent',
   'Dépose extérieur + pédicure express + semi permanent',
@@ -47,7 +47,7 @@ const PEDICURES = [
   'Pédicure russe + semi permanent',
   'Dépose extérieur + pédicure russe + semi permanent',
   'Dépose du salon + pedicure russe + semi permanent',
-  'Pédicure russe',
+  // Pas « Pédicure russe » : sans semi-permanent, pas de finition (consigne de l'institut, 2026-10-09).
 ];
 const OPTION_FICHE = 'Options pédicure';
 
