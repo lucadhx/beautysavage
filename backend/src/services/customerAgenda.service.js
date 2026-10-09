@@ -39,6 +39,8 @@ function serviceItem(event, product, now) {
     saleId: event.saleId ? String(event.saleId) : null,
     terms: cancellationTerms(product, event.startsAt, event.saleId ? paid : 0, now),
     location: '',
+    // Prestations réservées à la suite : l'espace client les montre ensemble.
+    bookingGroupId: event.source?.bookingGroupId || '',
   };
 }
 

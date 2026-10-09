@@ -68,6 +68,9 @@ customerRoutes.get('/me', authenticateCustomer, asyncHandler(async (req, res) =>
 customerRoutes.get('/cart', authenticateCustomer, asyncHandler(async (req, res) => ok(res, await commerce.getCustomerCart(req.customer._id))));
 customerRoutes.post('/cart/items', authenticateCustomer, requireSiteOpenForPurchase, asyncHandler(async (req, res) => ok(res, await commerce.addCartItem(req.customer._id, req.body))));
 customerRoutes.put('/cart/items/:lineId/booking', authenticateCustomer, requireSiteOpenForPurchase, asyncHandler(async (req, res) => ok(res, await commerce.setCartItemBooking(req.customer._id, req.params.lineId, req.body))));
+// Plusieurs prestations à la suite : ajoutées d'un coup, déplacées d'un bloc.
+customerRoutes.post('/cart/sequence', authenticateCustomer, requireSiteOpenForPurchase, asyncHandler(async (req, res) => ok(res, await commerce.addCartSequence(req.customer._id, req.body))));
+customerRoutes.put('/cart/groups/:groupId/booking', authenticateCustomer, requireSiteOpenForPurchase, asyncHandler(async (req, res) => ok(res, await commerce.setCartGroupBooking(req.customer._id, req.params.groupId, req.body))));
 customerRoutes.delete('/cart/items/:lineId', authenticateCustomer, asyncHandler(async (req, res) => ok(res, await commerce.removeCartItem(req.customer._id, req.params.lineId))));
 // Le retour après paiement se fait sur le site d'où vient la cliente (origine autorisée), jamais sur une adresse devinée.
 customerRoutes.post('/checkout', authenticateCustomer, requireSiteOpenForPurchase, asyncHandler(async (req, res) => created(res, await commerce.createCheckout(req.customer._id, { ...req.body, siteUrl: await siteUrlFor(req) }))));

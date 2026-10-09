@@ -3,11 +3,12 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   ArrowRight, CalendarDays, CalendarX, CheckCircle2, ChevronDown, Clock, CreditCard, FileText, Gift, GraduationCap,
-  LayoutDashboard, Loader2, MapPin, ReceiptText, Sparkles, UserRound, Wallet, X,
+  LayoutDashboard, Link2, Loader2, MapPin, Plus, ReceiptText, Sparkles, UserRound, Wallet, X,
 } from 'lucide-react';
 import { customerApi, type Agenda, type Appointment, type CustomerOrder, type WalletGiftCard } from '@/lib/api';
 import { resolvePreviewMediaUrl } from '@/lib/media';
 import { GiftCardWallet } from '@/components/GiftCardWallet';
+import { AddAfterDialog } from '@/components/account/AddAfterDialog';
 
 const euro = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' });
 const fmt = (cents: number) => euro.format((cents || 0) / 100);
@@ -231,6 +232,7 @@ function FormationRow({ f }: { f: Formation }) {
 
 function CalendarTab({ agenda, onChanged }: { agenda: Agenda | null; onChanged: () => Promise<unknown> }) {
   const [cancelling, setCancelling] = React.useState<Appointment | null>(null);
+  const [addingAfter, setAddingAfter] = React.useState<Appointment | null>(null);
   const [showPast, setShowPast] = React.useState(false);
   if (!agenda) return <div className="h-48 animate-pulse rounded-2xl" style={{ background: 'color-mix(in srgb, var(--v-muted-foreground) 10%, transparent)' }} />;
   const byMonth = new Map<string, Appointment[]>();
@@ -255,7 +257,10 @@ function CalendarTab({ agenda, onChanged }: { agenda: Agenda | null; onChanged: 
       ) : [...byMonth.entries()].map(([month, list]) => (
         <section key={month} className="grid gap-3">
           <h3 className="text-sm font-semibold uppercase tracking-[0.14em]" style={{ color: 'var(--v-muted-foreground)' }}>{month}</h3>
-          {list.map((a, i) => <AppointmentCard key={a.id} a={a} index={i} onCancel={() => setCancelling(a)} />)}
+          {list.map((a, i) => (
+            <AppointmentCard key={a.id} a={a} index={i} onCancel={() => setCancelling(a)} onAddAfter={() => setAddingAfter(a)}
+              chained={Boolean(a.bookingGroupId) && agenda.upcoming.some((b) => b.id !== a.id && b.bookingGroupId === a.bookingGroupId)} />
+          ))}
         </section>
       ))}
       {agenda.past.length > 0 && (
@@ -276,11 +281,14 @@ function CalendarTab({ agenda, onChanged }: { agenda: Agenda | null; onChanged: 
         </div>
       )}
       <CancelModal appointment={cancelling} onClose={() => setCancelling(null)} onDone={onChanged} />
+      <AddAfterDialog appointment={addingAfter} onClose={() => setAddingAfter(null)} />
     </div>
   );
 }
 
-function AppointmentCard({ a, index, onCancel }: { a: Appointment; index: number; onCancel: () => void }) {
+function AppointmentCard({ a, index, onCancel, onAddAfter, chained = false }: { a: Appointment; index: number; onCancel: () => void; onAddAfter: () => void; chained?: boolean }) {
+  // Enchaîner une prestation : seulement après un rendez-vous de prestation à venir.
+  const canAddAfter = a.kind === 'SERVICE' && a.status !== 'CANCELLED' && new Date(a.startsAt).getTime() > Date.now();
   const image = resolvePreviewMediaUrl(a.coverUrl || '');
   const start = new Date(a.startsAt);
   return (
@@ -299,6 +307,7 @@ function AppointmentCard({ a, index, onCancel }: { a: Appointment; index: number
             {a.kind === 'SERVICE' ? 'Prestation' : 'Formation'}
           </span>
           {a.soon && <motion.span initial={{ scale: 0.8 }} animate={{ scale: [1, 1.08, 1] }} transition={{ duration: 1.6, repeat: Infinity }} className="rounded-full bg-amber-500 px-2 py-0.5 text-[11px] font-semibold text-white" data-testid="appointment-soon">Bientôt</motion.span>}
+          {chained && <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold" style={{ background: 'color-mix(in srgb, var(--v-primary) 12%, transparent)' }} data-testid="appointment-chained"><Link2 className="h-3 w-3" /> À la suite</span>}
         </div>
         <p className="mt-1.5 break-words font-semibold">{a.title}</p>
         <div className="mt-1 grid gap-0.5 text-sm" style={{ color: 'var(--v-muted-foreground)' }}>
@@ -308,11 +317,16 @@ function AppointmentCard({ a, index, onCancel }: { a: Appointment; index: number
           {a.location && <p className="flex items-start gap-1.5 break-words"><MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" />{a.location}</p>}
           {a.balanceDueCents > 0 && <p className="flex items-start gap-1.5 font-medium" style={{ color: 'var(--v-foreground)' }} data-testid="appointment-balance"><Wallet className="mt-0.5 h-3.5 w-3.5 shrink-0" />{fmt(a.balanceDueCents)} à régler sur place</p>}
         </div>
-        {a.terms.cancellable && (
-          <div className="mt-3 flex justify-end">
-            <button type="button" onClick={onCancel} data-testid="appointment-cancel" className="inline-flex min-h-[40px] items-center gap-1.5 rounded-md border px-3 py-2 text-xs font-semibold transition hover:bg-black/5" style={{ borderColor: 'var(--v-border)' }}>
+        {(a.terms.cancellable || canAddAfter) && (
+          <div className="mt-3 flex flex-wrap justify-end gap-2">
+            {canAddAfter && (
+              <button type="button" onClick={onAddAfter} data-testid="appointment-add-after" className="inline-flex min-h-[40px] items-center gap-1.5 rounded-md border px-3 py-2 text-xs font-semibold transition hover:bg-black/5" style={{ borderColor: 'var(--v-border)' }}>
+                <Plus className="h-3.5 w-3.5" /> Ajouter une prestation juste après
+              </button>
+            )}
+            {a.terms.cancellable && <button type="button" onClick={onCancel} data-testid="appointment-cancel" className="inline-flex min-h-[40px] items-center gap-1.5 rounded-md border px-3 py-2 text-xs font-semibold transition hover:bg-black/5" style={{ borderColor: 'var(--v-border)' }}>
               <CalendarX className="h-3.5 w-3.5" /> Annuler
-            </button>
+            </button>}
           </div>
         )}
       </div>

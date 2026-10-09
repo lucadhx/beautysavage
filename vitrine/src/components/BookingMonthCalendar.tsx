@@ -1,9 +1,10 @@
 import * as React from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
-import { commerceApi } from '@/lib/api';
+import { commerceApi, type SlotSegment } from '@/lib/api';
 
-export type Slot = { startsAt: string; endsAt: string; durationMinutes: number };
+/** `segments` : une heure par prestation quand plusieurs s'enchaînent. */
+export type Slot = { startsAt: string; endsAt: string; durationMinutes: number; segments?: SlotSegment[] };
 
 const dayKey = (value: string | Date) => {
   const d = new Date(value);
@@ -27,11 +28,15 @@ const MAX_MONTHS_AHEAD = 12;
  * incrémenté par l'écran après un refus d'heure — relit les disponibilités :
  * une heure refusée ne reste jamais affichée comme libre.
  */
-export function BookingMonthCalendar({ durationMinutes, productId, optionKeys, cartLineId, refreshKey = 0, slot, onSlot }: {
+export function BookingMonthCalendar({ durationMinutes, productId, optionKeys, cartLineId, sequence, cartGroupId, refreshKey = 0, slot, onSlot }: {
   durationMinutes: number;
   productId?: string;
   optionKeys?: string[];
   cartLineId?: string;
+  /** Plusieurs prestations à la suite (`idA:opt,idB`) : la durée cherchée est leur somme. */
+  sequence?: string;
+  /** L'enchaînement du panier que l'on déplace : il ne se bloque pas lui-même. */
+  cartGroupId?: string;
   refreshKey?: number;
   slot: Slot | null;
   onSlot: (slot: Slot | null) => void;
@@ -46,7 +51,7 @@ export function BookingMonthCalendar({ durationMinutes, productId, optionKeys, c
   const autoAdvanced = React.useRef(0);
   const monthKey = dayKey(month).slice(0, 7);
   const options = (optionKeys || []).join(',');
-  const key = [monthKey, durationMinutes, productId || '', options, cartLineId || '', refreshKey].join('|');
+  const key = [monthKey, durationMinutes, productId || '', options, cartLineId || '', sequence || '', cartGroupId || '', refreshKey].join('|');
 
   React.useEffect(() => {
     if (byMonth[key]) { setLoading(false); return; }
@@ -54,7 +59,7 @@ export function BookingMonthCalendar({ durationMinutes, productId, optionKeys, c
     setLoading(true);
     const from = sameMonth(month, today) ? today : month;
     const to = addMonths(month, 1);
-    commerceApi.availability({ from: from.toISOString(), to: to.toISOString(), durationMinutes: Math.max(15, durationMinutes), productId, optionKeys, cartLineId })
+    commerceApi.availability({ from: from.toISOString(), to: to.toISOString(), durationMinutes: Math.max(15, durationMinutes), productId, optionKeys, cartLineId, sequence, cartGroupId })
       .then((list) => {
         if (!alive) return;
         setByMonth((m) => ({ ...m, [key]: list }));

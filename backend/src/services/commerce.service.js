@@ -23,13 +23,14 @@ import { provisionInstituteBrevoWebhook } from './email/instituteEmail.service.j
 import { signCustomerToken } from '../middlewares/customerAuth.middleware.js';
 import { assertNoOverlap, cancelEvent, sessionBlocks } from './calendar.service.js';
 import { bookingDurationMinutes } from './bookingDuration.js';
+import { loadSequence, sequenceSegments } from './bookingSequence.js';
 import { withCalendarLock } from './calendarLock.js';
 import { activeCommissionRule, applyCommissionCap, computeSaleCommission } from './commissionRules.js';
 import { activePromotion, effectivePriceCents } from './commercePromotion.js';
 import { paymentSplit, publicPaymentRule } from './commercePaymentRules.js';
 import { configuredSiteUrl } from '../utils/siteOrigin.js';
 import { view as commissionView } from './commissionPayment.service.js';
-import { emitAppointmentBooked, isPendingInstituteAccount, rotatePasswordResetToken, sendCustomerAccessLink } from './commerceCustomer.service.js';
+import { emitAppointmentsBooked, isPendingInstituteAccount, rotatePasswordResetToken, sendCustomerAccessLink } from './commerceCustomer.service.js';
 import { emitAndDispatch } from './events/domainEvent.service.js';
 import {
   activeInstituteMode,
@@ -1313,6 +1314,87 @@ export async function setCartItemBooking(customerId, lineId, payload = {}) {
   return hydrateCart(cart);
 }
 
+/* ───────────────────────── Prestations à la suite ───────────────────────── */
+
+/** Les champs d'enchaînement d'une ligne, recopiés sur son rendez-vous au planning. */
+function groupSource(line) {
+  const b = line.bookingSnapshot || {};
+  return b.groupId ? { bookingGroupId: String(b.groupId), groupIndex: Number(b.groupIndex || 0), groupSize: Number(b.groupSize || 1) } : {};
+}
+
+/** « · enchaînement 1/2 » au planning de l'institut — et la prestation qui suit. */
+function groupNote(line, sale) {
+  const b = line.bookingSnapshot || {};
+  if (!b.groupId) return '';
+  // Les prestations RÉELLEMENT payées ensemble : une retirée du panier n'est plus comptée.
+  const members = (sale.lines || [])
+    .filter((l) => l.bookingSnapshot?.groupId === b.groupId)
+    .sort((x, y) => new Date(x.bookingSnapshot.startsAt) - new Date(y.bookingSnapshot.startsAt));
+  if (members.length < 2) return '';
+  const position = members.findIndex((l) => String(l._id) === String(line._id));
+  const next = members[position + 1];
+  return ` Enchaînement ${position + 1}/${members.length}${next ? `, suivi de « ${next.productSnapshot?.title || 'prestation'} »` : ''}.`;
+}
+
+/**
+ * Les créneaux d'un enchaînement, vérifiés UN PAR UN : contre le planning,
+ * contre les autres lignes du panier — jamais contre ses propres segments,
+ * qui se touchent sans se chevaucher.
+ */
+async function sequenceBookings(customerId, sequence, startsAt, otherLines, groupId) {
+  const segments = sequenceSegments(startsAt, sequence);
+  const bookings = [];
+  for (const segment of segments) {
+    const item = sequence[segment.index];
+    const snapshot = await serviceBookingSnapshot(item.product, { serviceBooking: { startsAt: segment.startsAt } }, { customerId, optionKeys: item.optionKeys, otherLines });
+    bookings.push({ ...snapshot, groupId, groupIndex: segment.index, groupSize: segments.length });
+  }
+  return bookings;
+}
+
+/**
+ * PLUSIEURS PRESTATIONS À LA SUITE, AU PANIER — une heure de départ, les
+ * prestations s'enchaînent sans battement. Le paiement se fait depuis le
+ * panier (une ligne par prestation, ses conditions à cocher, retenue tout ou
+ * rien).
+ */
+export async function addCartSequence(customerId, payload = {}) {
+  const sequence = await loadSequence(payload.items || payload.sequence);
+  const startsAt = new Date(payload.startsAt || '');
+  if (Number.isNaN(startsAt.getTime())) throw ApiError.badRequest('Choisissez une heure de départ');
+  const current = await Cart.findOne({ customerId }).lean();
+  const groupId = crypto.randomUUID();
+  const bookings = await sequenceBookings(customerId, sequence, startsAt, current?.lines || [], groupId);
+  const lines = sequence.map((item, index) => ({
+    productId: item.product._id,
+    quantity: 1,
+    sessionId: null,
+    bookingSnapshot: bookings[index],
+    optionKeys: item.optionKeys,
+    giftCard: null,
+  }));
+  const cart = await Cart.findOneAndUpdate({ customerId }, { $push: { lines: { $each: lines } } }, { new: true, upsert: true });
+  return hydrateCart(cart);
+}
+
+/** Déplacer un enchaînement d'un bloc : toutes ses prestations suivent la nouvelle heure. */
+export async function setCartGroupBooking(customerId, groupId, payload = {}) {
+  const cart = await Cart.findOne({ customerId });
+  const members = (cart?.lines || [])
+    .filter((line) => String(line.bookingSnapshot?.groupId || '') === String(groupId))
+    .sort((a, b) => Number(a.bookingSnapshot.groupIndex) - Number(b.bookingSnapshot.groupIndex));
+  if (members.length === 0) throw ApiError.notFound('Enchaînement introuvable dans le panier');
+  const sequence = await loadSequence(members.map((line) => ({ productId: String(line.productId), optionKeys: line.optionKeys || [] })));
+  const startsAt = new Date(payload.startsAt || payload.serviceBooking?.startsAt || '');
+  if (Number.isNaN(startsAt.getTime())) throw ApiError.badRequest('Choisissez une heure de départ');
+  const others = cart.lines.filter((line) => String(line.bookingSnapshot?.groupId || '') !== String(groupId));
+  const bookings = await sequenceBookings(customerId, sequence, startsAt, others, String(groupId));
+  members.forEach((line, index) => { line.bookingSnapshot = { ...bookings[index], groupSize: members.length, groupIndex: index }; });
+  cart.markModified('lines');
+  await cart.save();
+  return hydrateCart(cart);
+}
+
 /** Identifiant de la ligne unique d'un achat rapide — il préfixe ses consentements. */
 export const QUICK_BUY_LINE_ID = 'achat-rapide';
 
@@ -1700,7 +1782,7 @@ async function holdServiceSlots(sale, customer, holdExpiresAt) {
     if (line.productSnapshot?.kind !== 'SERVICE' || !line.bookingSnapshot?.startsAt) continue;
     const startsAt = new Date(line.bookingSnapshot.startsAt);
     const endsAt = new Date(line.bookingSnapshot.endsAt);
-    const source = { saleId: String(sale._id), lineId: String(line._id), kind: 'SERVICE_CHECKOUT' };
+    const source = { saleId: String(sale._id), lineId: String(line._id), kind: 'SERVICE_CHECKOUT', ...groupSource(line) };
     const mine = await CalendarEvent.findOne({ 'source.saleId': source.saleId, 'source.lineId': source.lineId, status: 'HELD' });
     if (mine) { mine.holdExpiresAt = holdExpiresAt; await mine.save(); continue; }
     /**
@@ -1746,7 +1828,7 @@ async function holdServiceSlots(sale, customer, holdExpiresAt) {
       status: 'HELD',
       holdExpiresAt,
       paymentSnapshot: { totalCents: line.fullTotalCents ?? line.totalCents ?? 0, paidCents: 0, currency: sale.currency || 'EUR' },
-      notes: `En attente de paiement — ${sale.saleNumber}.`,
+      notes: `En attente de paiement — ${sale.saleNumber}.${groupNote(line, sale)}`,
       source,
     });
   }
@@ -1891,12 +1973,13 @@ export function bookingPaymentSnapshot(line, sale, previous = {}) {
 }
 
 async function createServiceBookingsFromSale(sale, customer, issues = null) {
+  const confirmed = [];
   for (const line of sale.lines || []) {
     if (line.productSnapshot?.kind !== 'SERVICE' || !line.bookingSnapshot?.startsAt || !line.bookingSnapshot?.endsAt) continue;
     const startsAt = new Date(line.bookingSnapshot.startsAt);
     const endsAt = new Date(line.bookingSnapshot.endsAt);
     if (Number.isNaN(startsAt.getTime()) || Number.isNaN(endsAt.getTime()) || endsAt <= startsAt) continue;
-    const source = { saleId: String(sale._id), lineId: String(line._id), kind: 'SERVICE_CHECKOUT' };
+    const source = { saleId: String(sale._id), lineId: String(line._id), kind: 'SERVICE_CHECKOUT', ...groupSource(line) };
     const existing = await CalendarEvent.findOne({ 'source.saleId': source.saleId, 'source.lineId': source.lineId, status: { $ne: 'CANCELLED' } });
     // La RETENUE devient le rendez-vous : le créneau était à elle depuis l'ouverture du paiement.
     if (existing?.status === 'HELD') {
@@ -1905,9 +1988,9 @@ async function createServiceBookingsFromSale(sale, customer, issues = null) {
       // La retenue portait « payé 0 » (rien n'était encore encaissé) : le
       // planning doit maintenant dire l'acompte versé et le solde restant.
       existing.paymentSnapshot = bookingPaymentSnapshot(line, sale, existing.paymentSnapshot || {});
-      existing.notes = `Reservation issue de ${sale.saleNumber}.`;
+      existing.notes = `Reservation issue de ${sale.saleNumber}.${groupNote(line, sale)}`;
       await existing.save();
-      await emitAppointmentBooked(existing.toObject(), { saleNumber: sale.saleNumber, origin: 'CHECKOUT' });
+      confirmed.push({ event: existing.toObject(), groupId: line.bookingSnapshot?.groupId || '' });
       continue;
     }
     if (existing) continue;
@@ -1940,7 +2023,7 @@ async function createServiceBookingsFromSale(sale, customer, issues = null) {
         endsAt,
         status: 'SCHEDULED',
         paymentSnapshot: bookingPaymentSnapshot(line, sale),
-        notes: `Reservation issue de ${sale.saleNumber}.`,
+        notes: `Reservation issue de ${sale.saleNumber}.${groupNote(line, sale)}`,
         source,
       });
     });
@@ -1949,7 +2032,20 @@ async function createServiceBookingsFromSale(sale, customer, issues = null) {
       if (issues) issues.push(`Créneau « ${line.productSnapshot?.title || 'prestation'} » plus disponible au paiement : ligne remboursée automatiquement`);
       continue;
     }
-    await emitAppointmentBooked(booked, { saleNumber: sale.saleNumber, origin: 'CHECKOUT' });
+    confirmed.push({ event: booked.toObject(), groupId: line.bookingSnapshot?.groupId || '' });
+  }
+  /*
+    UN ENCHAÎNEMENT = UNE CONFIRMATION. Une cliente qui réserve une dépose
+    puis une pose reçoit un seul e-mail (« Dépose, puis Pose », de la première
+    heure à la dernière), pas deux à la suite.
+  */
+  const groups = new Map();
+  for (const item of confirmed) {
+    const key = item.groupId || String(item.event._id);
+    groups.set(key, [...(groups.get(key) || []), item.event]);
+  }
+  for (const events of groups.values()) {
+    await emitAppointmentsBooked(events, { saleNumber: sale.saleNumber, origin: 'CHECKOUT' });
   }
 }
 

@@ -8,6 +8,7 @@ import { ApiError } from '../utils/ApiError.js';
 import { emitAndDispatch } from './events/domainEvent.service.js';
 import { emitAppointmentBooked, ensureCustomerForBooking } from './commerceCustomer.service.js';
 import { bookingDurationMinutes } from './bookingDuration.js';
+import { loadSequence, sequenceMinutes, sequenceSegments } from './bookingSequence.js';
 import { withCalendarLock } from './calendarLock.js';
 
 const DEFAULT_WEEKLY = [
@@ -210,11 +211,14 @@ async function availabilityDuration(query) {
  * que la ligne dont elle choisit l'heure. Sans elles, le calendrier proposait
  * l'heure même de sa pédicure pour l'option de cette pédicure.
  */
-async function cartBusy(customerId, cartLineId) {
-  if (!customerId || !cartLineId) return [];
+async function cartBusy(customerId, cartLineId, cartGroupId) {
+  if (!customerId || (!cartLineId && !cartGroupId)) return [];
   const cart = await Cart.findOne({ customerId }).select('lines._id lines.bookingSnapshot').lean();
+  // La ligne (ou l'enchaînement) dont on choisit l'heure ne se bloque pas elle-même.
+  const self = (line) => String(line._id) === String(cartLineId || '')
+    || (cartGroupId && String(line.bookingSnapshot?.groupId || '') === String(cartGroupId));
   return (cart?.lines || [])
-    .filter((line) => String(line._id) !== String(cartLineId) && line.bookingSnapshot?.startsAt && line.bookingSnapshot?.endsAt)
+    .filter((line) => !self(line) && line.bookingSnapshot?.startsAt && line.bookingSnapshot?.endsAt)
     .map((line) => ({ startsAt: new Date(line.bookingSnapshot.startsAt), endsAt: new Date(line.bookingSnapshot.endsAt) }));
 }
 
@@ -222,7 +226,9 @@ export async function listAvailability(query = {}, { customerId = null } = {}) {
   const from = asDate(query.from || new Date(), 'Date de debut');
   const to = asDate(query.to || new Date(Date.now() + 14 * 86400_000), 'Date de fin');
   assertRange(from, to);
-  const durationMinutes = await availabilityDuration(query);
+  // Plusieurs prestations à la suite : la durée cherchée est leur somme.
+  const sequence = query.sequence ? await loadSequence(query.sequence) : null;
+  const durationMinutes = sequence ? sequenceMinutes(sequence) : await availabilityDuration(query);
   const bufferAfterMinutes = Math.max(0, Number(query.bufferAfterMinutes || 0));
   const schedule = await getSchedule();
   const timeZone = schedule.timezone || 'Europe/Paris';
@@ -235,7 +241,7 @@ export async function listAvailability(query = {}, { customerId = null } = {}) {
   const busy = events.filter((event) => event.status !== 'CANCELLED')
     .filter((event) => !(owner && event.status === 'HELD' && String(event.customerSnapshot?.customerId || '') === owner))
     .map((event) => ({ startsAt: new Date(event.startsAt), endsAt: new Date(event.endsAt) }))
-    .concat(await cartBusy(owner, query.cartLineId));
+    .concat(await cartBusy(owner, query.cartLineId, query.cartGroupId));
 
   /*
     LA FIN D'UN RENDEZ-VOUS EST UNE HEURE DE DÉPART. La grille part de
@@ -280,6 +286,12 @@ export async function listAvailability(query = {}, { customerId = null } = {}) {
             endsAt: new Date(startsAt.getTime() + durationMinutes * 60_000).toISOString(),
             reservableEndsAt: endsAt.toISOString(),
             durationMinutes,
+            // Enchaînement : l'heure de chaque prestation, l'une après l'autre.
+            ...(sequence ? {
+              segments: sequenceSegments(startsAt, sequence).map((s) => ({
+                productId: s.productId, title: s.title, startsAt: s.startsAt.toISOString(), endsAt: s.endsAt.toISOString(), durationMinutes: s.durationMinutes,
+              })),
+            } : {}),
           });
         }
       }

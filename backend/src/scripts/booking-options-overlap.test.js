@@ -22,7 +22,9 @@
  *   5. un paiement en cours d'une autre personne est dit comme tel ;
  *   6. le paiement refuse un panier d'avant ce contrôle qui se chevauche ;
  *   7. deux écritures au planning ne se recouvrent jamais (verrou) ;
- *   8. le HTML servi aux robots déclare le vrai favicon, avec son empreinte.
+ *   8. le HTML servi aux robots déclare le vrai favicon, avec son empreinte ;
+ *   9. plusieurs prestations à la suite : une heure, des segments collés,
+ *      tout ou rien, déplacées d’un bloc, une seule confirmation.
  */
 import { MongoMemoryServer } from 'mongodb-memory-server';
 
@@ -175,6 +177,59 @@ check('icône Apple et manifeste déclarés', html.includes('apple-touch-icon.pn
 check('sans favicon ni logo, la coquille reste telle quelle', injectIntoTemplate(shell, { ...route, iconVersion: '' }).includes('data:,'));
 const ico = pngToIco(Buffer.from([0x89, 0x50, 0x4e, 0x47]), 48);
 check('ICO : en-tête « icône, une image, 48 px », PNG embarqué', ico.readUInt16LE(2) === 1 && ico.readUInt16LE(4) === 1 && ico[6] === 48 && ico.readUInt32LE(18) === 22 && ico[22] === 0x89);
+
+section('9. Plusieurs prestations à la suite (enchaînement)');
+const { addCartSequence, setCartGroupBooking } = commerce;
+const { emitAppointmentsBooked } = await import('../services/commerceCustomer.service.js');
+const { DomainEvent } = await import('../models/DomainEvent.model.js');
+const depose = await CommerceProduct.create({ slug: 'depose-shampoing', title: 'Dépose + shampoing', kind: 'SERVICE', status: 'PUBLISHED', price: { amountCents: 1500 }, durationMinutes: 30 });
+const pose = await CommerceProduct.create({ slug: 'volume-russe', title: 'Volume russe intense', kind: 'SERVICE', status: 'PUBLISHED', price: { amountCents: 8100 }, durationMinutes: 150 });
+const seqParam = `${depose._id},${pedicure._id}:french`;
+// Un jour neuf, sans les rendez-vous des sections précédentes.
+const at2 = (hh, mm = 0) => new Date(at(hh, mm).getTime() + 86400_000);
+const day2From = new Date(at(0).getTime() + 86400_000).toISOString();
+const day2To = new Date(at(23, 59).getTime() + 86400_000).toISOString();
+const seqSlots = await calendar.listAvailability({ from: day2From, to: day2To, sequence: seqParam });
+const first = seqSlots[0];
+check('les créneaux cherchent la durée totale (30 + 55 = 85 min)', first?.durationMinutes === 85, String(first?.durationMinutes));
+check('chaque créneau porte ses deux segments', first?.segments?.length === 2);
+check('le second segment commence à la fin du premier, sans battement', first.segments[0].endsAt === first.segments[1].startsAt);
+check('le dernier départ laisse tenir 85 min avant 18:00', hhmm(seqSlots.at(-1).startsAt) === '16:35' || hhmm(seqSlots.at(-1).startsAt) <= '16:35', hhmm(seqSlots.at(-1).startsAt));
+const sequencer = await Customer.create({ email: 'sequence@example.test', password: 'motdepasse-3', emailVerified: true });
+cart = await addCartSequence(sequencer._id, { items: [{ productId: String(depose._id) }, { productId: String(pedicure._id), optionKeys: ['french'] }], startsAt: at2(9).toISOString() });
+const [l1, l2] = cart.lines;
+check('deux lignes ajoutées au panier', cart.lines.length === 2);
+check('dépose 09:00 → 09:30, pédicure + French 09:30 → 10:25', hhmm(l1.bookingSnapshot.startsAt) === '09:00' && hhmm(l1.bookingSnapshot.endsAt) === '09:30' && hhmm(l2.bookingSnapshot.startsAt) === '09:30' && hhmm(l2.bookingSnapshot.endsAt) === '10:25');
+check('les deux lignes portent le même enchaînement (1/2, 2/2)', l1.bookingSnapshot.groupId && l1.bookingSnapshot.groupId === l2.bookingSnapshot.groupId && l1.bookingSnapshot.groupIndex === 0 && l2.bookingSnapshot.groupIndex === 1 && l2.bookingSnapshot.groupSize === 2);
+check('la French est bien sur la ligne pédicure', l2.optionKeys.includes('french') && l2.unitPriceCents === 5000);
+// Un rendez-vous existant tombe sur le SECOND segment seulement.
+await CalendarEvent.create({ type: 'SERVICE_BOOKING', title: 'Autre cliente', startsAt: at2(14), endsAt: at2(14, 30), status: 'SCHEDULED' });
+const seqRefused = await refusal(addCartSequence(other._id, { items: [{ productId: String(depose._id) }, { productId: String(pose._id) }], startsAt: at2(13, 30).toISOString() }));
+check('un segment en conflit fait refuser tout l’enchaînement', seqRefused?.details?.code === 'SLOT_TAKEN', seqRefused?.details?.code);
+check('rien n’a été ajouté au panier de cette cliente', ((await Cart.findOne({ customerId: other._id }).lean())?.lines || []).length === 0);
+const tooLong = await refusal(addCartSequence(other._id, { items: [1, 2, 3, 4, 5].map(() => ({ productId: String(depose._id) })), startsAt: at2(9).toISOString() }));
+check('au plus 4 prestations à la suite', tooLong?.details?.code === 'SEQUENCE_TOO_LONG');
+// Déplacer d'un bloc : les deux suivent, et l'enchaînement ne se bloque pas lui-même.
+const groupSlots = (await calendar.listAvailability({ from: day2From, to: day2To, sequence: seqParam, cartGroupId: l1.bookingSnapshot.groupId }, { customerId: sequencer._id })).map((x) => hhmm(x.startsAt));
+check('le calendrier de l’enchaînement repropose sa propre heure (09:00)', groupSlots.includes('09:00'));
+cart = await setCartGroupBooking(sequencer._id, l1.bookingSnapshot.groupId, { startsAt: at2(10).toISOString() });
+const moved = cart.lines.map((l) => `${hhmm(l.bookingSnapshot.startsAt)}-${hhmm(l.bookingSnapshot.endsAt)}`).join(' ');
+check('déplacé à 10:00, il reste collé : 10:00-10:30 10:30-11:25', moved === '10:00-10:30 10:30-11:25', moved);
+const outside = await refusal(commerce.addCartItem(sequencer._id, { productId: String(optionFiche._id), serviceBooking: { startsAt: at2(10, 15).toISOString() } }).catch(async (err) => {
+  // La fiche option a été dépubliée en section 6 : on la republie pour ce contrôle.
+  if (err?.message !== 'Article indisponible') throw err;
+  await CommerceProduct.updateOne({ _id: optionFiche._id }, { $set: { status: 'PUBLISHED' } });
+  return commerce.addCartItem(sequencer._id, { productId: String(optionFiche._id), serviceBooking: { startsAt: at2(10, 15).toISOString() } });
+}));
+check('une autre prestation posée DANS l’enchaînement est refusée (CART_OVERLAP)', outside?.details?.code === 'CART_OVERLAP', outside?.details?.code);
+// Une confirmation pour tout l'enchaînement.
+const e1 = { _id: new (await import('mongoose')).default.Types.ObjectId(), type: 'SERVICE_BOOKING', title: 'Dépose + shampoing', startsAt: at2(10), endsAt: at2(10, 30), customerSnapshot: { customerId: String(sequencer._id) }, paymentSnapshot: { paidCents: 1500, balanceDueCents: 0 } };
+const e2 = { ...e1, _id: new (await import('mongoose')).default.Types.ObjectId(), title: 'Pédicure', startsAt: at2(10, 30), endsAt: at2(11, 25), paymentSnapshot: { paidCents: 2000, balanceDueCents: 3000 } };
+await emitAppointmentsBooked([e2, e1], { saleNumber: 'BS-TEST', origin: 'CHECKOUT' });
+const mails = await DomainEvent.find({ type: 'appointment.booked', 'payloadSafe.customerId': String(sequencer._id) }).lean();
+check('un seul e-mail « rendez-vous confirmé » pour les deux prestations', mails.length === 1, String(mails.length));
+check('il dit « Dépose + shampoing, puis Pédicure », de 10:00 à 11:25', mails[0]?.payloadSafe?.appointmentTitle === 'Dépose + shampoing, puis Pédicure' && hhmm(mails[0].payloadSafe.appointmentStart) === '10:00' && hhmm(mails[0].payloadSafe.appointmentEnd) === '11:25', JSON.stringify(mails[0]?.payloadSafe || {}).slice(0, 200));
+check('montants additionnés (35 € payés, 30 € sur place)', mails[0]?.payloadSafe?.paidAmount === 3500 && mails[0]?.payloadSafe?.balanceDueAmount === 3000);
 
 await disconnectDatabase();
 await mongod.stop();

@@ -163,7 +163,8 @@ export interface CartView {
     product: CommerceProduct;
     quantity: number;
     sessionId: string | null;
-    bookingSnapshot?: { startsAt?: string; endsAt?: string; durationMinutes?: number } | null;
+    /** `groupId` : prestation réservée À LA SUITE d'une autre (même enchaînement). */
+    bookingSnapshot?: { startsAt?: string; endsAt?: string; durationMinutes?: number; groupId?: string; groupIndex?: number; groupSize?: number } | null;
     optionKeys: string[];
     unitPriceCents: number;
     /** Ce qui est payé en ligne (acompte compris). */
@@ -198,8 +199,13 @@ export type CheckoutStatus = {
   balanceDueCents?: number;
 };
 
+/** Une prestation d'un enchaînement, à son heure. */
+export type SlotSegment = { productId: string; title: string; startsAt: string; endsAt: string; durationMinutes: number };
+
 export type Appointment = {
   id: string;
+  /** Réservée à la suite d'une autre prestation (même enchaînement). */
+  bookingGroupId?: string;
   kind: 'SERVICE' | 'IN_PERSON_TRAINING';
   title: string;
   productSlug: string;
@@ -280,15 +286,18 @@ export const commerceApi = {
    * la durée (prestation + options), comme au paiement. `cartLineId` : les
    * autres prestations du panier de la cliente sont comptées comme occupées.
    */
-  availability: (params: { from: string; to: string; durationMinutes?: number; bufferAfterMinutes?: number; productId?: string; optionKeys?: string[]; cartLineId?: string }) => {
+  availability: (params: { from: string; to: string; durationMinutes?: number; bufferAfterMinutes?: number; productId?: string; optionKeys?: string[]; cartLineId?: string; sequence?: string; cartGroupId?: string }) => {
     const query = new URLSearchParams({ from: params.from, to: params.to });
     if (params.durationMinutes) query.set('durationMinutes', String(params.durationMinutes));
     if (params.productId) query.set('productId', params.productId);
     if (params.optionKeys?.length) query.set('optionKeys', params.optionKeys.join(','));
     if (params.cartLineId) query.set('cartLineId', params.cartLineId);
+    // Plusieurs prestations à la suite : `idA:opt|opt,idB` (voir lib/bookingSequence.ts).
+    if (params.sequence) query.set('sequence', params.sequence);
+    if (params.cartGroupId) query.set('cartGroupId', params.cartGroupId);
     if (params.bufferAfterMinutes) query.set('bufferAfterMinutes', String(params.bufferAfterMinutes));
     // Le jeton client, s'il existe : sa propre retenue (paiement quitté) ne lui ferme pas le créneau.
-    return publicGet<{ startsAt: string; endsAt: string; durationMinutes: number }[]>(`/commerce/availability?${query.toString()}`, customerTokenStore.get());
+    return publicGet<{ startsAt: string; endsAt: string; durationMinutes: number; segments?: SlotSegment[] }[]>(`/commerce/availability?${query.toString()}`, customerTokenStore.get());
   },
   reviews: (productId?: string) =>
     publicGet<unknown[]>(`/commerce/reviews${productId ? `?productId=${encodeURIComponent(productId)}` : ''}`),
@@ -324,6 +333,12 @@ export const customerApi = {
       { idempotencyKey: globalThis.crypto?.randomUUID?.() || String(Date.now()), item, consents, giftCardCodes, returnPath },
       customerTokenStore.get()
     ),
+  /** Plusieurs prestations à la suite : une heure de départ, une ligne par prestation, collées. */
+  addCartSequence: (items: { productId: string; optionKeys: string[] }[], startsAt: string) =>
+    publicSend<CartView>('/customer/cart/sequence', { items, startsAt }, customerTokenStore.get()),
+  /** Déplace un enchaînement d'un bloc : toutes ses prestations suivent. */
+  setCartGroupBooking: (groupId: string, startsAt: string) =>
+    publicSend<CartView>(`/customer/cart/groups/${groupId}/booking`, { startsAt }, customerTokenStore.get(), 'PUT'),
   /** Retour « annuler » depuis Stripe : le créneau retenu est rendu tout de suite. */
   abandonCheckout: (saleNumber: string) =>
     publicSend<{ released: boolean; paid?: boolean }>('/customer/checkout/abandon', { saleNumber }, customerTokenStore.get()),

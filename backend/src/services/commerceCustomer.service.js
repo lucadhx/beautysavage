@@ -174,4 +174,23 @@ export async function emitAppointmentBooked(event, { saleNumber = '', origin = '
   });
 }
 
-export default { ensureCustomerForBooking, emitAppointmentBooked };
+/**
+ * UNE CONFIRMATION POUR PLUSIEURS PRESTATIONS À LA SUITE. Le même e-mail
+ * (même modèle, mêmes variables) dit « Dépose, puis Pose », de l'heure de la
+ * première à la fin de la dernière, avec les montants additionnés. Une seule
+ * prestation : l'e-mail habituel.
+ */
+export async function emitAppointmentsBooked(events = [], options = {}) {
+  const list = events.filter(Boolean);
+  if (list.length <= 1) return list[0] ? emitAppointmentBooked(list[0], options) : undefined;
+  const sorted = [...list].sort((a, b) => new Date(a.startsAt) - new Date(b.startsAt));
+  const sum = (key) => sorted.reduce((total, event) => total + Number(event.paymentSnapshot?.[key] || 0), 0);
+  return emitAppointmentBooked({
+    ...sorted[0],
+    title: sorted.map((event) => event.title || 'Rendez-vous').join(', puis '),
+    endsAt: sorted[sorted.length - 1].endsAt,
+    paymentSnapshot: { paidCents: sum('paidCents'), balanceDueCents: sum('balanceDueCents') },
+  }, options);
+}
+
+export default { ensureCustomerForBooking, emitAppointmentBooked, emitAppointmentsBooked };

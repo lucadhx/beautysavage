@@ -9,6 +9,7 @@ import { BookingMonthCalendar, type Slot } from '@/components/BookingMonthCalend
 import { publishCartCount } from '@/lib/cartSignal';
 import { customerApi, type ApiFailure, type CartView } from '@/lib/api';
 import { useCheckoutAbandon } from '@/lib/checkoutAbandon';
+import { sequenceParam } from '@/lib/bookingSequence';
 import { useCustomer } from '@/context/CustomerContext';
 import { resolvePreviewMediaUrl } from '@/lib/media';
 import { durationText } from '@/components/CommerceProductCard';
@@ -162,7 +163,7 @@ export default function CartPage() {
           <ul className="grid content-start gap-4" data-testid="cart-lines">
             <AnimatePresence initial={false}>
               {lines.map((line) => (
-                <CartLine key={line.id} line={line} consents={consents} setConsents={setConsents} removing={removing === line.id} onRemove={() => remove(line)} onSchedule={() => setScheduling(line)} />
+                <CartLine key={line.id} line={line} group={groupOf(lines, line)} consents={consents} setConsents={setConsents} removing={removing === line.id} onRemove={() => remove(line)} onSchedule={() => setScheduling(line)} />
               ))}
             </AnimatePresence>
           </ul>
@@ -202,9 +203,22 @@ export default function CartPage() {
           </aside>
         </div>
       )}
-      <ScheduleDialog line={scheduling} onClose={() => setScheduling(null)} onSaved={(next) => { setCart(next); setScheduling(null); setMessage(null); }} />
+      <ScheduleDialog line={scheduling} group={scheduling ? groupOf(lines, scheduling) : []} onClose={() => setScheduling(null)} onSaved={(next) => { setCart(next); setScheduling(null); setMessage(null); }} />
     </section>
   );
+}
+
+/**
+ * LES PRESTATIONS RÉSERVÉES À LA SUITE de cette ligne (elle comprise), dans
+ * l'ordre. Vide quand la ligne est seule : un enchaînement dont on a retiré
+ * les autres prestations redevient une prestation ordinaire.
+ */
+function groupOf(lines: Line[], line: Line): Line[] {
+  const groupId = line.bookingSnapshot?.groupId;
+  if (!groupId) return [];
+  const members = lines.filter((l) => l.bookingSnapshot?.groupId === groupId)
+    .sort((a, b) => Number(a.bookingSnapshot?.groupIndex || 0) - Number(b.bookingSnapshot?.groupIndex || 0));
+  return members.length > 1 ? members : [];
 }
 
 /** La durée du rendez-vous d'une ligne : la prestation + les minutes de ses options. */
@@ -214,7 +228,10 @@ function lineMinutes(line: Line) {
 }
 
 /** Choisir le créneau d'une prestation du panier — le même calendrier que sur la fiche. */
-function ScheduleDialog({ line, onClose, onSaved }: { line: Line | null; onClose: () => void; onSaved: (cart: CartView) => void }) {
+function ScheduleDialog({ line, group, onClose, onSaved }: { line: Line | null; group: Line[]; onClose: () => void; onSaved: (cart: CartView) => void }) {
+  // Un enchaînement se déplace d'un bloc : une heure de départ, toutes ses prestations suivent.
+  const grouped = group.length > 1;
+  const groupId = line?.bookingSnapshot?.groupId || '';
   const [slot, setSlot] = React.useState<Slot | null>(null);
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState('');
@@ -226,7 +243,7 @@ function ScheduleDialog({ line, onClose, onSaved }: { line: Line | null; onClose
     setBusy(true);
     setError('');
     try {
-      onSaved(await customerApi.setCartItemBooking(line.id, slot));
+      onSaved(grouped ? await customerApi.setCartGroupBooking(groupId, slot.startsAt) : await customerApi.setCartItemBooking(line.id, slot));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Ce créneau n’est plus disponible.');
       setBusy(false);
@@ -244,13 +261,17 @@ function ScheduleDialog({ line, onClose, onSaved }: { line: Line | null; onClose
             <div className="flex items-center justify-between gap-3 border-b p-4" style={{ borderColor: 'var(--v-border)' }}>
               <div className="min-w-0">
                 <p className="text-xs font-semibold uppercase tracking-[0.14em]" style={{ color: 'var(--v-muted-foreground)' }}>Choisir le créneau</p>
-                <h2 className="truncate font-semibold">{line.product.title}</h2>
+                <h2 className="truncate font-semibold" data-testid="schedule-title">{grouped ? group.map((l) => l.product.title).join(', puis ') : line.product.title}</h2>
               </div>
               <button type="button" onClick={onClose} disabled={busy} className="grid h-10 w-10 shrink-0 place-items-center rounded-md border" style={{ borderColor: 'var(--v-border)' }} aria-label="Fermer"><X className="h-4 w-4" /></button>
             </div>
             <div className="overflow-y-auto p-4 sm:p-5">
               {/* Prestation + ses options, et les autres prestations du panier comptées comme prises. */}
-              <BookingMonthCalendar durationMinutes={lineMinutes(line)} productId={line.product.id} optionKeys={line.optionKeys} cartLineId={line.id} refreshKey={refreshKey} slot={slot} onSlot={(next) => { setSlot(next); if (next) setError(''); }} />
+              {grouped ? (
+                <BookingMonthCalendar durationMinutes={group.reduce((sum, l) => sum + lineMinutes(l), 0)} sequence={sequenceParam(group.map((l) => ({ productId: l.product.id, optionKeys: l.optionKeys })))} cartGroupId={groupId} refreshKey={refreshKey} slot={slot} onSlot={(next) => { setSlot(next); if (next) setError(''); }} />
+              ) : (
+                <BookingMonthCalendar durationMinutes={lineMinutes(line)} productId={line.product.id} optionKeys={line.optionKeys} cartLineId={line.id} refreshKey={refreshKey} slot={slot} onSlot={(next) => { setSlot(next); if (next) setError(''); }} />
+              )}
               {error && <p className="mt-3 rounded-lg border px-3 py-2 text-sm" style={{ borderColor: '#fecaca', background: '#fef2f2', color: '#991b1b' }} role="alert">{error}</p>}
             </div>
             <div className="flex flex-wrap items-center justify-between gap-2 border-t p-4" style={{ borderColor: 'var(--v-border)' }}>
@@ -269,8 +290,10 @@ function ScheduleDialog({ line, onClose, onSaved }: { line: Line | null; onClose
   );
 }
 
-function CartLine({ line, consents, setConsents, removing, onRemove, onSchedule }: {
+function CartLine({ line, group, consents, setConsents, removing, onRemove, onSchedule }: {
   line: Line;
+  /** Les prestations réservées à la suite de celle-ci (elle comprise), ou rien. */
+  group: Line[];
   consents: string[];
   setConsents: React.Dispatch<React.SetStateAction<string[]>>;
   removing: boolean;
@@ -297,6 +320,12 @@ function CartLine({ line, consents, setConsents, removing, onRemove, onSchedule 
                 style={{ background: 'color-mix(in srgb, var(--v-accent) 16%, transparent)', color: 'var(--v-foreground)' }} data-testid="cart-kind">
                 <kind.Icon className="h-3 w-3" style={{ color: 'var(--v-accent)' }} /> {kind.label}
               </span>
+              {group.length > 1 && (
+                <span className="ml-1.5 inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold" style={{ background: 'color-mix(in srgb, var(--v-primary) 12%, transparent)' }} data-testid="cart-chain-badge"
+                  title="Réservée à la suite d'une autre prestation : les deux se déplacent ensemble.">
+                  À la suite · {group.indexOf(line) + 1}/{group.length}
+                </span>
+              )}
               <Link to={`/catalogue/${line.product.slug}`} className="mt-1.5 block font-semibold leading-snug hover:underline sm:text-lg">{line.product.title}</Link>
             </div>
             <span className="shrink-0 text-right font-semibold tabular-nums sm:text-lg" data-testid="cart-price">{formatEuro(line.totalCents)}</span>
