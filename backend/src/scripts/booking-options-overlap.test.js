@@ -130,6 +130,9 @@ await CalendarEvent.create({ type: 'SERVICE_BOOKING', title: 'Pédicure', starts
 const after = (await calendar.listAvailability({ from: dayFrom, to: dayTo, productId: String(optionFiche._id) })).map((s) => hhmm(s.startsAt));
 check('10:40 est proposée (hors grille de 15 min)', after.includes('10:40'), after.filter((t) => t >= '10:00' && t < '11:00').join(' '));
 check('10:30 reste fermée (chevauche 10:00–10:40)', !after.includes('10:30'));
+// « Ajouter juste après » cherche à partir de la fin même du rendez-vous.
+const fromEnd = (await calendar.listAvailability({ from: at(10, 40).toISOString(), to: dayTo, productId: String(optionFiche._id) })).map((s) => hhmm(s.startsAt));
+check('une recherche qui commence à 10:40 propose 10:40 en premier', fromEnd[0] === '10:40', fromEnd.slice(0, 3).join(' '));
 
 section('5. Un paiement en cours d’une autre personne est dit comme tel');
 await CalendarEvent.create({

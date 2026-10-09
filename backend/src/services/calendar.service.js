@@ -233,7 +233,13 @@ export async function listAvailability(query = {}, { customerId = null } = {}) {
   const schedule = await getSchedule();
   const timeZone = schedule.timezone || 'Europe/Paris';
   const step = Math.max(5, Number(schedule.slotStepMinutes || 15));
-  const events = await listEvents({ from: from.toISOString(), to: to.toISOString() });
+  /*
+    Une journée de marge AVANT la fenêtre : un rendez-vous qui finit pile à
+    son début (« ajouter juste après » cherche à partir de 12:25, fin du
+    rendez-vous) n'y déborde pas, et son heure de fin — LE départ cherché —
+    disparaissait des heures proposées.
+  */
+  const events = await listEvents({ from: new Date(from.getTime() - 86400_000).toISOString(), to: to.toISOString() });
   // Sa PROPRE retenue (paiement quitté puis repris) ne ferme pas le créneau à
   // la cliente qui l'a posée : elle doit pouvoir réessayer. Pour toute autre
   // personne, le créneau reste pris jusqu'à l'échéance de la retenue.
