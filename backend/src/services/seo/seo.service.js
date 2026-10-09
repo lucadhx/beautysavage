@@ -14,6 +14,7 @@ import { BookingSchedule } from '../../models/BookingSchedule.model.js';
 import { SeoSettings } from '../../models/SeoSettings.model.js';
 import { listPublicCollections } from '../serviceCollection.service.js';
 import { projectCompanyMedia, projectHomeContentMedia, resolveOne } from '../media/mediaProjection.service.js';
+import { iconVersion } from './siteIcon.service.js';
 
 /**
  * LE RÉFÉRENCEMENT DE LA VITRINE — SEO (moteurs) et GEO (assistants IA).
@@ -643,6 +644,8 @@ export async function resolveRoute(rawPath, { originFallback = '' } = {}) {
     jsonLd: [],
     body: '',
     preload: [],
+    // Empreinte du favicon du Manager : les balises d'icône la portent (voir siteIcon.service).
+    iconVersion: iconVersion(data),
   };
   const graph = [businessNode(data, { withCatalog: pathname === '/' }), websiteNode(data)];
 
@@ -924,6 +927,22 @@ async function readTemplate() {
   return null;
 }
 
+/**
+ * LES ICÔNES, DÉCLARÉES DANS LE HTML QUE GOOGLE LIT. Le favicon des résultats
+ * de recherche vient de là, jamais du JavaScript. Adresses du site public,
+ * empreinte du fichier en paramètre : un changement dans le Manager se voit.
+ */
+function iconTags(version) {
+  if (!version) return [];
+  const v = `?v=${version}`;
+  return [
+    `<link rel="icon" href="/favicon.ico${v}" sizes="48x48" />`,
+    `<link rel="icon" type="image/png" sizes="192x192" href="/favicon-192.png${v}" />`,
+    `<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png${v}" />`,
+    `<link rel="manifest" href="/site.webmanifest${v}" />`,
+  ];
+}
+
 function headTags(route) {
   const tags = [
     `<title>${esc(route.title)}</title>`,
@@ -943,6 +962,7 @@ function headTags(route) {
     `<meta name="twitter:title" content="${esc(route.title)}" />`,
     `<meta name="twitter:description" content="${esc(route.description)}" />`,
     route.image ? `<meta name="twitter:image" content="${esc(route.image)}" />` : '',
+    ...iconTags(route.iconVersion),
     ...route.preload.map((href) => `<link rel="preload" as="image" href="${esc(href)}" fetchpriority="high" />`),
     ...route.jsonLd.map((json) => `<script type="application/ld+json" data-seo="1">${JSON.stringify(json).replace(/</g, '\\u003c')}</script>`),
   ];
@@ -957,6 +977,8 @@ export function injectIntoTemplate(template, route) {
     .replace(/<meta\s[^>]*?(?:name|property)\s*=\s*"(?:description|robots|theme-color|og:[^"]*|twitter:[^"]*)"[^>]*>/gis, '')
     .replace(/<link\s[^>]*?rel\s*=\s*"canonical"[^>]*>/gis, '')
     .replace(/<!--\s*(?:OpenGraph|Twitter Card)\s*-->/gi, '');
+  // L'icône vide de la coquille (`data:,`) cède la place aux vraies, quand il y en a une.
+  if (route.iconVersion) html = html.replace(/<link\s[^>]*?rel\s*=\s*"(?:icon|shortcut icon|apple-touch-icon|manifest)"[^>]*>/gis, '');
   html = html.replace(/<head(\s[^>]*)?>/i, (m) => `${m.replace(/>$/, '')} data-seo-path="${esc(route.pathname)}">`);
   html = html.replace(/<\/head>/i, `    ${headTags(route)}\n    <style>${PRERENDER_CSS}</style>\n  </head>`);
   const cover = `<div id="boot-cover" aria-hidden="true" style="position:fixed;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;background:${esc(route.themeColor)}">${route.logo ? `<img src="${esc(route.logo)}" alt="" style="max-width:min(220px,60vw);max-height:120px;object-fit:contain" />` : ''}</div>`

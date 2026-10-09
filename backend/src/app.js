@@ -44,6 +44,18 @@ export function createApp() {
    * scripts. Et avant la garde de disponibilité : sans base, on répond 502 et
    * nginx sert la coquille statique — le site ne tombe jamais à cause du SEO.
    */
+  /*
+    LES ICÔNES DU SITE (`/favicon.ico`…), produites depuis le favicon du
+    Manager. nginx les envoie ici comme n'importe quelle adresse sans fichier ;
+    sans ce passage, le rendu ci-dessous répondait 404 et Google affichait un
+    globe à côté du site. Voir services/seo/siteIcon.service.js.
+  */
+  app.use(async (req, res, next) => {
+    const { SITE_ICON_PATHS, serveSiteIcon } = await import('./services/seo/siteIcon.service.js');
+    if (!SITE_ICON_PATHS.includes(req.path)) return next();
+    return serveSiteIcon(req, res, next);
+  });
+
   app.use(async (req, res, next) => {
     if (req.get('x-seo-render') !== '1' || (req.method !== 'GET' && req.method !== 'HEAD')) return next();
     // Un « fichier » que nginx n'a pas trouvé : un 404 franc, pas une page HTML.
