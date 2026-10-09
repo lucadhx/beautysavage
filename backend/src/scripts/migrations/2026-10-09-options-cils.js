@@ -15,7 +15,8 @@
 //     qui n'est pas une extension) et tous les remplissages 2 et 3 semaines ;
 //   - « Dépose + shampoing » RESTE une prestation (des clientes ne font que la
 //     dépose) ET devient une option des poses complètes, pour celles qui
-//     enchaînent dépose puis nouvelle pose.
+//     enchaînent dépose puis nouvelle pose. Étendue le même jour, à sa
+//     demande, aux packs Élégance et Signature et aux remplissages.
 //
 // Prix et durées repris des fiches d'origine. Sauvegarde dans
 // `migration_backup_20261009` avant toute écriture. Idempotente.
@@ -43,8 +44,8 @@ const DEPOSE = { key: 'depose-shampoing', label: 'Dépose + shampoing', descript
 /** Ce que reçoit chaque famille de fiches. */
 const PLAN = [
   { titles: POSES, options: [KIM_K, COURBURE_M, COULEUR, DEPOSE] },
-  { titles: PACKS, options: [KIM_K, COURBURE_M, COULEUR] },
-  { titles: REMPLISSAGES, options: [KIM_K, COURBURE_M, COULEUR] },
+  { titles: PACKS, options: [KIM_K, COURBURE_M, COULEUR, DEPOSE] },
+  { titles: REMPLISSAGES, options: [KIM_K, COURBURE_M, COULEUR, DEPOSE] },
 ];
 
 const conn = await mongoose.createConnection(process.env.MONGODB_URI, { dbName: DB }).asPromise();
