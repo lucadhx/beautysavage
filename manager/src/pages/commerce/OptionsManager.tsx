@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { AlignLeft, ArrowLeft, Euro, Plus, Tag, Trash2 } from 'lucide-react';
+import { AlignLeft, ArrowLeft, Clock, Euro, Plus, Tag, Trash2 } from 'lucide-react';
 import { Button, Field, Input, Switch, Textarea } from '@/components/ui/primitives';
 import { Dropdown } from '@/components/base/dropdown/dropdown';
 import { cents } from './CommerceShared';
@@ -20,11 +20,18 @@ export function OptionsManager({
   rows,
   onChange,
   subject,
+  withDuration = false,
 }: {
   rows: OptionRow[];
   onChange: (rows: OptionRow[]) => void;
   /** « la formation » / « la prestation » — pour les textes. */
   subject: string;
+  /**
+   * Prestations : une option peut allonger le rendez-vous (French, chrome…).
+   * Le temps saisi s'ajoute au créneau réservé au planning, et la cliente
+   * choisit ses options AVANT l'heure, pour que l'heure tienne compte de tout.
+   */
+  withDuration?: boolean;
 }) {
   const [editing, setEditing] = React.useState<number | null>(null);
   const update = (index: number, patch: OptionRow) => {
@@ -37,7 +44,7 @@ export function OptionsManager({
     setEditing(null);
   };
   const add = () => {
-    onChange([...rows, { label: `Option ${rows.length + 1}`, description: '', priceCents: 0, active: true }]);
+    onChange([...rows, { label: `Option ${rows.length + 1}`, description: '', priceCents: 0, ...(withDuration ? { extraMinutes: 0 } : {}), active: true }]);
     setEditing(rows.length);
   };
 
@@ -67,6 +74,11 @@ export function OptionsManager({
                 <Euro className="h-4 w-4 text-muted-foreground" />
               </div>
             </Field>
+            {withDuration && (
+              <Field label="Temps en plus" unit="minutes" icon={<Clock />} className="md:col-span-2" hint="Ajouté à la durée du rendez-vous quand la cliente coche cette option. 0 : l'option ne prend pas de temps.">
+                <Input type="number" min="0" step="5" data-testid="option-extra-minutes" value={Number(current.extraMinutes || 0)} onChange={(e) => update(editing, { extraMinutes: Math.max(0, Math.round(Number(e.target.value || 0))) })} />
+              </Field>
+            )}
             <Field label="Description visible par la cliente" icon={<AlignLeft />} className="md:col-span-2">
               <Textarea className="min-h-28" value={String(current.description ?? '')} onChange={(e) => update(editing, { description: e.target.value })} />
             </Field>
@@ -92,7 +104,7 @@ export function OptionsManager({
         <div className="m-table max-w-full overflow-x-auto rounded-lg border bg-card" data-testid="options-table">
           <table className="w-full min-w-[620px] text-left text-sm">
             <thead className="bg-muted/40 text-xs uppercase tracking-wide text-muted-foreground">
-              <tr><th className="px-4 py-3">Option</th><th className="px-4 py-3">Prix</th><th className="m-hide px-4 py-3">État</th><th className="px-4 py-3 text-right">Actions</th></tr>
+              <tr><th className="px-4 py-3">Option</th><th className="px-4 py-3">Prix</th>{withDuration && <th className="px-4 py-3">Temps</th>}<th className="m-hide px-4 py-3">État</th><th className="px-4 py-3 text-right">Actions</th></tr>
             </thead>
             <tbody>
               {rows.map((row, index) => (
@@ -103,6 +115,7 @@ export function OptionsManager({
                     {row.active === false && <div className="mt-1 text-xs font-medium text-slate-500 sm:hidden">Désactivée</div>}
                   </td>
                   <td className="whitespace-nowrap px-4 py-3">+ {cents(Number(row.priceCents || 0))}</td>
+                  {withDuration && <td className="whitespace-nowrap px-4 py-3">{Number(row.extraMinutes || 0) > 0 ? `+ ${Number(row.extraMinutes)} min` : '—'}</td>}
                   <td className="m-hide px-4 py-3">
                     <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${row.active === false ? 'border-slate-300 bg-slate-100 text-slate-700' : 'border-emerald-300 bg-emerald-100 text-emerald-900'}`}>
                       {row.active === false ? 'Désactivée' : 'Active'}

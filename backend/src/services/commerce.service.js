@@ -22,6 +22,8 @@ import { decryptSecret, encryptSecret, lastFourOf, maskFromLastFour } from '../u
 import { provisionInstituteBrevoWebhook } from './email/instituteEmail.service.js';
 import { signCustomerToken } from '../middlewares/customerAuth.middleware.js';
 import { assertNoOverlap, cancelEvent, sessionBlocks } from './calendar.service.js';
+import { bookingDurationMinutes } from './bookingDuration.js';
+import { withCalendarLock } from './calendarLock.js';
 import { activeCommissionRule, applyCommissionCap, computeSaleCommission } from './commissionRules.js';
 import { activePromotion, effectivePriceCents } from './commercePromotion.js';
 import { paymentSplit, publicPaymentRule } from './commercePaymentRules.js';
@@ -1147,7 +1149,8 @@ export async function getCustomerCart(customerId) {
 export async function addCartItem(customerId, payload) {
   // Au panier, une prestation peut arriver SANS créneau : il se choisit depuis
   // le panier, et le paiement attend qu'il le soit (voir checkoutHydratedLines).
-  const line = await buildOrderLine(payload, { allowUnscheduled: true, customerId });
+  const current = await Cart.findOne({ customerId }).lean();
+  const line = await buildOrderLine(payload, { allowUnscheduled: true, customerId, otherLines: current?.lines || [] });
   const cart = await Cart.findOneAndUpdate(
     { customerId },
     { $push: { lines: line } },
@@ -1161,7 +1164,7 @@ export async function addCartItem(customerId, payload) {
  * libre, carte cadeau renseignée. Le panier et l'achat rapide passent tous deux
  * par ici : la règle d'admissibilité n'existe qu'à un endroit.
  */
-async function buildOrderLine(payload = {}, { allowUnscheduled = false, customerId = null } = {}) {
+async function buildOrderLine(payload = {}, { allowUnscheduled = false, customerId = null, otherLines = [] } = {}) {
   const product = await CommerceProduct.findOne({ _id: payload.productId, status: PRODUCT_STATUS.PUBLISHED });
   if (!product) throw ApiError.notFound('Article indisponible');
   let bookingSnapshot = null;
@@ -1177,7 +1180,7 @@ async function buildOrderLine(payload = {}, { allowUnscheduled = false, customer
   }
   const hasSlot = Boolean(payload.serviceBooking?.startsAt || payload.bookingSnapshot?.startsAt);
   if (product.kind === 'SERVICE' && (hasSlot || !allowUnscheduled)) {
-    bookingSnapshot = await serviceBookingSnapshot(product, payload, { customerId });
+    bookingSnapshot = await serviceBookingSnapshot(product, payload, { customerId, optionKeys: payload.optionKeys, otherLines });
   }
   const giftCard = product.kind === 'GIFT_CARD'
     ? giftCardLinePayload(product, { giftCard: payload.giftCard || payload })
@@ -1196,28 +1199,91 @@ async function buildOrderLine(payload = {}, { allowUnscheduled = false, customer
   };
 }
 
-/** Le créneau réservé d'une prestation : l'heure choisie + la durée de la fiche, contrôlé contre le planning. */
-async function serviceBookingSnapshot(product, payload = {}, { customerId = null } = {}) {
+const parisTime = (d) => new Date(d).toLocaleTimeString('fr-FR', { timeZone: 'Europe/Paris', hour: '2-digit', minute: '2-digit' });
+const parisDateTime = (d) => new Date(d).toLocaleString('fr-FR', { timeZone: 'Europe/Paris', dateStyle: 'full', timeStyle: 'short' });
+
+/**
+ * LE MESSAGE QUE LA CLIENTE LIT QUAND UNE HEURE EST REFUSÉE — la VRAIE raison.
+ *
+ * Tout refus disait « il vient d'être réservé ». Or le conflit était souvent
+ * un paiement en cours, qui se libère seul — l'institut, elle, ne voyait plus
+ * rien au planning et réservait l'heure à la main. Trois cas, trois messages ;
+ * le détail du rendez-vous en conflit reste côté institut.
+ */
+function slotConflictError(err, startsAt, extra = {}) {
+  const conflict = err?.details?.conflict || {};
+  if (conflict.status === 'HELD') {
+    const until = conflict.holdExpiresAt ? ` Elle se libère si ce paiement n’aboutit pas, au plus tard à ${parisTime(conflict.holdExpiresAt)}.` : '';
+    return ApiError.conflict(
+      `L’horaire du ${parisDateTime(startsAt)} est en cours de réservation par une autre personne (paiement en cours).${until} Choisissez un autre horaire ou réessayez plus tard.`,
+      { code: 'SLOT_PENDING_PAYMENT', ...extra },
+    );
+  }
+  return ApiError.conflict(
+    `L’horaire du ${parisDateTime(startsAt)} vient d’être réservé. Choisissez-en un autre.`,
+    { code: 'SLOT_TAKEN', ...extra },
+  );
+}
+
+/**
+ * DEUX PRESTATIONS D'UNE MÊME CLIENTE NE PEUVENT PAS AVOIR LIEU EN MÊME TEMPS.
+ *
+ * Le panier contrôlait chaque ligne contre le planning, jamais contre ses
+ * voisines : une cliente a pu poser son option pédicure à l'heure même de sa
+ * pédicure, et ne l'apprendre qu'au paiement, sous un message disant que
+ * quelqu'un d'autre avait pris l'heure. Le refus arrive désormais au moment
+ * du choix, et dit quoi faire.
+ */
+function bookingOverlap(startsAt, endsAt, otherLines = []) {
+  return (otherLines || []).find((line) => {
+    const b = line?.bookingSnapshot;
+    if (!b?.startsAt || !b?.endsAt) return false;
+    return startsAt < new Date(b.endsAt) && endsAt > new Date(b.startsAt);
+  }) || null;
+}
+
+function cartOverlapError(other, extra = {}) {
+  const b = other.bookingSnapshot;
+  const title = other.productSnapshot?.title || other.product?.title || other.title || 'autre prestation';
+  return ApiError.conflict(
+    `Cet horaire chevauche votre « ${title} » de ${parisTime(b.startsAt)} à ${parisTime(b.endsAt)}, déjà dans votre panier. Première heure possible juste après : ${parisTime(b.endsAt)}.`,
+    { code: 'CART_OVERLAP', ...extra },
+  );
+}
+
+/** Les lignes d'un panier, nommées : le message de chevauchement cite la prestation voisine. */
+async function titledLines(lines = []) {
+  const ids = lines.filter((l) => l?.bookingSnapshot?.startsAt).map((l) => l.productId);
+  if (!ids.length) return [];
+  const products = await CommerceProduct.find({ _id: { $in: ids } }).select('title').lean();
+  const titles = new Map(products.map((p) => [String(p._id), p.title]));
+  return lines.map((l) => ({ ...(l.toObject?.() ?? l), title: titles.get(String(l.productId)) || '' }));
+}
+
+/**
+ * Le créneau réservé d'une prestation : l'heure choisie + la durée de la fiche
+ * + les minutes des options cochées, contrôlé contre le planning ET contre les
+ * autres prestations de son panier.
+ */
+async function serviceBookingSnapshot(product, payload = {}, { customerId = null, optionKeys = [], otherLines = [] } = {}) {
   const startsAt = new Date(payload.serviceBooking?.startsAt || payload.bookingSnapshot?.startsAt || '');
-  const durationMinutes = Math.max(5, Number(product.durationMinutes || payload.serviceBooking?.durationMinutes || 60));
+  const durationMinutes = bookingDurationMinutes(product, optionKeys);
   /*
-    LE CRÉNEAU RÉSERVÉ = L'HEURE CHOISIE + LA DURÉE DE LA PRESTATION.
-    La fin n'est plus reprise du navigateur : c'est la fiche prestation qui
-    dit combien de temps bloquer au planning. Seule une prestation sans
-    durée renseignée garde la fin proposée par le créneau choisi.
+    LE CRÉNEAU RÉSERVÉ = L'HEURE CHOISIE + LA DURÉE DE LA PRESTATION + SES OPTIONS.
+    La fin n'est jamais reprise du navigateur : c'est la fiche prestation qui
+    dit combien de temps bloquer au planning (voir bookingDuration.js).
   */
-  const endsAt = product.durationMinutes
-    ? new Date(startsAt.getTime() + durationMinutes * 60_000)
-    : new Date(payload.serviceBooking?.endsAt || startsAt.getTime() + durationMinutes * 60_000);
+  const endsAt = new Date(startsAt.getTime() + durationMinutes * 60_000);
   if (Number.isNaN(startsAt.getTime()) || Number.isNaN(endsAt.getTime()) || endsAt <= startsAt) {
     throw ApiError.badRequest('Choisissez un créneau disponible pour cette prestation');
   }
+  const sibling = bookingOverlap(startsAt, endsAt, await titledLines(otherLines));
+  if (sibling) throw cartOverlapError(sibling);
   try {
     await assertNoOverlap({ startsAt, endsAt, ignoreHoldsOf: customerId });
   } catch (err) {
     if (err?.details?.code !== 'CALENDAR_OVERLAP') throw err;
-    // Message pour la CLIENTE (le détail du conflit reste côté institut).
-    throw ApiError.conflict('Ce créneau n’est plus disponible : il vient d’être réservé. Choisissez-en un autre.', { code: 'SLOT_TAKEN' });
+    throw slotConflictError(err, startsAt);
   }
   return {
     startsAt,
@@ -1237,7 +1303,11 @@ export async function setCartItemBooking(customerId, lineId, payload = {}) {
   const product = await CommerceProduct.findOne({ _id: line.productId, status: PRODUCT_STATUS.PUBLISHED });
   if (!product) throw ApiError.notFound('Article indisponible');
   if (product.kind !== 'SERVICE') throw ApiError.badRequest('Seule une prestation se planifie depuis le panier');
-  line.bookingSnapshot = await serviceBookingSnapshot(product, payload, { customerId });
+  line.bookingSnapshot = await serviceBookingSnapshot(product, payload, {
+    customerId,
+    optionKeys: line.optionKeys,
+    otherLines: cart.lines.filter((other) => String(other._id) !== String(line._id)),
+  });
   cart.markModified('lines');
   await cart.save();
   return hydrateCart(cart);
@@ -1284,6 +1354,18 @@ async function checkoutHydratedLines(customerId, hydrated, payload = {}, { check
       unscheduled.length > 1 ? 'Choisissez un créneau pour chaque prestation de votre panier.' : `Choisissez un créneau pour « ${unscheduled[0].product.title} ».`,
       { code: 'SLOT_REQUIRED', lineIds: unscheduled.map((line) => line.id) },
     );
+  }
+  // Un article retiré du catalogue depuis son ajout au panier ne se paie plus.
+  const withdrawn = hydrated.lines.filter((line) => line.product?.status && line.product.status !== PRODUCT_STATUS.PUBLISHED);
+  if (withdrawn.length > 0) {
+    throw ApiError.conflict(`« ${withdrawn[0].product.title} » n’est plus proposé : retirez-le de votre panier pour continuer.`, { code: 'PRODUCT_WITHDRAWN', lineIds: withdrawn.map((line) => line.id) });
+  }
+  // Deux lignes à la même heure : refus AVANT d'ouvrir quoi que ce soit (panier d'avant ce contrôle).
+  const dated = hydrated.lines.filter((line) => line.product?.kind === 'SERVICE' && line.bookingSnapshot?.startsAt && line.bookingSnapshot?.endsAt);
+  for (let i = 1; i < dated.length; i += 1) {
+    const b = dated[i].bookingSnapshot;
+    const sibling = bookingOverlap(new Date(b.startsAt), new Date(b.endsAt), dated.slice(0, i));
+    if (sibling) throw cartOverlapError(sibling, { lineId: dated[i].id, lineIds: [sibling.id, dated[i].id] });
   }
   const accepted = new Set(Array.isArray(payload.consents) ? payload.consents : []);
   const missingConsents = hydrated.lines.flatMap((line) => (
@@ -1421,9 +1503,10 @@ async function checkoutHydratedLines(customerId, hydrated, payload = {}, { check
         // 30 min (minimum Stripe) dès qu'un créneau, une place ou une carte cadeau est retenu.
         expiresInMinutes: (sale.giftCardAllocations?.length || saleHasDatedLines(sale)) ? 30 : null,
         // Un achat rapide annulé ramène sur la fiche, pas sur un panier qu'il n'a jamais touché.
-        cancelUrl: checkoutSource === 'QUICK_BUY' && payload.returnPath && /^\/[a-z0-9/_-]*$/i.test(String(payload.returnPath))
-          ? `${site}${payload.returnPath}?paiement=annule`
-          : `${site}/panier?paiement=annule`,
+        // Le numéro de commande revient avec la cliente : son retour libère le créneau sans attendre 30 min.
+        cancelUrl: `${checkoutSource === 'QUICK_BUY' && payload.returnPath && /^\/[a-z0-9/_-]*$/i.test(String(payload.returnPath))
+          ? `${site}${payload.returnPath}`
+          : `${site}/panier`}?paiement=annule&commande=${encodeURIComponent(sale.saleNumber)}`,
       });
       sale.stripe.checkoutSessionId = checkout.id || '';
       sale.stripe.checkoutUrl = checkout.url || '';
@@ -1607,6 +1690,12 @@ async function seatsHeldBy(customerId, sessionId) {
 async function holdSaleSlots(sale, customer) {
   if (!saleHasDatedLines(sale)) return;
   const holdExpiresAt = new Date(Date.now() + SLOT_HOLD_MINUTES * 60_000);
+  // Vérifier puis retenir, sous verrou : deux paiements simultanés ne prennent plus la même heure.
+  await withCalendarLock(() => holdServiceSlots(sale, customer, holdExpiresAt));
+  await holdTrainingSeats(sale, holdExpiresAt);
+}
+
+async function holdServiceSlots(sale, customer, holdExpiresAt) {
   for (const line of sale.lines || []) {
     if (line.productSnapshot?.kind !== 'SERVICE' || !line.bookingSnapshot?.startsAt) continue;
     const startsAt = new Date(line.bookingSnapshot.startsAt);
@@ -1637,9 +1726,7 @@ async function holdSaleSlots(sale, customer) {
     try {
       await assertNoOverlap({ startsAt, endsAt });
     } catch (err) {
-      if (err?.details?.code === 'CALENDAR_OVERLAP') {
-        throw ApiError.conflict(`Le créneau du ${startsAt.toLocaleString('fr-FR', { timeZone: 'Europe/Paris', dateStyle: 'full', timeStyle: 'short' })} vient d’être réservé. Choisissez-en un autre.`, { code: 'SLOT_TAKEN', lineId: String(line._id) });
-      }
+      if (err?.details?.code === 'CALENDAR_OVERLAP') throw slotConflictError(err, startsAt, { lineId: String(line._id) });
       throw err;
     }
     await CalendarEvent.create({
@@ -1663,6 +1750,9 @@ async function holdSaleSlots(sale, customer) {
       source,
     });
   }
+}
+
+async function holdTrainingSeats(sale, holdExpiresAt) {
   // Places de formation : comptées tout de suite (et rendues si le paiement n'aboutit pas).
   if (!sale.seatsHeld) {
     /**
@@ -1826,34 +1916,39 @@ async function createServiceBookingsFromSale(sale, customer, issues = null) {
      * crée JAMAIS un doublon. La ligne est remboursée automatiquement et la
      * cliente prévenue (e-mail « rendez-vous annulé », motif et montant).
      */
-    try {
-      await assertNoOverlap({ startsAt, endsAt, ignoreSaleId: sale._id });
-    } catch (err) {
-      if (err?.details?.code !== 'CALENDAR_OVERLAP') throw err;
+    // Vérifier puis écrire sous verrou ; le remboursement (appel Stripe) se fait verrou rendu.
+    const booked = await withCalendarLock(async () => {
+      try {
+        await assertNoOverlap({ startsAt, endsAt, ignoreSaleId: sale._id });
+      } catch (err) {
+        if (err?.details?.code !== 'CALENDAR_OVERLAP') throw err;
+        return null;
+      }
+      return CalendarEvent.create({
+        type: 'SERVICE_BOOKING',
+        title: line.productSnapshot?.title || 'Rendez-vous institut',
+        productId: line.productId,
+        saleId: sale._id,
+        lineId: String(line._id),
+        customerSnapshot: {
+          customerId: String(sale.customerId),
+          name: [customer?.firstName, customer?.lastName].filter(Boolean).join(' ') || customer?.email || 'Cliente',
+          email: customer?.email || '',
+          phone: customer?.phone || '',
+        },
+        startsAt,
+        endsAt,
+        status: 'SCHEDULED',
+        paymentSnapshot: bookingPaymentSnapshot(line, sale),
+        notes: `Reservation issue de ${sale.saleNumber}.`,
+        source,
+      });
+    });
+    if (!booked) {
       await refundUnavailableSlot(sale, line, customer, { startsAt, endsAt, source });
       if (issues) issues.push(`Créneau « ${line.productSnapshot?.title || 'prestation'} » plus disponible au paiement : ligne remboursée automatiquement`);
       continue;
     }
-    const overlapNote = '';
-    const booked = await CalendarEvent.create({
-      type: 'SERVICE_BOOKING',
-      title: line.productSnapshot?.title || 'Rendez-vous institut',
-      productId: line.productId,
-      saleId: sale._id,
-      lineId: String(line._id),
-      customerSnapshot: {
-        customerId: String(sale.customerId),
-        name: [customer?.firstName, customer?.lastName].filter(Boolean).join(' ') || customer?.email || 'Cliente',
-        email: customer?.email || '',
-        phone: customer?.phone || '',
-      },
-      startsAt,
-      endsAt,
-      status: 'SCHEDULED',
-      paymentSnapshot: bookingPaymentSnapshot(line, sale),
-      notes: `Reservation issue de ${sale.saleNumber}.${overlapNote}`,
-      source,
-    });
     await emitAppointmentBooked(booked, { saleNumber: sale.saleNumber, origin: 'CHECKOUT' });
   }
 }
@@ -3057,6 +3152,38 @@ export async function addGiftCardToWallet(customerId, payload = {}) {
  * laissées ouvertes : une session expirée ne peut plus être payée, la
  * réservation peut donc être rendue sans risque.
  */
+/**
+ * LA CLIENTE A QUITTÉ LA PAGE DE PAIEMENT (« retour » sur Stripe).
+ *
+ * Son créneau restait retenu 32 minutes : fermé à toutes les autres, alors
+ * que personne ne paierait. On ferme la page Stripe et on rend tout de suite
+ * ce que la vente retenait. Si Stripe dit que le paiement a malgré tout abouti
+ * (retour cliqué après validation), la vente est finalisée, pas annulée.
+ */
+export async function abandonCheckout(customerId, saleNumber) {
+  const sale = await CommerceSale.findOne({
+    customerId,
+    saleNumber: String(saleNumber || ''),
+    paymentStatus: 'CHECKOUT_CREATED',
+    finalizedAt: null,
+  });
+  if (!sale) return { released: false };
+  if (sale.stripe?.checkoutSessionId) {
+    const session = await expireInstituteCheckoutSession(sale.stripe.checkoutSessionId).catch((err) => {
+      logger.warn(`[checkout] page Stripe ${sale.saleNumber} non refermée : ${err.message}`);
+      return null;
+    });
+    if (session?.status === 'complete') {
+      await finalizeInstituteStripeCheckout(session.id).catch(() => null);
+      return { released: false, paid: true };
+    }
+    // Page Stripe toujours ouverte (fermeture refusée) : on la laisse expirer d'elle-même.
+    if (!session || session.status !== 'expired') return { released: false };
+  }
+  await closeUnpaidSale(sale, 'EXPIRED');
+  return { released: true };
+}
+
 async function releaseAbandonedCheckouts(customerId) {
   const stale = await CommerceSale.find({
     customerId,

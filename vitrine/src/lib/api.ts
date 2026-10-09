@@ -123,7 +123,8 @@ export interface CommerceProduct {
   gallery?: string[];
   durationMinutes?: number;
   trailer?: { title?: string; url?: string; sourceUrl?: string; streamableShortcode?: string; coverUrl?: string };
-  options: { key: string; label: string; description: string; priceCents: number }[];
+  /** `extraMinutes` : temps ajouté au rendez-vous quand l'option est cochée (prestations). */
+  options: { key: string; label: string; description: string; priceCents: number; extraMinutes?: number }[];
   sessions: { id: string; startsAt: string; endsAt: string; capacity: number; remaining: number; days?: { startsAt: string; endsAt: string }[] }[];
   requiresLegalWaiver?: boolean;
   faq?: { question: string; answer: string }[];
@@ -274,9 +275,17 @@ export const commerceApi = {
   collections: () => publicGet<ServiceCollection[]>('/commerce/collections').catch(() => [] as ServiceCollection[]),
   // Jeton client s'il existe : ses propres places retenues (paiement quitté) restent libres pour elle.
   product: (slug: string) => publicGet<CommerceProduct>(`/commerce/products/${slug}`, customerTokenStore.get()),
-  availability: (params: { from: string; to: string; durationMinutes?: number; bufferAfterMinutes?: number }) => {
+  /**
+   * Les heures libres. `productId` + `optionKeys` : le serveur compte lui-même
+   * la durée (prestation + options), comme au paiement. `cartLineId` : les
+   * autres prestations du panier de la cliente sont comptées comme occupées.
+   */
+  availability: (params: { from: string; to: string; durationMinutes?: number; bufferAfterMinutes?: number; productId?: string; optionKeys?: string[]; cartLineId?: string }) => {
     const query = new URLSearchParams({ from: params.from, to: params.to });
     if (params.durationMinutes) query.set('durationMinutes', String(params.durationMinutes));
+    if (params.productId) query.set('productId', params.productId);
+    if (params.optionKeys?.length) query.set('optionKeys', params.optionKeys.join(','));
+    if (params.cartLineId) query.set('cartLineId', params.cartLineId);
     if (params.bufferAfterMinutes) query.set('bufferAfterMinutes', String(params.bufferAfterMinutes));
     // Le jeton client, s'il existe : sa propre retenue (paiement quitté) ne lui ferme pas le créneau.
     return publicGet<{ startsAt: string; endsAt: string; durationMinutes: number }[]>(`/commerce/availability?${query.toString()}`, customerTokenStore.get());
@@ -315,6 +324,9 @@ export const customerApi = {
       { idempotencyKey: globalThis.crypto?.randomUUID?.() || String(Date.now()), item, consents, giftCardCodes, returnPath },
       customerTokenStore.get()
     ),
+  /** Retour « annuler » depuis Stripe : le créneau retenu est rendu tout de suite. */
+  abandonCheckout: (saleNumber: string) =>
+    publicSend<{ released: boolean; paid?: boolean }>('/customer/checkout/abandon', { saleNumber }, customerTokenStore.get()),
   /** Choisit (ou change) le créneau d'une prestation déjà au panier. */
   setCartItemBooking: (lineId: string, serviceBooking: { startsAt: string; endsAt?: string; durationMinutes?: number }) =>
     publicSend<CartView>(`/customer/cart/items/${lineId}/booking`, { serviceBooking }, customerTokenStore.get(), 'PUT'),

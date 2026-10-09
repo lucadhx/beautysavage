@@ -1,8 +1,8 @@
 import * as React from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ArrowRight, CalendarDays, Check, CheckCircle2, Clock, CreditCard, ChevronDown, Gift, ImageIcon, Loader2, PawPrint, Play, ShoppingBag, X } from 'lucide-react';
-import { QUICK_BUY_LINE_ID, commerceApi, customerApi, type CommerceProduct, type OrderLineInput } from '@/lib/api';
+import { ArrowLeft, ArrowRight, CalendarDays, Check, CheckCircle2, Clock, CreditCard, ChevronDown, Gift, ImageIcon, ListChecks, Loader2, PawPrint, Play, ShoppingBag, X } from 'lucide-react';
+import { QUICK_BUY_LINE_ID, commerceApi, customerApi, type ApiFailure, type CommerceProduct, type OrderLineInput } from '@/lib/api';
 import { useCustomer } from '@/context/CustomerContext';
 import { resolvePreviewMediaUrl } from '@/lib/media';
 import { RichDescription } from '@/components/RichDescription';
@@ -14,6 +14,7 @@ import { AuthRequiredModal, type AuthAction } from '@/components/AuthRequiredMod
 import { paySplit } from '@/lib/paymentRule';
 import { GiftCardPayment, PaymentSummary, splitPayment, type AppliedGiftCard } from '@/components/GiftCardPayment';
 import { flyToCart, publishCartCount } from '@/lib/cartSignal';
+import { useCheckoutAbandon } from '@/lib/checkoutAbandon';
 
 const formatter = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' });
 
@@ -31,6 +32,8 @@ export default function ProductPage() {
   const [reviews, setReviews] = React.useState<any[]>([]);
   const [trailerOpen, setTrailerOpen] = React.useState(false);
   const [message, setMessage] = React.useState('');
+  // Retour « annuler » d'un achat rapide sur Stripe : le créneau retenu est rendu tout de suite.
+  useCheckoutAbandon(setMessage, 'Paiement annulé : rien n’a été débité. Le créneau est libéré, vous pouvez réserver à nouveau.');
   const [giftCard, setGiftCard] = React.useState({
     senderName: '',
     recipientName: '',
@@ -500,8 +503,11 @@ function GiftCardPreview({ sender, recipient, amount, message }: { sender: strin
 
 
 /**
- * RÉSERVER / ACHETER — une fenêtre, deux étapes.
+ * RÉSERVER / ACHETER — une fenêtre, deux ou trois étapes.
  *
+ *   0. « Options » (prestation qui en propose) : AVANT le calendrier, car une
+ *      option (French, chrome…) allonge le rendez-vous. Le calendrier ne
+ *      propose ensuite que des heures où la durée TOTALE tient ;
  *   1. « Choisir » (prestation, formation présentielle) : le calendrier des
  *      créneaux libres, ou la liste des sessions ouvertes ;
  *   2. « Payer » : récapitulatif, consentements légaux de CETTE fiche, carte
@@ -528,8 +534,12 @@ function BookingDialog({
   onDone: (target: string) => void;
 }) {
   const needsChoice = product.kind === 'SERVICE' || product.kind === 'IN_PERSON_TRAINING';
-  const [step, setStep] = React.useState<'choose' | 'pay'>(needsChoice ? 'choose' : 'pay');
+  // Les options d'une prestation se choisissent AVANT l'heure : elles en changent la durée.
+  const pickOptions = product.kind === 'SERVICE' && (product.options || []).length > 0;
+  const [step, setStep] = React.useState<'options' | 'choose' | 'pay'>(pickOptions ? 'options' : needsChoice ? 'choose' : 'pay');
   const [slot, setSlot] = React.useState<Slot | null>(null);
+  // Incrémenté après un refus d'heure : le calendrier relit les disponibilités.
+  const [refreshKey, setRefreshKey] = React.useState(0);
   const [sessionId, setSessionId] = React.useState<string | null>(null);
   const requirements = (product.consentRequirements ?? []).filter((item) => item.required);
   const [accepted, setAccepted] = React.useState<string[]>([]);
@@ -540,6 +550,25 @@ function BookingDialog({
   const [info, setInfo] = React.useState('');
 
   const session = product.sessions.find((item) => item.id === sessionId) || null;
+  const extraMinutes = (product.options || []).filter((o) => optionKeys.includes(o.key)).reduce((sum, o) => sum + Number(o.extraMinutes || 0), 0);
+  const totalMinutes = Number(product.durationMinutes || 60) + extraMinutes;
+  // Changer d'options change la durée : l'heure déjà choisie ne vaut plus.
+  const chooseOptions = (keys: string[]) => { setOptionKeys(keys); setSlot(null); };
+
+  /**
+   * UNE HEURE REFUSÉE (prise entre-temps, paiement en cours d'une autre
+   * personne, chevauchement avec son panier) : retour au calendrier, relu, avec
+   * la vraie raison. L'heure refusée n'y est plus proposée comme libre.
+   */
+  const slotRefused = (err: unknown) => {
+    const code = (err as ApiFailure)?.code || '';
+    if (!['SLOT_TAKEN', 'SLOT_PENDING_PAYMENT', 'CART_OVERLAP'].includes(code)) return false;
+    setSlot(null);
+    setRefreshKey((n) => n + 1);
+    setStep('choose');
+    setError(err instanceof Error ? err.message : 'Cet horaire n’est plus disponible.');
+    return true;
+  };
 
   const line: OrderLineInput | null = product.kind === 'GIFT_CARD'
     ? giftLine
@@ -583,6 +612,7 @@ function BookingDialog({
       }
       setError(result.message || 'Paiement indisponible pour le moment.');
     } catch (err) {
+      if (slotRefused(err)) return;
       setError(err instanceof Error ? err.message : 'Paiement indisponible');
     } finally {
       setBusy(false);
@@ -598,6 +628,7 @@ function BookingDialog({
       publishCartCount(cart.lines.length, true);
       setInfo('Ajouté au panier.');
     } catch (err) {
+      if (slotRefused(err)) return;
       setError(err instanceof Error ? err.message : 'Ajout au panier impossible');
     } finally {
       setBusy(false);
@@ -608,15 +639,17 @@ function BookingDialog({
     LES DEUX ÉTAPES — chacune occupe une moitié de la fenêtre, avec son icône :
     l'étape en cours est pleine, l'étape franchie porte une coche.
   */
+  const ORDER = ['options', 'choose', 'pay'] as const;
   const STEPS = [
-    { key: 'choose', n: 1, label: product.kind === 'SERVICE' ? 'Choisir le créneau' : 'Choisir la session', Icon: CalendarDays },
-    { key: 'pay', n: 2, label: 'Payer', Icon: CreditCard },
-  ] as const;
+    ...(pickOptions ? [{ key: 'options' as const, label: 'Choisir les options', Icon: ListChecks }] : []),
+    { key: 'choose' as const, label: product.kind === 'SERVICE' ? 'Choisir le créneau' : 'Choisir la session', Icon: CalendarDays },
+    { key: 'pay' as const, label: 'Payer', Icon: CreditCard },
+  ].map((item, index) => ({ ...item, n: index + 1 }));
   const stepper = needsChoice && (
-    <ol className="grid grid-cols-2 border-b" style={{ borderColor: 'var(--v-border)' }} aria-label="Étapes" data-testid="booking-steps">
+    <ol className={`grid ${STEPS.length === 3 ? 'grid-cols-3' : 'grid-cols-2'} border-b`} style={{ borderColor: 'var(--v-border)' }} aria-label="Étapes" data-testid="booking-steps">
       {STEPS.map(({ key, n, label, Icon }) => {
         const current = step === key;
-        const done = key === 'choose' && step === 'pay';
+        const done = ORDER.indexOf(key) < ORDER.indexOf(step);
         return (
           <li
             key={key}
@@ -658,8 +691,28 @@ function BookingDialog({
         {stepper}
 
         <div className="grid gap-4 overflow-y-auto p-5">
+          {step === 'options' && (
+            <div className="grid gap-4" data-testid="booking-options-step">
+              <p className="text-sm" style={{ color: 'var(--v-muted-foreground)' }}>
+                Cochez vos options avant de choisir l’heure : le créneau réservé tiendra compte de leur durée.
+              </p>
+              <ProductOptions product={product} selected={optionKeys} onChange={chooseOptions} />
+              <p className="flex items-center gap-1.5 text-sm font-semibold" data-testid="booking-total-duration">
+                <Clock className="h-4 w-4" style={{ color: 'var(--v-accent)' }} /> Durée du rendez-vous : {durationText(totalMinutes)}
+              </p>
+            </div>
+          )}
+
           {step === 'choose' && product.kind === 'SERVICE' && (
-            <BookingMonthCalendar durationMinutes={Number(product.durationMinutes || 60)} slot={slot} onSlot={setSlot} />
+            <>
+              {pickOptions && (
+                <p className="text-sm" style={{ color: 'var(--v-muted-foreground)' }} data-testid="booking-duration-recap">
+                  Durée du rendez-vous : <span className="font-semibold">{durationText(totalMinutes)}</span>
+                  {optionKeys.length > 0 && <> · options : {(product.options || []).filter((o) => optionKeys.includes(o.key)).map((o) => o.label).join(', ')}</>}
+                </p>
+              )}
+              <BookingMonthCalendar durationMinutes={totalMinutes} productId={product.id} optionKeys={optionKeys} refreshKey={refreshKey} slot={slot} onSlot={(next) => { setSlot(next); if (next) setError(''); }} />
+            </>
           )}
 
           {step === 'choose' && product.kind === 'IN_PERSON_TRAINING' && (
@@ -741,7 +794,8 @@ function BookingDialog({
                   </div>
                 )}
               </div>
-              {product.kind !== 'GIFT_CARD' && <ProductOptions product={product} selected={optionKeys} onChange={setOptionKeys} />}
+              {/* Prestation : options déjà choisies à la première étape (elles fixent la durée). */}
+              {product.kind !== 'GIFT_CARD' && !pickOptions && <ProductOptions product={product} selected={optionKeys} onChange={setOptionKeys} />}
               {requirements.map((item) => (
                 <label key={item.key} className="flex items-start gap-2 text-sm" style={{ color: 'var(--v-muted-foreground)' }}>
                   <input
@@ -766,8 +820,26 @@ function BookingDialog({
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-2 border-t p-4" style={{ borderColor: 'var(--v-border)' }}>
-          {step === 'choose' ? (
+          {step === 'options' ? (
             <>
+              <span className="text-sm" style={{ color: 'var(--v-muted-foreground)' }}>{optionKeys.length ? `${optionKeys.length} option${optionKeys.length > 1 ? 's' : ''} · ${durationText(totalMinutes)}` : 'Aucune option · vous pouvez continuer'}</span>
+              <button
+                type="button"
+                data-testid="booking-options-next"
+                onClick={() => { setStep('choose'); setError(''); }}
+                className="inline-flex items-center gap-2 rounded-md px-5 py-3 text-sm font-semibold"
+                style={{ background: 'var(--v-primary)', color: 'var(--v-primary-foreground)' }}
+              >
+                Choisir l’heure <ArrowRight className="h-4 w-4" />
+              </button>
+            </>
+          ) : step === 'choose' ? (
+            <>
+              {pickOptions ? (
+                <button type="button" onClick={() => setStep('options')} className="inline-flex items-center gap-1.5 rounded-md border px-4 py-3 text-sm font-semibold" style={{ borderColor: 'var(--v-border)' }} data-testid="booking-options-back">
+                  <ArrowLeft className="h-4 w-4" /> Options
+                </button>
+              ) : null}
               <span className="text-sm" style={{ color: 'var(--v-muted-foreground)' }}>{slot ? when(slot.startsAt) : session ? when(session.startsAt) : 'Choisissez un créneau'}</span>
               <button
                 type="button"

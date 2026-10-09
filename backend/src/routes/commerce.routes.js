@@ -71,7 +71,9 @@ customerRoutes.put('/cart/items/:lineId/booking', authenticateCustomer, requireS
 customerRoutes.delete('/cart/items/:lineId', authenticateCustomer, asyncHandler(async (req, res) => ok(res, await commerce.removeCartItem(req.customer._id, req.params.lineId))));
 // Le retour après paiement se fait sur le site d'où vient la cliente (origine autorisée), jamais sur une adresse devinée.
 customerRoutes.post('/checkout', authenticateCustomer, requireSiteOpenForPurchase, asyncHandler(async (req, res) => created(res, await commerce.createCheckout(req.customer._id, { ...req.body, siteUrl: await siteUrlFor(req) }))));
-customerRoutes.post('/checkout/quick', authenticateCustomer, requireSiteOpenForPurchase, asyncHandler(async (req, res) => created(res, await commerce.createQuickCheckout(req.customer._id, { ...req.body, siteUrl: await siteUrlFor(req) }))));
+// Retour « annuler » depuis Stripe : rend tout de suite le créneau retenu.
+customerRoutes.post('/checkout/abandon', authenticateCustomer, asyncHandler(async (req, res) => ok(res, await commerce.abandonCheckout(req.customer._id, req.body?.saleNumber))));
+customerRoutes.post('/checkout/quick',authenticateCustomer, requireSiteOpenForPurchase, asyncHandler(async (req, res) => created(res, await commerce.createQuickCheckout(req.customer._id, { ...req.body, siteUrl: await siteUrlFor(req) }))));
 // La page de succès vérifie que le paiement est bien enregistré (et le finalise si le webhook tarde).
 customerRoutes.get('/checkout/status', authenticateCustomer, asyncHandler(async (req, res) => {
   res.set('Cache-Control', 'no-store');

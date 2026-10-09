@@ -1,11 +1,14 @@
 import mongoose from 'mongoose';
 import { BookingSchedule } from '../models/BookingSchedule.model.js';
 import { CalendarEvent } from '../models/CalendarEvent.model.js';
-import { CommerceProduct } from '../models/CommerceProduct.model.js';
+import { Cart } from '../models/Cart.model.js';
+import { CommerceProduct, PRODUCT_STATUS } from '../models/CommerceProduct.model.js';
 import { CommerceSale } from '../models/CommerceSale.model.js';
 import { ApiError } from '../utils/ApiError.js';
 import { emitAndDispatch } from './events/domainEvent.service.js';
 import { emitAppointmentBooked, ensureCustomerForBooking } from './commerceCustomer.service.js';
+import { bookingDurationMinutes } from './bookingDuration.js';
+import { withCalendarLock } from './calendarLock.js';
 
 const DEFAULT_WEEKLY = [
   { weekday: 1, enabled: true, ranges: [{ start: '09:00', end: '12:00' }, { start: '14:00', end: '18:00' }] },
@@ -186,11 +189,40 @@ export function zonedWallTime(year, month, day, minutes, timeZone) {
   return new Date(instant);
 }
 
+/**
+ * LA DURÉE À CHERCHER. Quand la vitrine nomme la prestation (et ses options),
+ * c'est la fiche qui fait foi — la même règle que l'ajout au panier et le
+ * paiement (`bookingDuration.js`). Le nombre de minutes envoyé par le
+ * navigateur n'est qu'un repli pour les appels qui ne nomment rien.
+ */
+async function availabilityDuration(query) {
+  if (query.productId && mongoose.isValidObjectId(query.productId)) {
+    const product = await CommerceProduct.findOne({ _id: query.productId, status: PRODUCT_STATUS.PUBLISHED })
+      .select('durationMinutes options').lean();
+    if (product) return bookingDurationMinutes(product, query.optionKeys || query.options || '');
+  }
+  return Math.max(5, Number(query.durationMinutes || 60));
+}
+
+/**
+ * LES AUTRES PRESTATIONS DU PANIER DE LA CLIENTE. Elles ne sont pas encore au
+ * planning (rien n'est payé), mais elles ne peuvent pas avoir lieu en même temps
+ * que la ligne dont elle choisit l'heure. Sans elles, le calendrier proposait
+ * l'heure même de sa pédicure pour l'option de cette pédicure.
+ */
+async function cartBusy(customerId, cartLineId) {
+  if (!customerId || !cartLineId) return [];
+  const cart = await Cart.findOne({ customerId }).select('lines._id lines.bookingSnapshot').lean();
+  return (cart?.lines || [])
+    .filter((line) => String(line._id) !== String(cartLineId) && line.bookingSnapshot?.startsAt && line.bookingSnapshot?.endsAt)
+    .map((line) => ({ startsAt: new Date(line.bookingSnapshot.startsAt), endsAt: new Date(line.bookingSnapshot.endsAt) }));
+}
+
 export async function listAvailability(query = {}, { customerId = null } = {}) {
   const from = asDate(query.from || new Date(), 'Date de debut');
   const to = asDate(query.to || new Date(Date.now() + 14 * 86400_000), 'Date de fin');
   assertRange(from, to);
-  const durationMinutes = Math.max(5, Number(query.durationMinutes || 60));
+  const durationMinutes = await availabilityDuration(query);
   const bufferAfterMinutes = Math.max(0, Number(query.bufferAfterMinutes || 0));
   const schedule = await getSchedule();
   const timeZone = schedule.timezone || 'Europe/Paris';
@@ -202,7 +234,22 @@ export async function listAvailability(query = {}, { customerId = null } = {}) {
   const owner = customerId ? String(customerId) : null;
   const busy = events.filter((event) => event.status !== 'CANCELLED')
     .filter((event) => !(owner && event.status === 'HELD' && String(event.customerSnapshot?.customerId || '') === owner))
-    .map((event) => ({ startsAt: new Date(event.startsAt), endsAt: new Date(event.endsAt) }));
+    .map((event) => ({ startsAt: new Date(event.startsAt), endsAt: new Date(event.endsAt) }))
+    .concat(await cartBusy(owner, query.cartLineId));
+
+  /*
+    LA FIN D'UN RENDEZ-VOUS EST UNE HEURE DE DÉPART. La grille part de
+    l'ouverture, de `step` en `step` : un soin de 40 min commencé à 14:00 finit
+    à 14:40, hors grille — le suivant ne pouvait démarrer qu'à 14:45, cinq
+    minutes de trou imposées. Chaque fin de rendez-vous du jour rejoint donc les
+    heures proposées.
+  */
+  const endsByDay = new Map();
+  for (const event of busy) {
+    const p = zonedParts(event.endsAt, timeZone);
+    const key = `${p.year}-${p.month}-${p.day}`;
+    endsByDay.set(key, [...(endsByDay.get(key) || []), p.hour * 60 + p.minute]);
+  }
 
   const slots = [];
   const first = zonedParts(from, timeZone);
@@ -214,10 +261,15 @@ export async function listAvailability(query = {}, { customerId = null } = {}) {
     const weekday = calendarDay.getUTCDay() || 7;
     const dayRule = (schedule.weeklyHours || []).find((rule) => rule.weekday === weekday);
     if (!dayRule?.enabled) continue;
+    const dayEnds = endsByDay.get(`${year}-${month}-${day}`) || [];
     for (const range of dayRule.ranges || []) {
       const startMinute = minutesOf(range.start);
       const endMinute = minutesOf(range.end);
-      for (let minute = startMinute; minute + durationMinutes <= endMinute; minute += step) {
+      const grid = [];
+      for (let minute = startMinute; minute + durationMinutes <= endMinute; minute += step) grid.push(minute);
+      const candidates = [...new Set([...grid, ...dayEnds.filter((m) => m > startMinute && m + durationMinutes <= endMinute)])]
+        .sort((a, b) => a - b);
+      for (const minute of candidates) {
         const startsAt = zonedWallTime(year, month, day, minute, timeZone);
         const endsAt = new Date(startsAt.getTime() + (durationMinutes + bufferAfterMinutes) * 60_000);
         if (startsAt < from || endsAt > to) continue;
@@ -261,7 +313,8 @@ export async function assertNoOverlap({ startsAt, endsAt, ignoreId = null, ignor
   if (conflict) {
     throw ApiError.conflict('Ce créneau chevauche déjà un événement du calendrier', {
       code: 'CALENDAR_OVERLAP',
-      conflict: publicEvent(conflict),
+      // L'échéance d'une retenue : la vitrine peut dire « se libère au plus tard à … ».
+      conflict: publicEvent(conflict, { holdExpiresAt: conflict.holdExpiresAt || null }),
     });
   }
   const generated = await generatedFormationEvents(startsAt, endsAt);
@@ -280,6 +333,13 @@ export async function assertNoOverlap({ startsAt, endsAt, ignoreId = null, ignor
 }
 
 export async function createEvent(payload) {
+  // Vérifier puis écrire sous verrou ; l'e-mail de confirmation part une fois le verrou rendu.
+  const { event, accountCreated } = await withCalendarLock(() => createEventLocked(payload));
+  await emitAppointmentBooked(event, { origin: 'MANAGER' });
+  return publicEvent(event.toObject(), { customerAccountCreated: accountCreated });
+}
+
+async function createEventLocked(payload) {
   const startsAt = asDate(payload.startsAt, 'Debut');
   /*
     Réservation d'une prestation sans heure de fin : le créneau court sur la
@@ -341,8 +401,7 @@ export async function createEvent(payload) {
     notes: payload.notes || '',
     source: payload.source || {},
   });
-  await emitAppointmentBooked(event, { origin: 'MANAGER' });
-  return publicEvent(event.toObject(), { customerAccountCreated: accountCreated });
+  return { event, accountCreated };
 }
 
 /**
@@ -418,6 +477,10 @@ export async function getFormationSession(productId, sessionId) {
 }
 
 export async function updateEvent(id, payload) {
+  return withCalendarLock(() => updateEventLocked(id, payload));
+}
+
+async function updateEventLocked(id, payload) {
   const event = await CalendarEvent.findById(id);
   if (!event) throw ApiError.notFound('Événement introuvable');
   const startsAt = payload.startsAt ? asDate(payload.startsAt, 'Debut') : event.startsAt;

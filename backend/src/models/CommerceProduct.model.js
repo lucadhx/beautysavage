@@ -29,6 +29,13 @@ const productOptionSchema = new mongoose.Schema(
     label: { type: String, required: true, trim: true },
     description: { type: String, default: '' },
     priceCents: { type: Number, default: 0, min: 0 },
+    /**
+     * TEMPS AJOUTÉ AU RENDEZ-VOUS (prestations). Une finition (French, chrome…)
+     * prend du temps : cochée, elle allonge le créneau réservé au planning. Sans
+     * ce champ, l'institut devait vendre chaque finition comme une prestation à
+     * part, avec SON créneau — et la cliente le posait pendant sa pédicure.
+     */
+    extraMinutes: { type: Number, default: 0, min: 0 },
     active: { type: Boolean, default: true },
   },
   { _id: false }

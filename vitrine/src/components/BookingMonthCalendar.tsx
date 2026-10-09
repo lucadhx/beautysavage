@@ -20,9 +20,19 @@ const MAX_MONTHS_AHEAD = 12;
  * suivant ou revenir au précédent. La flèche « précédent » est grisée sur le
  * mois en cours : on ne réserve pas dans le passé. Les jours sans créneau sont
  * grisés ; un jour choisi montre ses heures.
+ *
+ * Les heures proposées dépendent de la prestation ET de ses options (le
+ * serveur additionne leurs minutes), et, depuis le panier, des autres
+ * prestations de la cliente. Tout changement de l'un d'eux — ou `refreshKey`,
+ * incrémenté par l'écran après un refus d'heure — relit les disponibilités :
+ * une heure refusée ne reste jamais affichée comme libre.
  */
-export function BookingMonthCalendar({ durationMinutes, slot, onSlot }: {
+export function BookingMonthCalendar({ durationMinutes, productId, optionKeys, cartLineId, refreshKey = 0, slot, onSlot }: {
   durationMinutes: number;
+  productId?: string;
+  optionKeys?: string[];
+  cartLineId?: string;
+  refreshKey?: number;
   slot: Slot | null;
   onSlot: (slot: Slot | null) => void;
 }) {
@@ -34,7 +44,9 @@ export function BookingMonthCalendar({ durationMinutes, slot, onSlot }: {
   const [loading, setLoading] = React.useState(true);
   const [day, setDay] = React.useState('');
   const autoAdvanced = React.useRef(0);
-  const key = dayKey(month).slice(0, 7);
+  const monthKey = dayKey(month).slice(0, 7);
+  const options = (optionKeys || []).join(',');
+  const key = [monthKey, durationMinutes, productId || '', options, cartLineId || '', refreshKey].join('|');
 
   React.useEffect(() => {
     if (byMonth[key]) { setLoading(false); return; }
@@ -42,7 +54,7 @@ export function BookingMonthCalendar({ durationMinutes, slot, onSlot }: {
     setLoading(true);
     const from = sameMonth(month, today) ? today : month;
     const to = addMonths(month, 1);
-    commerceApi.availability({ from: from.toISOString(), to: to.toISOString(), durationMinutes: Math.max(15, durationMinutes) })
+    commerceApi.availability({ from: from.toISOString(), to: to.toISOString(), durationMinutes: Math.max(15, durationMinutes), productId, optionKeys, cartLineId })
       .then((list) => {
         if (!alive) return;
         setByMonth((m) => ({ ...m, [key]: list }));
@@ -101,7 +113,7 @@ export function BookingMonthCalendar({ durationMinutes, slot, onSlot }: {
 
       <div className="relative overflow-hidden">
         <AnimatePresence mode="wait" initial={false} custom={direction}>
-          <motion.div key={key} custom={direction}
+          <motion.div key={monthKey} custom={direction}
             initial={{ x: direction * 40, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: -direction * 40, opacity: 0 }} transition={{ duration: 0.22 }}
             className="grid grid-cols-7 gap-1 text-center">
             {WEEKDAYS.map((w, i) => <span key={i} className="pb-1 text-[11px] font-semibold uppercase" style={{ color: 'var(--v-muted-foreground)' }}>{w}</span>)}

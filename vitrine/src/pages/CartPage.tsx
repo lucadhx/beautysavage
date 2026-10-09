@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   ArrowRight, CalendarDays, Clock, CreditCard, Gift, GraduationCap, ImageIcon, Loader2, LockKeyhole,
@@ -7,7 +7,8 @@ import {
 } from 'lucide-react';
 import { BookingMonthCalendar, type Slot } from '@/components/BookingMonthCalendar';
 import { publishCartCount } from '@/lib/cartSignal';
-import { customerApi, type CartView } from '@/lib/api';
+import { customerApi, type ApiFailure, type CartView } from '@/lib/api';
+import { useCheckoutAbandon } from '@/lib/checkoutAbandon';
 import { useCustomer } from '@/context/CustomerContext';
 import { resolvePreviewMediaUrl } from '@/lib/media';
 import { durationText } from '@/components/CommerceProductCard';
@@ -50,7 +51,6 @@ function whenOf(line: Line): string[] {
  */
 export default function CartPage() {
   const { customer } = useCustomer();
-  const [params, setParams] = useSearchParams();
   const [cart, setCart] = React.useState<CartView | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [message, setMessage] = React.useState<{ tone: 'error' | 'info'; text: string } | null>(null);
@@ -65,12 +65,11 @@ export default function CartPage() {
     customerApi.cart().then(setCart).catch((err) => setMessage({ tone: 'error', text: err.message })).finally(() => setLoading(false));
   }, [customer]);
 
-  React.useEffect(() => {
-    if (params.get('paiement') !== 'annule') return;
-    setMessage({ tone: 'info', text: 'Paiement annulé : rien n’a été débité. Votre panier vous attend.' });
-    params.delete('paiement');
-    setParams(params, { replace: true });
-  }, [params, setParams]);
+  // Retour « annuler » de Stripe : le créneau retenu est rendu tout de suite.
+  useCheckoutAbandon(
+    (text) => setMessage({ tone: 'info', text }),
+    'Paiement annulé : rien n’a été débité. Votre panier vous attend.',
+  );
 
   const lines = cart?.lines ?? [];
   const total = cart?.totalCents ?? 0;
@@ -105,6 +104,11 @@ export default function CartPage() {
     } catch (err) {
       setMessage({ tone: 'error', text: err instanceof Error ? err.message : 'Le paiement est momentanément indisponible.' });
       setPaying(false);
+      // Une heure refusée (chevauchement, prise entre-temps) : on rouvre directement le choix de l'heure de la ligne en cause.
+      const failure = err as ApiFailure;
+      const lineId = String(failure?.details?.lineId || '');
+      const refused = ['CART_OVERLAP', 'SLOT_TAKEN', 'SLOT_PENDING_PAYMENT'].includes(failure?.code || '') ? lines.find((l) => l.id === lineId) : null;
+      if (refused) setScheduling(refused);
     }
   }
 
@@ -203,11 +207,19 @@ export default function CartPage() {
   );
 }
 
+/** La durée du rendez-vous d'une ligne : la prestation + les minutes de ses options. */
+function lineMinutes(line: Line) {
+  const extra = (line.product.options || []).filter((o) => line.optionKeys.includes(o.key)).reduce((sum, o) => sum + Number(o.extraMinutes || 0), 0);
+  return Number(line.product.durationMinutes || 60) + extra;
+}
+
 /** Choisir le créneau d'une prestation du panier — le même calendrier que sur la fiche. */
 function ScheduleDialog({ line, onClose, onSaved }: { line: Line | null; onClose: () => void; onSaved: (cart: CartView) => void }) {
   const [slot, setSlot] = React.useState<Slot | null>(null);
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState('');
+  // Incrémenté après un refus d'heure : le calendrier relit les disponibilités.
+  const [refreshKey, setRefreshKey] = React.useState(0);
   React.useEffect(() => { setSlot(null); setError(''); setBusy(false); }, [line?.id]);
   async function save() {
     if (!line || !slot) return;
@@ -218,6 +230,8 @@ function ScheduleDialog({ line, onClose, onSaved }: { line: Line | null; onClose
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Ce créneau n’est plus disponible.');
       setBusy(false);
+      setSlot(null);
+      setRefreshKey((n) => n + 1);
     }
   }
   return (
@@ -235,7 +249,8 @@ function ScheduleDialog({ line, onClose, onSaved }: { line: Line | null; onClose
               <button type="button" onClick={onClose} disabled={busy} className="grid h-10 w-10 shrink-0 place-items-center rounded-md border" style={{ borderColor: 'var(--v-border)' }} aria-label="Fermer"><X className="h-4 w-4" /></button>
             </div>
             <div className="overflow-y-auto p-4 sm:p-5">
-              <BookingMonthCalendar durationMinutes={Number(line.product.durationMinutes || 60)} slot={slot} onSlot={setSlot} />
+              {/* Prestation + ses options, et les autres prestations du panier comptées comme prises. */}
+              <BookingMonthCalendar durationMinutes={lineMinutes(line)} productId={line.product.id} optionKeys={line.optionKeys} cartLineId={line.id} refreshKey={refreshKey} slot={slot} onSlot={(next) => { setSlot(next); if (next) setError(''); }} />
               {error && <p className="mt-3 rounded-lg border px-3 py-2 text-sm" style={{ borderColor: '#fecaca', background: '#fef2f2', color: '#991b1b' }} role="alert">{error}</p>}
             </div>
             <div className="flex flex-wrap items-center justify-between gap-2 border-t p-4" style={{ borderColor: 'var(--v-border)' }}>
@@ -303,7 +318,7 @@ function CartLine({ line, consents, setConsents, removing, onRemove, onSchedule 
                 {line.product.kind === 'SERVICE' && <button type="button" onClick={onSchedule} className="text-xs font-semibold underline" data-testid="cart-change-slot">Changer</button>}
               </p>
             ))}
-            {line.product.kind === 'SERVICE' && line.product.durationMinutes ? <p className="flex items-center gap-1.5"><Clock className="h-3.5 w-3.5 shrink-0" style={{ color: 'var(--v-accent)' }} /> {durationText(line.product.durationMinutes)}</p> : null}
+            {line.product.kind === 'SERVICE' && line.product.durationMinutes ? <p className="flex items-center gap-1.5"><Clock className="h-3.5 w-3.5 shrink-0" style={{ color: 'var(--v-accent)' }} /> {durationText(lineMinutes(line))}</p> : null}
             {line.giftCard && <p>Pour {line.giftCard.recipientName || 'la personne de votre choix'}{line.giftCard.senderName ? `, de la part de ${line.giftCard.senderName}` : ''}</p>}
             {options.length > 0 && <p>Options : {options.map((o) => o.label).join(', ')}</p>}
             {line.quantity > 1 && <p>Quantité : {line.quantity} × {formatEuro(line.unitPriceCents)}</p>}

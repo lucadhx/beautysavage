@@ -72,6 +72,7 @@ function normalizeOptions(rows: Record<string, unknown>[]) {
     ...row,
     key: String(row.key || optionKey(row.label, index)),
     priceCents: Math.round(Number(row.priceCents || 0)),
+    extraMinutes: Math.max(0, Math.round(Number(row.extraMinutes || 0))),
     active: row.active !== false,
   }));
 }
@@ -174,7 +175,7 @@ export default function CommercePrestationEditPage() {
         </ToneSection>
       )}
 
-      {tab === 'options' && <OptionsManager rows={rows('options')} onChange={(r) => setRows('options', r)} subject="la prestation" />}
+      {tab === 'options' && <OptionsManager rows={rows('options')} onChange={(r) => setRows('options', r)} subject="la prestation" withDuration />}
       {tab === 'photos' && <GalleryEditor items={product.gallery || []} onChange={(items) => patch('gallery', items)} />}
       {tab === 'advanced' && (
         <ToneSection tone="advanced" icon={<Settings2 className="h-5 w-5" />} title="Disponibilité et affichage" description="Réglez la visibilité, la réservation et les temps de battement autour de cette prestation.">
