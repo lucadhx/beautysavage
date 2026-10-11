@@ -213,6 +213,31 @@ export async function resolveTrainingDecisionClient({ event }) {
   };
 }
 
+/**
+ * DEMANDE D'AVIS — une prestation, ou plusieurs enchaînées dans le même e-mail.
+ * Le lien mène à la page d'avis ; la cliente s'y connecte, et seul son compte
+ * peut y répondre.
+ */
+export async function resolveReviewRequestClient({ event }) {
+  const p = event.payloadSafe;
+  const titles = p.productTitles || [];
+  const many = titles.length > 1;
+  const first = titles[0] || 'votre prestation';
+  return {
+    ...(await customerVariables(p.customerId)),
+    subjectLine: p.reminder
+      ? `Petit rappel : votre avis sur ${many ? 'vos prestations' : first}`
+      : `Comment s’est passée ${many ? 'votre visite' : `votre prestation ${first}`} ?`,
+    introText: many
+      ? `Merci pour votre visite ! Vous avez enchaîné ${titles.length} prestations : dites-nous ce que vous en avez pensé, une par une. Vos retours nous aident à progresser et guident les prochaines clientes.`
+      : 'Merci pour votre confiance ! Dites-nous ce que vous en avez pensé : vos retours nous aident à progresser et guident les prochaines clientes.',
+    serviceName: many ? '' : first,
+    completedAt: many ? '' : p.completedAt,
+    servicesHtml: many ? `<ul>${titles.map((t) => `<li>${escapeHtml(t)}</li>`).join('')}</ul>` : '',
+    reviewUrl: await customerAccountUrl(`/avis?demande=${encodeURIComponent(p.reviewRequestIds[0])}`),
+  };
+}
+
 export async function resolveSessionRescheduledClient({ event }) {
   const p = event.payloadSafe;
   return {
@@ -258,6 +283,7 @@ export default {
   resolveSaleAdminNotification,
   resolveTrainingSubmissionAdmin,
   resolveTrainingDecisionClient,
+  resolveReviewRequestClient,
   resolveSessionRescheduledClient,
   resolveSessionCancelledClient,
 };

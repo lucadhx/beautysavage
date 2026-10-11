@@ -78,7 +78,7 @@ const JOURS = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dim
 const JOURS_COURTS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
 
 /** Adresses privées : jamais indexées, et fermées dans le robots.txt. */
-const PRIVATE_PREFIXES = ['/panier', '/paiement', '/espace-client', '/connexion-client', '/inscription-client', '/verification-email'];
+const PRIVATE_PREFIXES = ['/panier', '/paiement', '/espace-client', '/connexion-client', '/inscription-client', '/verification-email', '/avis'];
 const PRIVATE_TITLES = {
   '/panier': 'Panier',
   '/paiement/succes': 'Paiement confirmé',
@@ -88,6 +88,7 @@ const PRIVATE_TITLES = {
   '/espace-client': 'Votre espace client',
   '/espace-client/formations': 'Vos formations',
   '/espace-client/mot-de-passe': 'Mot de passe',
+  '/avis': 'Votre avis',
 };
 
 const LEGAL_ROUTES = {

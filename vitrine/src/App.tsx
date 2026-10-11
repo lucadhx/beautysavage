@@ -39,6 +39,7 @@ const CartPage = React.lazy(() => import('@/pages/CartPage'));
 const PaymentSuccessPage = React.lazy(() => import('@/pages/PaymentSuccessPage'));
 const CustomerAccountPage = React.lazy(() => import('@/pages/CustomerAccountPage'));
 const CustomerTrainingsPage = React.lazy(() => import('@/pages/CustomerTrainingsPage'));
+const ReviewPage = React.lazy(() => import('@/pages/ReviewPage'));
 const CustomerPasswordResetPage = React.lazy(() => import('@/pages/CustomerPasswordResetPage'));
 
 /**
@@ -172,6 +173,7 @@ function PagesEnFondu() {
             <Route path="/espace-client" element={<CustomerAccountPage />} />
             <Route path="/verification-email" element={<EmailVerificationPage />} />
             <Route path="/espace-client/formations" element={<CustomerTrainingsPage />} />
+            <Route path="/avis" element={<ReviewPage />} />
             <Route path="/espace-client/mot-de-passe" element={<CustomerPasswordResetPage />} />
             {/*
               ROUTES LÉGALES, ET STABLES.

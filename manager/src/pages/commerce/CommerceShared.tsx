@@ -35,6 +35,7 @@ export interface CommerceProduct {
   service?: Record<string, unknown>;
   paymentRules?: Record<string, unknown>;
   bookingRules?: Record<string, unknown>;
+  reviewRequest?: { enabled: boolean; delay: { value: number; unit: string }; reminders: { value: number; unit: string }[] } | null;
   seo?: { metaTitle?: string; metaDescription?: string };
 }
 

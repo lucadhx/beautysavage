@@ -158,6 +158,16 @@ export const DOMAIN_EVENT_ACTION_REGISTRY = Object.freeze({
       description: 'Annonce a la cliente que sa formation est validee.',
     },
   ],
+  'review.requested': [
+    {
+      actionId: 'send-customer-review-request',
+      actionType: ACTION_TYPE.SEND_EMAIL,
+      enabled: true,
+      templateId: 'REVIEW_REQUEST_CLIENT',
+      recipientResolver: 'CUSTOMER_EMAIL',
+      description: 'Invite la cliente a laisser son avis sur ses prestations/formations terminees.',
+    },
+  ],
   'training.submission.rejected': [
     {
       actionId: 'send-customer-training-rejected',

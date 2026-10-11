@@ -380,7 +380,21 @@ export const customerApi = {
     publicGet<{ playbackUrl: string; shortcode: string }>(`/commerce/videos/streamable/${encodeURIComponent(shortcode)}/playback-url`),
   createReview: (body: { saleId: string; productId: string; rating: number; comment?: string; displayName?: string }) =>
     publicSend<unknown>('/customer/reviews', body, customerTokenStore.get()),
+  /** Avis à donner (une entrée par prestation pas encore notée) ; `demande` = la demande du lien reçu. */
+  reviewRequests: async (demande?: string | null) => {
+    const query = demande ? `?demande=${encodeURIComponent(demande)}` : '';
+    const token = customerTokenStore.get();
+    const res = await fetch(`${PUBLIC_BASE}/customer/review-requests${query}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) throw apiError(json);
+    return json.data as PendingReviews;
+  },
+  submitRequestedReview: (requestId: string, body: { rating: number; comment?: string }) =>
+    publicSend<{ id: string; status: string }>(`/customer/review-requests/${encodeURIComponent(requestId)}/review`, body, customerTokenStore.get()),
 };
+
+export interface PendingReviewItem { id: string; productId: string; title: string; kind: string; completedAt: string; coverUrl: string }
+export interface PendingReviews { items: PendingReviewItem[]; focusStatus: 'OPEN' | 'ALREADY_REVIEWED' | null; reviewedCount: number }
 
 export const api = {
   bootstrap: () => get<BootstrapData>('/bootstrap'),

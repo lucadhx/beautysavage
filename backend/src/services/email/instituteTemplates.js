@@ -98,6 +98,16 @@ export const INSTITUTE_TEMPLATES = Object.freeze({
     quote: '{{comment}}',
     cta: { label: 'Reprendre mon dossier', url: '{{accountUrl}}' },
   },
+  REVIEW_REQUEST_CLIENT: {
+    subject: '{{subjectLine}}',
+    preheader: 'Votre avis compte beaucoup pour nous.',
+    title: 'Votre avis compte',
+    paragraphs: ['Bonjour {{clientFirstName}},', '{{introText}}'],
+    list: '{{servicesHtml}}',
+    rows: [['Prestation', '{{serviceName}}'], ['Date', '{{completedAt}}']],
+    cta: { label: 'Laisser mon avis', url: '{{reviewUrl}}' },
+    note: 'Cela prend moins d’une minute : une note de 1 à 5 et, si vous le souhaitez, quelques mots. Vous vous connecterez à votre espace client pour donner votre avis.',
+  },
   COMMERCE_GIFT_CARD_CLIENT: {
     subject: 'Votre carte cadeau est prête',
     preheader: 'Téléchargez votre carte cadeau.',

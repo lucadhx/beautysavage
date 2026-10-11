@@ -13,6 +13,7 @@ import * as commissionPayment from '../services/commissionPayment.service.js';
 import { siteUrlFor } from '../utils/siteOrigin.js';
 import * as customerAgenda from '../services/customerAgenda.service.js';
 import * as commerce from '../services/commerce.service.js';
+import * as reviewRequests from '../services/reviewRequest.service.js';
 import * as calendar from '../services/calendar.service.js';
 import * as sessions from '../services/formationSessions.service.js';
 
@@ -96,6 +97,9 @@ customerRoutes.post('/training-deliverables', authenticateCustomer, uploadTraini
 customerRoutes.delete('/training-deliverables', authenticateCustomer, asyncHandler(async (req, res) => ok(res, await commerce.deleteCustomerTrainingDeliverable(req.customer._id, req.body?.url || req.query.url))));
 customerRoutes.post('/training-submissions', authenticateCustomer, asyncHandler(async (req, res) => created(res, await commerce.createTrainingSubmission(req.customer._id, req.body))));
 customerRoutes.post('/reviews', authenticateCustomer, asyncHandler(async (req, res) => created(res, await commerce.createReview(req.customer._id, req.body))));
+// Demandes d'avis : réservées à la cliente visée (le lien de l'e-mail ne suffit pas, il faut sa session).
+customerRoutes.get('/review-requests', authenticateCustomer, asyncHandler(async (req, res) => ok(res, await reviewRequests.listPendingReviews(req.customer._id, { focus: req.query.demande || null }))));
+customerRoutes.post('/review-requests/:id/review', authenticateCustomer, rateLimit({ windowMs: 60_000, max: 20 }), asyncHandler(async (req, res) => created(res, await reviewRequests.submitRequestedReview(req.customer._id, req.params.id, req.body))));
 // L'agenda de la cliente : prochains rendez-vous / sessions, solde sur place, conditions d'annulation.
 customerRoutes.get('/appointments', authenticateCustomer, asyncHandler(async (req, res) => {
   res.set('Cache-Control', 'no-store');

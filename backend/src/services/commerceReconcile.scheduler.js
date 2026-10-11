@@ -1,6 +1,7 @@
 import { logger } from '../utils/logger.js';
 import { reconcileInstituteCheckouts } from './commerce.service.js';
 import { notifyFinishedCommissionMonths, reconcileCommissionPayments } from './commissionPayment.service.js';
+import { processReviewRequests } from './reviewRequest.service.js';
 
 /**
  * RATTRAPAGE DES PAIEMENTS CLIENTS — toutes les 3 minutes, les ventes encore
@@ -27,6 +28,12 @@ async function cycle() {
       await notifyFinishedCommissionMonths();
     } catch (err) {
       logger.warn(`[commission] rattrapage interrompu : ${err.message}`);
+    }
+    try {
+      // Demandes d'avis : prestations terminées détectées, envois et relances dus.
+      await processReviewRequests();
+    } catch (err) {
+      logger.warn(`[avis] passage interrompu : ${err.message}`);
     } finally {
       running = null;
     }

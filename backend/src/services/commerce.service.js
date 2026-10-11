@@ -32,6 +32,7 @@ import { configuredSiteUrl } from '../utils/siteOrigin.js';
 import { view as commissionView } from './commissionPayment.service.js';
 import { emitAppointmentsBooked, isPendingInstituteAccount, rotatePasswordResetToken, sendCustomerAccessLink } from './commerceCustomer.service.js';
 import { emitAndDispatch } from './events/domainEvent.service.js';
+import { normalizeReviewRequestConfig } from './reviewRequestConfig.js';
 import {
   activeInstituteMode,
   assertInstituteKeyMatchesMode,
@@ -2684,6 +2685,8 @@ export async function upsertProduct(payload) {
     service: payload.service || {},
     paymentRules: payload.paymentRules || {},
     bookingRules: payload.bookingRules || {},
+    // Demande d'avis : normalisée (unités, bornes) ; absente, la fiche garde la sienne.
+    reviewRequest: payload.reviewRequest !== undefined ? normalizeReviewRequestConfig(payload.reviewRequest) : (previous?.reviewRequest ?? null),
     seo: {
       metaTitle: String(payload.seo?.metaTitle ?? previous?.seo?.metaTitle ?? '').trim().slice(0, 120),
       metaDescription: String(payload.seo?.metaDescription ?? previous?.seo?.metaDescription ?? '').trim().slice(0, 320),

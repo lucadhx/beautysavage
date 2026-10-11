@@ -309,6 +309,21 @@ export const DOMAIN_EVENT_REGISTRY = Object.freeze({
     }).strict(),
   },
 
+  'review.requested': {
+    type: 'review.requested',
+    description: "Une ou plusieurs prestations/formations terminees : la cliente est invitee a laisser son avis (premier envoi ou relance).",
+    entityTypes: [ENTITY_TYPE.CUSTOMER],
+    retentionClass: RETENTION_CLASS.OPERATIONAL,
+    payloadSchema: z.object({
+      customerId: z.string().max(64),
+      reviewRequestIds: z.array(z.string().max(64)).min(1).max(20),
+      productTitles: z.array(z.string().max(180)).min(1).max(20),
+      completedAt: z.string().max(40),
+      reminder: z.boolean(),
+      requestedAt: z.string().max(40),
+    }).strict(),
+  },
+
   'training.submission.validated': {
     type: 'training.submission.validated',
     description: "L'institut a valide le dossier final d'une formation.",

@@ -10,6 +10,7 @@ import { ConfirmDialog, Modal } from '@/components/ui/dialog';
 import { Dropdown } from '@/components/base/dropdown/dropdown';
 import { CommercePageFrame, KIND_LABEL, PromotionStateBadge, cents, type CommerceProduct, type ProductKind } from './CommerceShared';
 import { ToneSection, toneTabClass, type EditorTone } from './editorTones';
+import { DEFAULT_REVIEW_REQUEST, ReviewRequestEditor } from './ReviewRequestEditor';
 import { OptionsManager } from './OptionsManager';
 import { ProductSeoSection } from './ProductSeoSection';
 import { PublicationStatusWidget } from './PublicationStatusWidget';
@@ -21,7 +22,7 @@ import { FloatingSaveWidget } from '@/components/ui/FloatingSaveWidget';
 import { useFloatingSave } from '@/hooks/useFloatingSave';
 import { useGuardedNavigate } from '@/components/LeaveGuard';
 
-type TabId = 'infos' | 'horaires' | 'modules' | 'sessions' | 'promotion' | 'options' | 'evaluation';
+type TabId = 'infos' | 'horaires' | 'modules' | 'sessions' | 'promotion' | 'options' | 'evaluation' | 'reviews';
 
 const EMPTY: Partial<CommerceProduct> = {
   title: '',
@@ -41,6 +42,7 @@ const EMPTY: Partial<CommerceProduct> = {
   training: { durationDays: 1, formalities: '', cancellationPolicy: '', location: '', accessMode: 'IMMEDIATE' },
   promotion: { enabled: false, type: 'PERCENT', value: 0, startsAt: '', endsAt: '' },
   evaluation: { enabled: false, version: 1, showScoreToCustomer: false, sections: [], deliverables: [] },
+  reviewRequest: DEFAULT_REVIEW_REQUEST,
 };
 
 function readPath<T>(source: unknown, path: string, fallback: T): T {
@@ -156,6 +158,7 @@ export default function CommerceFormationEditPage() {
     { id: 'promotion', label: 'Promotion', tone: 'promotion' },
     { id: 'options', label: 'Options', tone: 'options' },
     { id: 'evaluation', label: 'Évaluation finale', tone: 'evaluation' },
+    { id: 'reviews', label: 'Avis', tone: 'reviews' },
   ] satisfies { id: TabId; label: string; tone: EditorTone }[];
 
   const patch = (path: string, value: unknown) => setProduct((p) => writePath(p as Record<string, unknown>, path, value) as Partial<CommerceProduct>);
@@ -322,6 +325,13 @@ export default function CommerceFormationEditPage() {
         <OptionsManager rows={array('options')} onChange={(rows) => setArray('options', rows)} subject="la formation" />
       )}
       {tab === 'evaluation' && <EvaluationTabV2 product={product} patch={patch} />}
+      {tab === 'reviews' && (
+        <ReviewRequestEditor
+          value={product.reviewRequest}
+          onChange={(c) => patch('reviewRequest', c)}
+          anchor={distanciel ? 'après votre validation manuelle de la formation' : 'après la fin de la session'}
+        />
+      )}
       <ConfirmDialog
         open={Boolean(pendingKind)}
         onClose={() => setPendingKind(null)}

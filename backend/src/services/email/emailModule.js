@@ -2,6 +2,7 @@
 import { registerVariableResolver } from './emailVariableResolvers.js';
 import { resolveCommissionPaymentDue } from './commissionVariableResolver.js';
 import { registerRelevanceGuard } from '../events/actionRelevance.js';
+import { reviewRequestStillRelevant } from '../reviewRequest.service.js';
 import { registerEmailActionHandlers } from './sendEmailHandler.js';
 import { registerReportIncidentHandler } from '../events/reportIncidentHandler.js';
 import { refreshContracts } from './emailTemplateContract.service.js';
@@ -23,6 +24,7 @@ import {
   resolveTrainingSubmissionAdmin,
   resolveSessionRescheduledClient,
   resolveSessionCancelledClient,
+  resolveReviewRequestClient,
   resolveCustomerEmailVerification,
   resolveCustomerPasswordReset,
   resolveGiftCardIssuedClient,
@@ -78,6 +80,9 @@ export async function initEmailModule({ skipBootstrap = false } = {}) {
   registerVariableResolver('TRAINING_REJECTED_CLIENT', resolveTrainingDecisionClient);
   registerVariableResolver('FORMATION_SESSION_RESCHEDULED_CLIENT', resolveSessionRescheduledClient);
   registerVariableResolver('FORMATION_SESSION_CANCELLED_CLIENT', resolveSessionCancelledClient);
+  registerVariableResolver('REVIEW_REQUEST_CLIENT', resolveReviewRequestClient);
+  // Un avis reçu entre la planification et l'envoi annule l'e-mail.
+  registerRelevanceGuard('review.requested', reviewRequestStillRelevant);
 
   /**
    * Cycle de paiement et incidents techniques.

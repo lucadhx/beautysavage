@@ -29,7 +29,8 @@ export type EditorTone =
   | 'deliverable'
   | 'payment'
   | 'photos'
-  | 'advanced';
+  | 'advanced'
+  | 'reviews';
 
 interface ToneClasses {
   /** Liseré et bordure du bloc. */
@@ -57,6 +58,7 @@ const TONES: Record<EditorTone, ToneClasses> = {
   boost: { border: 'border-rose-200 dark:border-rose-900', head: 'bg-rose-100/80 text-rose-950 dark:bg-rose-950/60 dark:text-rose-100', body: 'bg-rose-50/40 dark:bg-rose-950/10', dot: 'bg-rose-500', tab: 'bg-rose-600 text-white' },
   options: { border: 'border-teal-200 dark:border-teal-900', head: 'bg-teal-100/80 text-teal-950 dark:bg-teal-950/60 dark:text-teal-100', body: 'bg-teal-50/40 dark:bg-teal-950/10', dot: 'bg-teal-500', tab: 'bg-teal-600 text-white' },
   evaluation: { border: 'border-blue-200 dark:border-blue-900', head: 'bg-blue-100/80 text-blue-950 dark:bg-blue-950/60 dark:text-blue-100', body: 'bg-blue-50/40 dark:bg-blue-950/10', dot: 'bg-blue-500', tab: 'bg-blue-600 text-white' },
+  reviews: { border: 'border-yellow-200 dark:border-yellow-900', head: 'bg-yellow-100/80 text-yellow-950 dark:bg-yellow-950/60 dark:text-yellow-100', body: 'bg-yellow-50/40 dark:bg-yellow-950/10', dot: 'bg-yellow-500', tab: 'bg-yellow-600 text-white' },
   question: { border: 'border-indigo-200 dark:border-indigo-900', head: 'bg-indigo-100/80 text-indigo-950 dark:bg-indigo-950/60 dark:text-indigo-100', body: 'bg-indigo-50/40 dark:bg-indigo-950/10', dot: 'bg-indigo-500', tab: 'bg-indigo-600 text-white' },
   deliverable: { border: 'border-orange-200 dark:border-orange-900', head: 'bg-orange-100/80 text-orange-950 dark:bg-orange-950/60 dark:text-orange-100', body: 'bg-orange-50/40 dark:bg-orange-950/10', dot: 'bg-orange-500', tab: 'bg-orange-600 text-white' },
   payment: { border: 'border-emerald-200 dark:border-emerald-900', head: 'bg-emerald-100/80 text-emerald-950 dark:bg-emerald-950/60 dark:text-emerald-100', body: 'bg-emerald-50/40 dark:bg-emerald-950/10', dot: 'bg-emerald-500', tab: 'bg-emerald-600 text-white' },
