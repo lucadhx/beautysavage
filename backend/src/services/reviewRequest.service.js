@@ -49,6 +49,7 @@ async function discoverySince(now) {
  */
 export async function ensureReviewRequest({ customerId, product, sourceKey, completedAt, saleId = null, title = '', origin = 'AUTO', sendNow = false, now = new Date() }) {
   if (!customerId || !product || !REVIEWABLE_KINDS.includes(product.kind)) return null;
+  if (product.status && product.status !== 'PUBLISHED') return null;
   const config = effectiveReviewRequestConfig(product);
   if (!config.enabled) return null;
   const steps = [config.delay, ...config.reminders];
@@ -131,7 +132,9 @@ export async function listCompletions({ from, to }) {
   }
 
   const products = new Map((await CommerceProduct.find({ _id: { $in: [...productIds] } }).select('title kind reviewRequest status').lean()).map((p) => [String(p._id), p]));
-  return out.map((c) => ({ ...c, product: products.get(c.productId) || null })).filter((c) => c.product);
+  // Seules les fiches PUBLIÉES se notent : une fiche retirée ou devenue une
+  // option (« Options pédicure ») n'appelle pas d'avis.
+  return out.map((c) => ({ ...c, product: products.get(c.productId) || null })).filter((c) => c.product?.status === 'PUBLISHED');
 }
 
 export async function discoverReviewRequests(now = new Date()) {
