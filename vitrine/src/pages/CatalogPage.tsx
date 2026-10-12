@@ -62,17 +62,17 @@ export default function CatalogPage({ kind = 'all' }: { kind?: 'all' | 'training
   const searchLabel = kind === 'training' ? 'Rechercher une formation' : kind === 'service' ? 'Rechercher une prestation' : kind === 'gift' ? 'Rechercher une carte cadeau' : 'Rechercher dans la boutique';
 
   return (
-    <section className="mx-auto min-h-screen max-w-6xl px-5 pb-24 pt-32 md:px-8">
+    <section className="mx-auto min-h-screen max-w-6xl px-4 pb-16 pt-20 sm:px-5 sm:pb-24 sm:pt-32 md:px-8">
       <div className="max-w-2xl">
-        <p className="text-sm font-semibold uppercase tracking-[0.18em]" style={{ color: 'var(--v-accent)' }}>BeautySavage</p>
-        <h1 className="mt-4 text-4xl font-semibold tracking-normal md:text-6xl">{intro.title}</h1>
-        <p className="mt-5 text-lg leading-8" style={{ color: 'var(--v-muted-foreground)' }}>
+        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] sm:text-sm sm:tracking-[0.18em]" style={{ color: 'var(--v-accent)' }}>BeautySavage</p>
+        <h1 className="mt-1.5 text-[1.75rem] font-semibold leading-tight tracking-normal sm:mt-4 sm:text-4xl md:text-6xl">{intro.title}</h1>
+        <p className="mt-2 text-sm leading-6 sm:mt-5 sm:text-lg sm:leading-8" style={{ color: 'var(--v-muted-foreground)' }}>
           {intro.text}
         </p>
       </div>
       {error && <p className="mt-8 rounded-md border px-4 py-3" style={{ borderColor: 'var(--v-border)' }}>{error}</p>}
       {inKind.length > 0 && (
-        <form role="search" className="mt-10 flex flex-wrap items-center gap-3" onSubmit={(event) => event.preventDefault()}>
+        <form role="search" className="mt-5 flex flex-wrap items-center gap-3 sm:mt-10" onSubmit={(event) => event.preventDefault()}>
           <CatalogSearchInput value={query} onChange={setQuery} label={searchLabel} />
           {query && (
             <p className="text-sm" style={{ color: 'var(--v-muted-foreground)' }} aria-live="polite" data-testid="catalog-search-count">
@@ -82,9 +82,9 @@ export default function CatalogPage({ kind = 'all' }: { kind?: 'all' | 'training
         </form>
       )}
       {kind === 'service' && !query && collections === null ? <CollectionGridSkeleton /> : kind === 'service' && !query && groups.length > 0 ? <CollectionGrid groups={groups} /> : (
-      <div className="mt-8 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+      <div className="mt-5 grid grid-cols-2 gap-3 sm:mt-8 sm:gap-5 lg:grid-cols-3">
         {filtered.length === 0 && !error ? (
-          <p className="rounded-lg border border-dashed p-5 text-sm md:col-span-2 lg:col-span-3" style={{ borderColor: 'var(--v-border)', color: 'var(--v-muted-foreground)' }}>
+          <p className="col-span-2 rounded-lg border border-dashed p-5 text-sm lg:col-span-3" style={{ borderColor: 'var(--v-border)', color: 'var(--v-muted-foreground)' }}>
             {query ? 'Aucune offre ne correspond à cette recherche.' : 'Les offres publiées depuis le manager apparaîtront ici.'}
           </p>
         ) : filtered.map((product) => (

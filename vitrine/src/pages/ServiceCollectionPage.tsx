@@ -72,7 +72,7 @@ export default function ServiceCollectionPage() {
   if (collections && items.length && !group) return <NotFoundPage />;
 
   return (
-    <section className="mx-auto min-h-screen max-w-6xl px-5 pb-24 pt-28 md:px-8" data-testid="collection-page">
+    <section className="mx-auto min-h-screen max-w-6xl px-4 pb-16 pt-20 sm:px-5 sm:pb-24 sm:pt-28 md:px-8" data-testid="collection-page">
       {/* Retour collant : il glisse sous la barre de navigation et y reste. */}
       <div
         className="sticky z-20 -mx-2 px-2 py-2"
@@ -96,13 +96,13 @@ export default function ServiceCollectionPage() {
       </div>
       {!group ? <CollectionGridSkeleton /> : (
         <>
-          <div className="mt-6 max-w-3xl">
-            <p className="text-sm font-semibold uppercase tracking-[0.18em]" style={{ color: 'var(--v-accent)' }}>Prestations</p>
-            <h1 className="mt-4 text-4xl font-semibold tracking-normal md:text-6xl">{group.title}</h1>
-            {group.description && <p className="mt-5 text-lg leading-8" style={{ color: 'var(--v-muted-foreground)' }}>{group.description}</p>}
-            <p className="mt-3 text-sm" style={{ color: 'var(--v-muted-foreground)' }}>{group.items.length} prestation{group.items.length > 1 ? 's' : ''}</p>
+          <div className="mt-3 max-w-3xl sm:mt-6">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] sm:text-sm sm:tracking-[0.18em]" style={{ color: 'var(--v-accent)' }}>Prestations</p>
+            <h1 className="mt-1.5 text-[1.75rem] font-semibold leading-tight tracking-normal sm:mt-4 sm:text-4xl md:text-6xl">{group.title}</h1>
+            {group.description && <p className="mt-2 text-sm leading-6 sm:mt-5 sm:text-lg sm:leading-8" style={{ color: 'var(--v-muted-foreground)' }}>{group.description}</p>}
+            <p className="mt-1.5 text-xs sm:mt-3 sm:text-sm" style={{ color: 'var(--v-muted-foreground)' }}>{group.items.length} prestation{group.items.length > 1 ? 's' : ''}</p>
           </div>
-          <form role="search" className="mt-10 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center" onSubmit={(event) => event.preventDefault()}>
+          <form role="search" className="mt-5 flex flex-col gap-3 sm:mt-10 sm:flex-row sm:flex-wrap sm:items-center" onSubmit={(event) => event.preventDefault()}>
             <CatalogSearchInput value={query} onChange={(v) => setParam('q', v, '')} label="Rechercher dans la collection" />
             <SortMenu value={sort} options={SORTS} onChange={(k) => setParam('tri', k, 'ordre')} />
             {query && (
@@ -111,16 +111,16 @@ export default function ServiceCollectionPage() {
               </p>
             )}
           </form>
-          <div className="mt-8 grid gap-5 md:grid-cols-2 lg:grid-cols-3" data-testid="collection-items">
+          <div className="mt-5 grid grid-cols-2 gap-3 sm:mt-8 sm:gap-5 lg:grid-cols-3" data-testid="collection-items">
             {shown.length === 0 ? (
-              <p className="rounded-lg border border-dashed p-5 text-sm md:col-span-2 lg:col-span-3" style={{ borderColor: 'var(--v-border)', color: 'var(--v-muted-foreground)' }}>
+              <p className="col-span-2 rounded-lg border border-dashed p-5 text-sm lg:col-span-3" style={{ borderColor: 'var(--v-border)', color: 'var(--v-muted-foreground)' }}>
                 Aucune prestation de cette collection ne correspond à cette recherche.
               </p>
             ) : shown.map((product) => (
               <CommerceProductCard key={product.id} item={product} review={reviews[product.id]} showKind={false} />
             ))}
           </div>
-          <div className="mt-12">
+          <div className="mt-8 sm:mt-12">
             <Link
               to="/prestations"
               className="inline-flex items-center gap-2 px-6 py-3 text-sm font-semibold"

@@ -185,13 +185,13 @@ export default function ProductPage() {
   );
 
   return (
-    <section className="mx-auto min-h-screen max-w-6xl px-5 pb-24 pt-32 md:px-8">
-      <div className="grid gap-10 lg:grid-cols-[minmax(0,1.05fr)_minmax(360px,0.95fr)] lg:items-start">
+    <section className="mx-auto min-h-screen max-w-6xl px-4 pb-16 pt-20 sm:px-5 sm:pb-24 sm:pt-32 md:px-8">
+      <div className="grid gap-5 sm:gap-10 lg:grid-cols-[minmax(0,1.05fr)_minmax(360px,0.95fr)] lg:items-start">
         <div>
-          <div className="relative mb-7 overflow-hidden rounded-lg border" style={{ borderColor: 'var(--v-border)', background: 'var(--v-surface)' }}>
+          <div className="relative mb-4 overflow-hidden rounded-lg border sm:mb-7" style={{ borderColor: 'var(--v-border)', background: 'var(--v-surface)' }}>
             <PromoBadge product={product} large />
             {coverUrl ? (
-              <img src={coverUrl} alt={product.title} className="aspect-square w-full object-cover" />
+              <img src={coverUrl} alt={product.title} className="aspect-[4/3] w-full object-cover sm:aspect-square" />
             ) : (
               <div className="grid aspect-square place-items-center" style={{ color: 'var(--v-muted-foreground)' }}>
                 <ImageIcon className="h-12 w-12" />
@@ -215,10 +215,10 @@ export default function ProductPage() {
             </div>
           )}
         </div>
-        <aside className="rounded-lg border p-5" style={{ borderColor: 'var(--v-border)', background: 'var(--v-surface)' }}>
-          <p className="text-xs font-semibold uppercase tracking-[0.18em]" style={{ color: 'var(--v-accent)' }}>{kindLabel(product.kind)}</p>
-          <h1 className="mt-4 text-4xl font-semibold tracking-normal md:text-5xl">{product.title}</h1>
-          <RichDescription value={product.description} className="mt-4 text-base leading-7" style={{ color: 'var(--v-muted-foreground)' }} />
+        <aside className="rounded-lg border p-4 sm:p-5" style={{ borderColor: 'var(--v-border)', background: 'var(--v-surface)' }}>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] sm:text-xs sm:tracking-[0.18em]" style={{ color: 'var(--v-accent)' }}>{kindLabel(product.kind)}</p>
+          <h1 className="mt-1.5 text-2xl font-semibold leading-tight tracking-normal sm:mt-4 sm:text-4xl md:text-5xl">{product.title}</h1>
+          <RichDescription value={product.description} className="mt-3 text-sm leading-6 sm:mt-4 sm:text-base sm:leading-7" style={{ color: 'var(--v-muted-foreground)' }} />
           <div className="mt-6 grid gap-3">
             {product.requiresLegalWaiver && <Line text="Accès confirmé après acceptation des conditions de formation." />}
             {product.kind === 'DISTANCE_TRAINING' && <Line text="Accès aux modules depuis votre espace client après achat." />}

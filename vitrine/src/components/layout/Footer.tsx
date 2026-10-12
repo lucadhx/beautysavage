@@ -66,7 +66,7 @@ export function Footer() {
         borderTop: '1px solid var(--v-border)',
       }}
     >
-      <div className="mx-auto max-w-6xl px-5 py-16 md:px-8 md:py-20">
+      <div className="mx-auto max-w-6xl px-4 py-10 sm:px-5 sm:py-16 md:px-8 md:py-20">
         {/*
           L'APPEL FINAL — la dernière chose que lit quelqu'un qui a tout lu.
 
@@ -77,19 +77,19 @@ export function Footer() {
         */}
         <Link
           to="/contact"
-          className="group flex flex-wrap items-end justify-between gap-6 border-b pb-14 md:pb-16"
+          className="group flex flex-wrap items-end justify-between gap-4 border-b pb-8 sm:gap-6 sm:pb-14 md:pb-16"
           style={{ borderColor: 'var(--v-border)' }}
         >
           <p
-            className="max-w-2xl text-3xl font-semibold leading-[1.1] tracking-[-0.02em] md:text-5xl"
+            className="max-w-2xl text-2xl font-semibold leading-[1.15] tracking-[-0.02em] sm:text-3xl md:text-5xl"
             style={{ fontFamily: 'var(--font-heading)' }}
           >
             Une question ou une envie de rendez-vous ?
           </p>
-          <ArrowUpRight className="h-8 w-8 shrink-0 transition-transform duration-300 group-hover:translate-x-1 group-hover:-translate-y-1" />
+          <ArrowUpRight className="h-6 w-6 shrink-0 sm:h-8 sm:w-8 transition-transform duration-300 group-hover:translate-x-1 group-hover:-translate-y-1" />
         </Link>
 
-        <div className="mt-14 grid gap-12 md:grid-cols-4">
+        <div className="mt-8 grid gap-8 sm:mt-14 sm:gap-12 md:grid-cols-4">
           <div className="md:col-span-2">
             {logo ? (
               <img src={logo} alt={company?.name || ''} className="h-9 object-contain" />

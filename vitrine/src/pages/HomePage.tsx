@@ -37,34 +37,34 @@ export default function HomePage() {
 
   return (
     <>
-      <section className="px-5 pb-12 pt-28 md:px-8" style={{ background: 'var(--v-background)' }}>
+      <section className="px-4 pb-8 pt-20 sm:px-5 sm:pb-12 sm:pt-28 md:px-8" style={{ background: 'var(--v-background)' }}>
         <div className="mx-auto max-w-7xl">
-          <div className="relative min-h-[520px] overflow-hidden rounded-lg">
+          <div className="relative overflow-hidden rounded-lg sm:min-h-[520px]">
             {heroImage ? (
               <img src={heroImage} alt="" className="absolute inset-0 h-full w-full object-cover" />
             ) : (
               <div className="absolute inset-0" style={{ background: 'var(--v-menu-background)' }} />
             )}
             <div className="absolute inset-0 bg-black/45" />
-            <div className="relative flex min-h-[520px] max-w-5xl flex-col justify-center px-7 py-14 text-white md:px-16">
+            <div className="relative flex min-h-[15rem] max-w-5xl flex-col justify-center px-5 py-6 text-white sm:min-h-[520px] sm:px-7 sm:py-14 md:px-16">
               {/* Accroche, titre et slogan : ceux de la page « Informations » du Manager, en direct. */}
-              <p className="text-sm font-semibold uppercase tracking-[0.18em]" style={{ color: 'var(--v-accent)' }} data-testid="hero-kicker">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] sm:text-sm sm:tracking-[0.18em]" style={{ color: 'var(--v-accent)' }} data-testid="hero-kicker">
                 {company?.heroKicker?.trim() || "Le geste. La certification. L'institut."}
               </p>
-              <h1 className="mt-6 max-w-4xl text-5xl font-semibold leading-[1.02] tracking-normal md:text-7xl" data-testid="hero-title">
+              <h1 className="mt-2 max-w-4xl text-[1.85rem] font-semibold leading-[1.05] tracking-normal sm:mt-6 sm:text-5xl md:text-7xl" data-testid="hero-title">
                 {name}
               </h1>
-              <p className="mt-6 max-w-3xl text-xl leading-8 text-white/88" data-testid="hero-tagline">
+              <p className="mt-2 max-w-3xl text-sm leading-snug text-white/88 sm:mt-6 sm:text-xl sm:leading-8" data-testid="hero-tagline">
                 {company?.tagline?.trim() || 'Ongles, regard, prestations institut et formations beauté à Nice.'}
               </p>
-              <div className="mt-8 flex flex-wrap gap-3">
-                <Link to="/formations" className="inline-flex items-center gap-2 rounded-md px-6 py-3 text-sm font-semibold" style={{ background: 'var(--v-accent)', color: '#111111' }}>
+              <div className="mt-4 flex flex-wrap gap-2 sm:mt-8 sm:gap-3">
+                <Link to="/formations" className="inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-xs font-semibold sm:gap-2 sm:px-6 sm:py-3 sm:text-sm" style={{ background: 'var(--v-accent)', color: '#111111' }}>
                   Je veux me former <ArrowRight className="h-4 w-4" />
                 </Link>
-                <Link to="/prestations" className="inline-flex items-center gap-2 rounded-md bg-white px-6 py-3 text-sm font-semibold text-black">
+                <Link to="/prestations" className="inline-flex items-center gap-2 rounded-md bg-white px-3 py-2 text-xs font-semibold text-black sm:px-6 sm:py-3 sm:text-sm">
                   Réserver une prestation
                 </Link>
-                <Link to="/cartes-cadeaux" className="inline-flex items-center gap-2 rounded-md border border-white/45 px-6 py-3 text-sm font-semibold text-white">
+                <Link to="/cartes-cadeaux" className="inline-flex items-center gap-2 rounded-md border border-white/45 px-3 py-2 text-xs font-semibold text-white sm:px-6 sm:py-3 sm:text-sm">
                   Offrir une carte cadeau
                 </Link>
               </div>
@@ -72,7 +72,7 @@ export default function HomePage() {
             </div>
           </div>
           {company?.homeIntro?.trim() && (
-            <p className="mx-auto mt-8 max-w-3xl whitespace-pre-line text-center text-lg leading-8" style={{ color: 'var(--v-muted-foreground)' }} data-testid="home-intro">
+            <p className="mx-auto mt-5 max-w-3xl whitespace-pre-line text-center text-sm leading-6 sm:mt-8 sm:text-lg sm:leading-8" style={{ color: 'var(--v-muted-foreground)' }} data-testid="home-intro">
               {company.homeIntro}
             </p>
           )}
@@ -94,11 +94,11 @@ export default function HomePage() {
 
       <ReviewsCarousel reviews={reviewItems} />
 
-      <section className="mx-auto max-w-6xl px-5 py-20 md:px-8">
+      <section className="mx-auto max-w-6xl px-4 py-10 sm:px-5 sm:py-20 md:px-8">
         <div className="grid gap-6 rounded-lg border p-6 md:grid-cols-[1fr_auto] md:items-center md:p-8" style={{ borderColor: 'var(--v-border)', background: 'var(--v-surface)' }}>
           <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.18em]" style={{ color: 'var(--v-accent)' }}>Espace client</p>
-            <h2 className="mt-3 text-3xl font-semibold tracking-normal">Achats, paniers et factures au même endroit.</h2>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] sm:text-sm sm:tracking-[0.18em]" style={{ color: 'var(--v-accent)' }}>Espace client</p>
+            <h2 className="mt-1.5 text-xl font-semibold leading-tight tracking-normal sm:mt-3 sm:text-3xl">Achats, paniers et factures au même endroit.</h2>
             <p className="mt-3 max-w-2xl text-sm leading-6" style={{ color: 'var(--v-muted-foreground)' }}>
               Chaque cliente peut créer son compte, reprendre son panier, suivre ses commandes et consulter ses factures.
             </p>
@@ -120,19 +120,19 @@ function ReviewsCarousel({ reviews }: { reviews: any[] }) {
   const visible = reviews.filter((review) => Number(review.rating || 0) > 0).slice(0, 12);
   if (visible.length === 0) return null;
   return (
-    <section className="mx-auto max-w-6xl px-5 py-16 md:px-8">
+    <section className="mx-auto max-w-6xl px-4 py-9 sm:px-5 sm:py-16 md:px-8">
       <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div>
-          <p className="text-sm font-semibold uppercase tracking-[0.18em]" style={{ color: 'var(--v-accent)' }}>Avis clientes</p>
-          <h2 className="mt-3 text-4xl font-semibold tracking-normal">Elles ont testé BeautySavage.</h2>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] sm:text-sm sm:tracking-[0.18em]" style={{ color: 'var(--v-accent)' }}>Avis clientes</p>
+          <h2 className="mt-1.5 text-2xl font-semibold leading-tight tracking-normal sm:mt-3 sm:text-4xl">Elles ont testé BeautySavage.</h2>
         </div>
       </div>
-      <div className="no-scrollbar -mx-5 mt-8 flex snap-x gap-4 overflow-x-auto px-5 pb-2 md:mx-0 md:px-0">
+      <div className="no-scrollbar -mx-4 mt-5 flex snap-x scroll-px-4 gap-3 overflow-x-auto px-4 pb-2 sm:-mx-5 sm:mt-8 sm:scroll-px-5 sm:gap-4 sm:px-5 md:mx-0 md:px-0">
         {visible.map((review, index) => {
           const rating = Math.round(Number(review.rating || 0));
           const productTitle = review.productId?.title || review.sourceLabel || 'BeautySavage';
           return (
-            <article key={review._id || index} className="min-h-56 w-[82vw] max-w-[360px] shrink-0 snap-start rounded-lg border p-5" style={{ borderColor: 'var(--v-border)', background: 'var(--v-surface)' }}>
+            <article key={review._id || index} className="w-[70vw] max-w-[300px] shrink-0 snap-start rounded-lg border p-4 sm:min-h-56 sm:w-[82vw] sm:max-w-[360px] sm:p-5" style={{ borderColor: 'var(--v-border)', background: 'var(--v-surface)' }}>
               <div className="flex items-center gap-1" aria-label={`${rating} sur 5`}>
                 {Array.from({ length: 5 }).map((_, pawIndex) => (
                   <PawPrint
@@ -176,24 +176,24 @@ function CatalogBand({
   showKind?: boolean;
 }) {
   return (
-    <section className="mx-auto max-w-6xl px-5 py-16 md:px-8">
+    <section className="mx-auto max-w-6xl px-4 py-9 sm:px-5 sm:py-16 md:px-8">
       <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div>
-          <p className="text-sm font-semibold uppercase tracking-[0.18em]" style={{ color: 'var(--v-accent)' }}>BeautySavage</p>
-          <h2 className="mt-3 text-4xl font-semibold tracking-normal">{title}</h2>
-          <p className="mt-3 text-sm" style={{ color: 'var(--v-muted-foreground)' }}>{subtitle}</p>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] sm:text-sm sm:tracking-[0.18em]" style={{ color: 'var(--v-accent)' }}>BeautySavage</p>
+          <h2 className="mt-1.5 text-2xl font-semibold leading-tight tracking-normal sm:mt-3 sm:text-4xl">{title}</h2>
+          <p className="mt-1.5 text-xs leading-5 sm:mt-3 sm:text-sm" style={{ color: 'var(--v-muted-foreground)' }}>{subtitle}</p>
         </div>
         <Link to={fallbackTo} className="hidden items-center gap-2 text-sm font-semibold md:inline-flex">
           {ctaLabel} <ArrowRight className="h-4 w-4" />
         </Link>
       </div>
-      <div className={mobileCarousel ? 'no-scrollbar -mx-5 mt-8 flex snap-x gap-4 overflow-x-auto px-5 pb-2 md:mx-0 md:grid md:grid-cols-3 md:overflow-visible md:px-0 md:pb-0' : 'mt-8 grid gap-4 md:grid-cols-3'}>
+      <div className={mobileCarousel ? 'no-scrollbar -mx-4 mt-5 flex snap-x scroll-px-4 gap-3 overflow-x-auto px-4 pb-2 sm:-mx-5 sm:mt-8 sm:scroll-px-5 sm:gap-4 sm:px-5 md:mx-0 md:grid md:grid-cols-3 md:overflow-visible md:px-0 md:pb-0' : 'mt-8 grid gap-4 md:grid-cols-3'}>
         {items.length === 0 ? (
           <p className="w-full rounded-lg border border-dashed p-5 text-sm text-muted-foreground md:col-span-3">
             Les offres seront visibles ici dès qu'elles seront publiées depuis le manager.
           </p>
         ) : items.map((item) => (
-          <div key={item.id} className={mobileCarousel ? 'w-[78vw] max-w-[330px] shrink-0 snap-start md:w-auto md:max-w-none' : ''}>
+          <div key={item.id} className={mobileCarousel ? 'w-[44vw] max-w-[220px] shrink-0 snap-start sm:w-[42vw] sm:max-w-[330px] md:w-auto md:max-w-none' : ''}>
             <CommerceProductCard item={item} review={reviews[item.id]} showKind={showKind} />
           </div>
         ))}
@@ -201,10 +201,10 @@ function CatalogBand({
       {mobileCarousel && items.length > 0 && (
         <Link
           to={fallbackTo}
-          className="mt-7 inline-flex w-full items-center justify-center gap-2 px-6 py-4 text-base font-semibold md:hidden"
+          className="mt-5 inline-flex w-full items-center justify-center gap-2 px-5 py-3 text-sm font-semibold md:hidden"
           style={{ background: 'var(--v-primary)', color: 'var(--v-primary-foreground)', borderRadius: 'var(--v-radius)' }}
         >
-          {ctaLabel} <ArrowRight className="h-5 w-5" />
+          {ctaLabel} <ArrowRight className="h-4 w-4" />
         </Link>
       )}
     </section>
@@ -213,13 +213,13 @@ function CatalogBand({
 
 function FormationBand({ items, reviews }: { items: CommerceProduct[]; reviews: Record<string, ProductReviewSummary> }) {
   return (
-    <section className="py-16" style={{ background: 'color-mix(in srgb, var(--v-primary) 10%, var(--v-background))' }}>
-      <div className="mx-auto max-w-6xl px-5 md:px-8">
+    <section className="py-9 sm:py-16" style={{ background: 'color-mix(in srgb, var(--v-primary) 10%, var(--v-background))' }}>
+      <div className="mx-auto max-w-6xl px-4 sm:px-5 md:px-8">
         <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.18em]" style={{ color: 'var(--v-accent)' }}>Academy</p>
-            <h2 className="mt-3 text-4xl font-semibold tracking-normal">Se former aux techniques BeautySavage.</h2>
-            <p className="mt-4 max-w-2xl text-sm leading-7" style={{ color: 'var(--v-muted-foreground)' }}>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] sm:text-sm sm:tracking-[0.18em]" style={{ color: 'var(--v-accent)' }}>Academy</p>
+            <h2 className="mt-1.5 text-2xl font-semibold leading-tight tracking-normal sm:mt-3 sm:text-4xl">Se former aux techniques BeautySavage.</h2>
+            <p className="mt-1.5 max-w-2xl text-xs leading-5 sm:mt-4 sm:text-sm sm:leading-7" style={{ color: 'var(--v-muted-foreground)' }}>
               Des parcours pour apprendre, pratiquer et suivre ses contenus depuis son compte client après achat.
             </p>
           </div>
@@ -227,13 +227,13 @@ function FormationBand({ items, reviews }: { items: CommerceProduct[]; reviews: 
             Je veux être formée <ArrowRight className="h-4 w-4" />
           </Link>
         </div>
-        <div className="no-scrollbar -mx-5 mt-8 flex snap-x gap-4 overflow-x-auto px-5 pb-2 md:mx-0 md:grid md:grid-cols-3 md:overflow-visible md:px-0 md:pb-0">
+        <div className="no-scrollbar -mx-4 mt-5 flex snap-x scroll-px-4 gap-3 overflow-x-auto px-4 pb-2 sm:-mx-5 sm:mt-8 sm:scroll-px-5 sm:gap-4 sm:px-5 md:mx-0 md:grid md:grid-cols-3 md:overflow-visible md:px-0 md:pb-0">
           {items.length === 0 ? (
             <div className="rounded-lg border border-dashed p-5 text-sm text-muted-foreground md:col-span-3">
               Les formations publiées apparaîtront ici.
             </div>
           ) : items.map((item) => (
-            <div key={item.id} className="w-[78vw] max-w-[330px] shrink-0 snap-start md:w-auto md:max-w-none">
+            <div key={item.id} className="w-[44vw] max-w-[220px] shrink-0 snap-start sm:w-[42vw] sm:max-w-[330px] md:w-auto md:max-w-none">
               <CommerceProductCard item={item} review={reviews[item.id]} />
             </div>
           ))}
@@ -241,15 +241,15 @@ function FormationBand({ items, reviews }: { items: CommerceProduct[]; reviews: 
         {items.length > 0 && (
           <Link
             to="/formations"
-            className="mt-7 inline-flex w-full items-center justify-center gap-2 px-6 py-4 text-base font-semibold md:hidden"
+            className="mt-5 inline-flex w-full items-center justify-center gap-2 px-5 py-3 text-sm font-semibold md:hidden"
             style={{ background: 'var(--v-primary)', color: 'var(--v-primary-foreground)', borderRadius: 'var(--v-radius)' }}
           >
-            Je veux être formée <ArrowRight className="h-5 w-5" />
+            Je veux être formée <ArrowRight className="h-4 w-4" />
           </Link>
         )}
-        <div className="mt-8 grid gap-4 rounded-lg border p-5 md:grid-cols-3" style={{ borderColor: 'var(--v-border)', background: 'color-mix(in srgb, var(--v-background) 58%, transparent)' }}>
+        <div className="mt-5 grid gap-2.5 rounded-lg border p-4 sm:mt-8 sm:gap-4 sm:p-5 md:grid-cols-3" style={{ borderColor: 'var(--v-border)', background: 'color-mix(in srgb, var(--v-background) 58%, transparent)' }}>
           {['Programmes structurés', 'Accès client après achat', 'Suivi des évaluations'].map((text) => (
-            <p key={text} className="flex items-center gap-3 text-sm font-medium">
+            <p key={text} className="flex items-center gap-2.5 text-xs font-medium sm:gap-3 sm:text-sm">
               <CheckCircle2 className="h-4 w-4" style={{ color: 'var(--v-accent)' }} />
               {text}
             </p>
@@ -280,16 +280,16 @@ function TrainingDeclarationBadge({ declaration }: { declaration?: { number: str
   const number = declaration?.number?.trim();
   if (!number) return null;
   return (
-    <div className="mt-8 max-w-xl" data-testid="nda-badge">
-      <div className="inline-flex items-center gap-3 rounded-lg border border-white/35 bg-white/95 px-4 py-3 text-left text-black shadow-lg backdrop-blur">
-        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full" style={{ background: 'var(--v-accent)', color: '#111111' }}>
-          <GraduationCap className="h-6 w-6" aria-hidden />
+    <div className="mt-4 max-w-xl sm:mt-8" data-testid="nda-badge">
+      <div className="inline-flex items-center gap-2 rounded-lg border border-white/35 bg-white/95 px-2.5 py-1.5 text-left text-black shadow-lg backdrop-blur sm:gap-3 sm:px-4 sm:py-3">
+        <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full sm:h-11 sm:w-11" style={{ background: 'var(--v-accent)', color: '#111111' }}>
+          <GraduationCap className="h-4 w-4 sm:h-6 sm:w-6" aria-hidden />
         </span>
         <span className="min-w-0">
-          <span className="block text-[11px] font-semibold uppercase tracking-[0.16em] text-black/60">Organisme de formation déclaré</span>
-          <span className="block text-lg font-semibold tabular-nums">NDA {formatNda(number)}</span>
+          <span className="block text-[9px] font-semibold uppercase tracking-[0.14em] text-black/60 sm:text-[11px] sm:tracking-[0.16em]">Organisme de formation déclaré</span>
+          <span className="block text-sm font-semibold tabular-nums sm:text-lg">NDA {formatNda(number)}</span>
         </span>
-        <BadgeCheck className="h-5 w-5 shrink-0 text-emerald-600" aria-hidden />
+        <BadgeCheck className="h-4 w-4 shrink-0 text-emerald-600 sm:h-5 sm:w-5" aria-hidden />
       </div>
     </div>
   );

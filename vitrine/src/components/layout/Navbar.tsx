@@ -108,10 +108,10 @@ export function Navbar() {
           borderBottom: `1px solid ${defile ? 'var(--v-border)' : 'transparent'}`,
         }}
       >
-        <div className="mx-auto flex h-20 max-w-6xl items-center justify-between px-5 md:px-8">
+        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:h-20 sm:px-5 md:px-8">
           <Link to="/" className="flex items-center gap-3" aria-label={nom}>
             {logo ? (
-              <img src={logo} alt={nom} className="h-8 w-auto md:h-9" />
+              <img src={logo} alt={nom} className="h-7 w-auto sm:h-8 md:h-9" />
             ) : (
               <span
                 className="text-base font-semibold tracking-[-0.02em] md:text-lg"

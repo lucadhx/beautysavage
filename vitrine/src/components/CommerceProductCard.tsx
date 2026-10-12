@@ -96,10 +96,10 @@ export function CommerceProductCard({
           </div>
         )}
       </div>
-      <div className="flex flex-1 flex-col p-5">
-        <div className="flex min-h-5 items-center justify-between gap-3">
+      <div className="flex flex-1 flex-col p-3 sm:p-5">
+        <div className="flex min-h-4 flex-wrap items-center justify-between gap-x-3 gap-y-1 sm:min-h-5">
           {showKind ? (
-            <span className="text-xs font-semibold uppercase tracking-[0.14em]" style={{ color: 'var(--v-accent)' }}>
+            <span className="text-[10px] font-semibold uppercase tracking-[0.12em] sm:text-xs sm:tracking-[0.14em]" style={{ color: 'var(--v-accent)' }}>
               {kindLabel(item.kind)}
             </span>
           ) : (
@@ -110,7 +110,7 @@ export function CommerceProductCard({
               {Array.from({ length: 5 }).map((_, index) => (
                 <PawPrint
                   key={index}
-                  className="h-3.5 w-3.5"
+                  className="h-3 w-3 sm:h-3.5 sm:w-3.5"
                   fill={index < roundedAverage ? 'currentColor' : 'none'}
                   style={{ color: 'var(--v-accent)' }}
                 />
@@ -119,19 +119,19 @@ export function CommerceProductCard({
             </span>
           )}
         </div>
-        <h3 className="mt-4 text-xl font-semibold tracking-normal">{item.title}</h3>
-        <p className="mt-2 line-clamp-2 min-h-12 text-sm leading-6" style={{ color: 'var(--v-muted-foreground)' }}>
+        <h3 className="mt-2 line-clamp-2 text-[0.95rem] font-semibold leading-snug tracking-normal sm:mt-4 sm:line-clamp-none sm:text-xl">{item.title}</h3>
+        <p className="mt-2 line-clamp-2 min-h-12 text-sm leading-6 max-sm:!hidden" style={{ color: 'var(--v-muted-foreground)' }}>
           {item.subtitle || richTextToPlain(item.description)}
         </p>
         {item.kind === 'SERVICE' && durationText(item.durationMinutes) && (
-          <p className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold" data-testid="card-duration">
-            <Clock className="h-4 w-4" style={{ color: 'var(--v-accent)' }} aria-hidden />
+          <p className="mt-1.5 inline-flex items-center gap-1 text-xs font-semibold sm:mt-3 sm:gap-1.5 sm:text-sm" data-testid="card-duration">
+            <Clock className="h-3.5 w-3.5 sm:h-4 sm:w-4" style={{ color: 'var(--v-accent)' }} aria-hidden />
             <span>{durationText(item.durationMinutes)}</span>
           </p>
         )}
-        <div className="mt-auto flex items-center justify-between gap-4 pt-6">
+        <div className="mt-auto flex items-center justify-between gap-2 pt-3 text-sm sm:gap-4 sm:pt-6 sm:text-base">
           {item.kind === 'GIFT_CARD' ? <strong>{price(item)}</strong> : <PromoPrice product={item} />}
-          <span className="inline-flex items-center gap-2 text-sm font-semibold">
+          <span className="hidden items-center gap-2 text-sm font-semibold sm:inline-flex">
             Voir <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
           </span>
         </div>

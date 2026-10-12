@@ -43,7 +43,7 @@ function groupCover(group: ServiceGroup) {
 
 export function CollectionGrid({ groups }: { groups: ServiceGroup[] }) {
   return (
-    <div className="mt-10 grid gap-5 md:grid-cols-2 lg:grid-cols-3" data-testid="collection-grid">
+    <div className="mt-5 grid grid-cols-2 gap-3 sm:mt-10 sm:gap-5 lg:grid-cols-3" data-testid="collection-grid">
       {groups.map((group) => {
         const cover = groupCover(group);
         return (
@@ -54,24 +54,24 @@ export function CollectionGrid({ groups }: { groups: ServiceGroup[] }) {
             style={{ borderColor: 'var(--v-border)', background: 'var(--v-surface)' }}
             data-testid="collection-card"
           >
-            <div className="relative aspect-[16/10] w-full overflow-hidden" style={{ background: 'color-mix(in srgb, var(--v-foreground) 5%, var(--v-background))' }}>
+            <div className="relative aspect-square w-full overflow-hidden sm:aspect-[16/10]" style={{ background: 'color-mix(in srgb, var(--v-foreground) 5%, var(--v-background))' }}>
               {cover ? (
                 <img src={cover} alt={group.title} loading="lazy" className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />
               ) : (
                 <div className="grid h-full place-items-center" style={{ color: 'var(--v-muted-foreground)' }}><ImageIcon className="h-8 w-8" /></div>
               )}
-              <span className="absolute left-3 top-3 rounded-full px-3 py-1 text-xs font-semibold" style={{ background: 'var(--v-background)', color: 'var(--v-foreground)' }}>
+              <span className="absolute left-2 top-2 rounded-full px-2 py-0.5 text-[10px] font-semibold sm:left-3 sm:top-3 sm:px-3 sm:py-1 sm:text-xs" style={{ background: 'var(--v-background)', color: 'var(--v-foreground)' }}>
                 {group.items.length} prestation{group.items.length > 1 ? 's' : ''}
               </span>
             </div>
-            <div className="flex flex-1 flex-col gap-3 p-5">
-              <h2 className="text-2xl font-semibold tracking-normal">{group.title}</h2>
-              {group.description && <p className="text-sm leading-6" style={{ color: 'var(--v-muted-foreground)' }}>{group.description}</p>}
+            <div className="flex flex-1 flex-col gap-2 p-3 sm:gap-3 sm:p-5">
+              <h2 className="text-base font-semibold leading-snug tracking-normal sm:text-2xl">{group.title}</h2>
+              {group.description && <p className="line-clamp-2 text-sm leading-6 max-sm:!hidden" style={{ color: 'var(--v-muted-foreground)' }}>{group.description}</p>}
               <span
-                className="mt-auto inline-flex items-center justify-center gap-2 px-5 py-3 text-sm font-semibold"
+                className="mt-auto inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold sm:gap-2 sm:px-5 sm:py-3 sm:text-sm"
                 style={{ background: 'var(--v-primary)', color: 'var(--v-primary-foreground)', borderRadius: 'var(--v-radius)' }}
               >
-                Voir les prestations <ArrowRight className="h-4 w-4" />
+                <span className="sm:hidden">Voir</span><span className="max-sm:hidden">Voir les prestations</span> <ArrowRight className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
               </span>
             </div>
           </Link>
@@ -83,11 +83,11 @@ export function CollectionGrid({ groups }: { groups: ServiceGroup[] }) {
 
 export function CollectionGridSkeleton() {
   return (
-    <div className="mt-10 grid gap-5 md:grid-cols-2 lg:grid-cols-3" aria-busy="true">
+    <div className="mt-5 grid grid-cols-2 gap-3 sm:mt-10 sm:gap-5 lg:grid-cols-3" aria-busy="true">
       {[0, 1, 2].map((i) => (
         <div key={i} className="overflow-hidden rounded-lg border" style={{ borderColor: 'var(--v-border)' }}>
-          <div className="aspect-[16/10] animate-pulse" style={{ background: 'color-mix(in srgb, var(--v-foreground) 8%, var(--v-background))' }} />
-          <div className="grid gap-3 p-5">
+          <div className="aspect-square animate-pulse sm:aspect-[16/10]" style={{ background: 'color-mix(in srgb, var(--v-foreground) 8%, var(--v-background))' }} />
+          <div className="grid gap-3 p-3 sm:p-5">
             <div className="h-6 w-2/3 animate-pulse rounded" style={{ background: 'color-mix(in srgb, var(--v-foreground) 8%, var(--v-background))' }} />
             <div className="h-10 animate-pulse rounded" style={{ background: 'color-mix(in srgb, var(--v-foreground) 8%, var(--v-background))' }} />
           </div>
