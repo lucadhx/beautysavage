@@ -13,7 +13,7 @@ export function PromoBadge({ product, large = false }: { product: CommerceProduc
       initial={{ scale: 0.6, opacity: 0, rotate: -8 }}
       animate={{ scale: 1, opacity: 1, rotate: 0 }}
       transition={{ type: 'spring', stiffness: 380, damping: 18 }}
-      className={`absolute right-3 top-3 z-10 rounded-full font-semibold shadow-lg ${large ? 'px-4 py-2 text-base' : 'px-3 py-1 text-sm'}`}
+      className={`absolute right-3 top-3 z-10 rounded-full font-semibold shadow-lg ${large ? 'px-4 py-2 text-base' : 'max-sm:right-2 max-sm:top-2 px-2 py-0.5 text-xs sm:px-3 sm:py-1 sm:text-sm'}`}
       style={{ background: 'var(--v-accent)', color: 'var(--v-accent-foreground)' }}
       data-testid="promo-badge"
     >

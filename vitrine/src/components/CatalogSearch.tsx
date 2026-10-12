@@ -26,7 +26,7 @@ export function CatalogSearchInput({ value, onChange, label }: { value: string; 
         onChange={(event) => onChange(event.target.value)}
         placeholder={`${label}…`}
         data-testid="catalog-search"
-        className="h-12 w-full rounded-full border pl-11 pr-11 text-base outline-none transition focus:ring-2"
+        className="h-11 w-full rounded-full border pl-11 pr-11 text-base outline-none transition focus:ring-2 sm:h-12"
         style={{ borderColor: 'var(--v-border)', background: 'var(--v-surface)', color: 'var(--v-foreground)' }}
       />
       {value && (
