@@ -127,13 +127,27 @@ export default function ProductPage() {
   const ctaRef = React.useRef<HTMLDivElement | null>(null);
   const [ctaBelow, setCtaBelow] = React.useState(false);
   React.useEffect(() => {
-    const el = ctaRef.current;
-    if (!el || typeof IntersectionObserver === 'undefined') return;
-    const observer = new IntersectionObserver(([entry]) => {
-      setCtaBelow(!entry.isIntersecting && entry.boundingClientRect.top > 0);
-    }, { threshold: 0.6 });
-    observer.observe(el);
-    return () => observer.disconnect();
+    // Mesure au défilement (une par image) plutôt qu'un IntersectionObserver :
+    // un saut d'un bout à l'autre de la page ne croise jamais les boutons, et
+    // l'observateur ne se manifestait alors pas — la barre ne revenait plus.
+    let frame = 0;
+    const measure = () => {
+      frame = 0;
+      const el = ctaRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      // « Atteints » dès que le haut des boutons entre dans les 85 % de l'écran.
+      setCtaBelow(rect.top > window.innerHeight * 0.85);
+    };
+    const schedule = () => { if (!frame) frame = window.requestAnimationFrame(measure); };
+    measure();
+    window.addEventListener('scroll', schedule, { passive: true });
+    window.addEventListener('resize', schedule);
+    return () => {
+      window.removeEventListener('scroll', schedule);
+      window.removeEventListener('resize', schedule);
+      if (frame) window.cancelAnimationFrame(frame);
+    };
   }, [product?.id]);
   const scrollToCta = () => ctaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
