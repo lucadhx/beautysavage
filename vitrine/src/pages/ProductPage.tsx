@@ -117,6 +117,26 @@ export default function ProductPage() {
     setBookingOpen(true);
   }
 
+  /**
+   * LES BOUTONS SONT-ILS ENCORE PLUS BAS QUE L'ÉCRAN ?
+   *
+   * Sur téléphone, la description pousse « Réserver » et « Ajouter au panier »
+   * hors de l'écran. Tant qu'ils sont DESSOUS, une barre fixe les reprend ;
+   * dès qu'on les atteint (ou qu'on les a dépassés), elle s'efface.
+   */
+  const ctaRef = React.useRef<HTMLDivElement | null>(null);
+  const [ctaBelow, setCtaBelow] = React.useState(false);
+  React.useEffect(() => {
+    const el = ctaRef.current;
+    if (!el || typeof IntersectionObserver === 'undefined') return;
+    const observer = new IntersectionObserver(([entry]) => {
+      setCtaBelow(!entry.isIntersecting && entry.boundingClientRect.top > 0);
+    }, { threshold: 0.6 });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [product?.id]);
+  const scrollToCta = () => ctaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
   if (!product) {
     return <section className="min-h-screen px-5 pt-32">{message || 'Chargement...'}</section>;
   }
@@ -233,6 +253,7 @@ export default function ProductPage() {
           {product.kind === 'GIFT_CARD' && (
             <GiftCardConfigurator value={giftCard} minimumEuros={giftMinimumEuros} onChange={setGiftCard} />
           )}
+          <div ref={ctaRef}>
           <button
             type="button"
             onClick={() => start()}
@@ -282,6 +303,7 @@ export default function ProductPage() {
               </AnimatePresence>
             </motion.button>
           )}
+          </div>
           <AnimatePresence>
             {added && (
               <motion.p initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="mt-2 text-center text-xs" style={{ color: 'var(--v-muted-foreground)' }}>
@@ -302,6 +324,76 @@ export default function ProductPage() {
           </div>
         </section>
       )}
+      {/*
+        BARRE D'ACTION FIXE — téléphone seulement, tant que les boutons sont
+        plus bas. Le fondu et la flèche au-dessus disent « la page continue » :
+        sans eux, une barre collée en bas se lit comme la fin de la page.
+      */}
+      <AnimatePresence>
+        {ctaBelow && !bookingOpen && (
+          <motion.div
+            key="sticky-cta"
+            initial={{ y: 90, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 90, opacity: 0 }}
+            transition={{ type: 'spring', stiffness: 380, damping: 34 }}
+            className="fixed inset-x-0 bottom-0 z-40 sm:hidden"
+            data-testid="sticky-cta"
+          >
+            <div
+              className="pointer-events-none relative h-16"
+              style={{ background: 'linear-gradient(to bottom, transparent, color-mix(in srgb, var(--v-background) 92%, transparent))', backdropFilter: 'blur(1.5px)', WebkitBackdropFilter: 'blur(1.5px)', maskImage: 'linear-gradient(to bottom, transparent, black 70%)', WebkitMaskImage: 'linear-gradient(to bottom, transparent, black 70%)' }}
+            />
+            <button
+              type="button"
+              onClick={scrollToCta}
+              aria-label="Faire défiler jusqu'aux détails et à la réservation"
+              className="absolute left-1/2 top-5 grid h-8 w-8 -translate-x-1/2 place-items-center rounded-full border shadow-sm"
+              style={{ borderColor: 'var(--v-border)', background: 'var(--v-background)', color: 'var(--v-foreground)' }}
+              data-testid="sticky-cta-scroll"
+            >
+              <ArrowDown className="h-4 w-4 motion-safe:animate-bounce" />
+            </button>
+            <div
+              className="flex items-center gap-2 border-t px-3 pt-2.5"
+              style={{ borderColor: 'var(--v-border)', background: 'var(--v-background)', paddingBottom: 'calc(0.625rem + env(safe-area-inset-bottom))' }}
+            >
+              <div className="min-w-0 flex-1 text-sm font-semibold leading-tight">
+                <p className="truncate text-xs font-medium" style={{ color: 'var(--v-muted-foreground)' }}>{product.title}</p>
+                {product.kind === 'GIFT_CARD' ? <span>{displayPrice}</span> : <PromoPrice product={product} />}
+              </div>
+              {product.kind === 'GIFT_CARD' ? (
+                <button type="button" onClick={scrollToCta} className="inline-flex h-10 items-center gap-1.5 rounded-md px-4 text-sm font-semibold" style={{ background: 'var(--v-primary)', color: 'var(--v-primary-foreground)' }}>
+                  <Gift className="h-4 w-4" /> Personnaliser
+                </button>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={(e) => (product.kind === 'IN_PERSON_TRAINING' ? start('cart') : addToCart(e.currentTarget))}
+                    disabled={adding}
+                    aria-label="Ajouter au panier"
+                    className="grid h-10 w-10 shrink-0 place-items-center rounded-md border-2"
+                    style={added ? { borderColor: '#059669', color: '#065f46', background: '#ecfdf5' } : { borderColor: 'var(--v-primary)', color: 'var(--v-foreground)' }}
+                    data-testid="sticky-cart"
+                  >
+                    {adding ? <Loader2 className="h-4 w-4 animate-spin" /> : added ? <CheckCircle2 className="h-4 w-4" /> : <ShoppingBag className="h-4 w-4" />}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => start()}
+                    className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-md px-4 text-sm font-semibold"
+                    style={{ background: 'var(--v-primary)', color: 'var(--v-primary-foreground)' }}
+                    data-testid="sticky-buy"
+                  >
+                    {reservable ? <><CalendarDays className="h-4 w-4" /> Réserver</> : 'Acheter'}
+                  </button>
+                </>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
       <AuthRequiredModal open={Boolean(authPrompt)} action={authPrompt?.action || 'buy'} unverified={authPrompt?.unverified} onClose={() => setAuthPrompt(null)} />
       {bookingOpen && (
         <BookingDialog
