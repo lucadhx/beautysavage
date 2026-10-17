@@ -37,16 +37,18 @@ export default function HomePage() {
 
   return (
     <>
-      <section className="px-4 pb-8 pt-20 sm:px-5 sm:pb-12 sm:pt-28 md:px-8" style={{ background: 'var(--v-background)' }}>
+      <section className="pb-8 pt-16 sm:px-5 sm:pb-12 sm:pt-28 md:px-8" style={{ background: 'var(--v-background)' }}>
         <div className="mx-auto max-w-7xl">
-          <div className="relative overflow-hidden rounded-lg sm:min-h-[520px]">
+          <div className="relative overflow-hidden sm:min-h-[520px] sm:rounded-lg">
             {heroImage ? (
               <img src={heroImage} alt="" className="absolute inset-0 h-full w-full object-cover" />
             ) : (
               <div className="absolute inset-0" style={{ background: 'var(--v-menu-background)' }} />
             )}
-            <div className="absolute inset-0 bg-black/45" />
-            <div className="relative flex min-h-[15rem] max-w-5xl flex-col justify-center px-5 py-6 text-white sm:min-h-[520px] sm:px-7 sm:py-14 md:px-16">
+            {/* Téléphone : l'image respire en haut, le noir monte seulement sous le texte. */}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-black/0 sm:hidden" />
+            <div className="absolute inset-0 hidden bg-black/45 sm:block" />
+            <div className="relative flex min-h-[calc(100svh-4rem-1.75rem)] max-w-5xl flex-col justify-end px-5 pb-6 pt-28 text-white sm:min-h-[520px] sm:justify-center sm:px-7 sm:py-14 md:px-16">
               {/* Accroche, titre et slogan : ceux de la page « Informations » du Manager, en direct. */}
               <p className="text-[10px] font-semibold uppercase tracking-[0.16em] sm:text-sm sm:tracking-[0.18em]" style={{ color: 'var(--v-accent)' }} data-testid="hero-kicker">
                 {company?.heroKicker?.trim() || "Le geste. La certification. L'institut."}
@@ -72,7 +74,7 @@ export default function HomePage() {
             </div>
           </div>
           {company?.homeIntro?.trim() && (
-            <p className="mx-auto mt-5 max-w-3xl whitespace-pre-line text-center text-sm leading-6 sm:mt-8 sm:text-lg sm:leading-8" style={{ color: 'var(--v-muted-foreground)' }} data-testid="home-intro">
+            <p className="mx-auto mt-5 max-w-3xl whitespace-pre-line px-4 text-center text-sm leading-6 sm:mt-8 sm:px-0 sm:text-lg sm:leading-8" style={{ color: 'var(--v-muted-foreground)' }} data-testid="home-intro">
               {company.homeIntro}
             </p>
           )}
@@ -116,41 +118,59 @@ export default function HomePage() {
   );
 }
 
+/**
+ * LES AVIS — une bande SOMBRE, couleurs inversées : le titre à gauche, les
+ * avis en colonnes séparées d'un filet, comme une page de magazine. Les
+ * pattes de la maison restent la note. Téléphone : un défilement horizontal
+ * aimanté qui démarre bien aligné à gauche.
+ */
 function ReviewsCarousel({ reviews }: { reviews: any[] }) {
-  const visible = reviews.filter((review) => Number(review.rating || 0) > 0).slice(0, 12);
+  const visible = reviews
+    .filter((review) => Number(review.rating || 0) > 0 && String(review.comment || '').trim())
+    .slice(0, 6);
   if (visible.length === 0) return null;
+  const filet = 'color-mix(in srgb, var(--v-menu-foreground) 18%, transparent)';
+  const muet = 'color-mix(in srgb, var(--v-menu-foreground) 58%, transparent)';
   return (
-    <section className="mx-auto max-w-6xl px-4 py-9 sm:px-5 sm:py-16 md:px-8">
-      <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] sm:text-sm sm:tracking-[0.18em]" style={{ color: 'var(--v-accent)' }}>Avis clientes</p>
-          <h2 className="mt-1.5 text-2xl font-semibold leading-tight tracking-normal sm:mt-3 sm:text-4xl">Elles ont testé BeautySavage.</h2>
+    <section id="avis" className="py-12 sm:py-20" style={{ background: 'var(--v-menu-background)', color: 'var(--v-menu-foreground)' }} data-testid="home-reviews">
+      <div className="mx-auto max-w-6xl px-4 sm:px-5 md:px-8">
+        <div className="grid gap-7 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,2.6fr)] lg:gap-0">
+          <div className="lg:pr-10">
+            <p className="flex items-center gap-3 text-[11px] font-semibold uppercase tracking-[0.2em]" style={{ color: 'var(--v-accent)' }}>
+              Avis clientes <span className="h-px w-8" style={{ background: 'var(--v-accent)' }} aria-hidden />
+            </p>
+            <h2 className="mt-3 text-[1.75rem] font-normal leading-[1.1] tracking-[-0.01em] sm:mt-4 sm:text-4xl" style={{ fontFamily: 'var(--font-heading)' }}>
+              Elles ont testé BeautySavage.
+            </h2>
+          </div>
+          <div className="no-scrollbar -mx-4 flex snap-x snap-mandatory scroll-px-4 overflow-x-auto px-4 sm:-mx-5 sm:scroll-px-5 sm:px-5 lg:mx-0 lg:grid lg:grid-cols-3 lg:gap-y-10 lg:overflow-visible lg:px-0">
+            {visible.map((review, index) => {
+              const rating = Math.round(Number(review.rating || 0));
+              const productTitle = review.productId?.title || '';
+              return (
+                <figure
+                  key={review._id || index}
+                  className="w-[74vw] max-w-[300px] shrink-0 snap-start border-l px-5 lg:w-auto lg:max-w-none lg:px-8"
+                  style={{ borderColor: filet }}
+                  data-testid="home-review"
+                >
+                  <div className="flex items-center gap-1" aria-label={`${rating} sur 5`}>
+                    {Array.from({ length: 5 }).map((_, pawIndex) => (
+                      <PawPrint key={pawIndex} className="h-3.5 w-3.5" fill={pawIndex < rating ? 'currentColor' : 'none'} style={{ color: 'var(--v-accent)' }} />
+                    ))}
+                  </div>
+                  <blockquote className="mt-4 line-clamp-6 text-[14px] leading-6" style={{ color: 'color-mix(in srgb, var(--v-menu-foreground) 86%, var(--v-menu-background))' }}>
+                    « {String(review.comment).trim()} »
+                  </blockquote>
+                  <figcaption className="mt-4 text-[13px] font-medium">
+                    {review.displayName || 'Cliente BeautySavage'}
+                    {productTitle && <span className="mt-0.5 block text-[11px] font-normal" style={{ color: muet }}>{productTitle}</span>}
+                  </figcaption>
+                </figure>
+              );
+            })}
+          </div>
         </div>
-      </div>
-      <div className="no-scrollbar -mx-4 mt-5 flex snap-x scroll-px-4 gap-3 overflow-x-auto px-4 pb-2 sm:-mx-5 sm:mt-8 sm:scroll-px-5 sm:gap-4 sm:px-5 md:mx-0 md:px-0">
-        {visible.map((review, index) => {
-          const rating = Math.round(Number(review.rating || 0));
-          const productTitle = review.productId?.title || review.sourceLabel || 'BeautySavage';
-          return (
-            <article key={review._id || index} className="w-[70vw] max-w-[300px] shrink-0 snap-start rounded-lg border p-4 sm:min-h-56 sm:w-[82vw] sm:max-w-[360px] sm:p-5" style={{ borderColor: 'var(--v-border)', background: 'var(--v-surface)' }}>
-              <div className="flex items-center gap-1" aria-label={`${rating} sur 5`}>
-                {Array.from({ length: 5 }).map((_, pawIndex) => (
-                  <PawPrint
-                    key={pawIndex}
-                    className="h-4 w-4"
-                    fill={pawIndex < rating ? 'currentColor' : 'none'}
-                    style={{ color: 'var(--v-accent)' }}
-                  />
-                ))}
-              </div>
-              <p className="mt-4 line-clamp-4 text-sm leading-6">{review.comment || 'Très belle expérience institut.'}</p>
-              <div className="mt-5 border-t pt-4 text-sm" style={{ borderColor: 'var(--v-border)' }}>
-                <p className="font-semibold">{review.displayName || 'Cliente BeautySavage'}</p>
-                <p className="mt-1 text-xs" style={{ color: 'var(--v-muted-foreground)' }}>{productTitle}</p>
-              </div>
-            </article>
-          );
-        })}
       </div>
     </section>
   );

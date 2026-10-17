@@ -41,6 +41,10 @@ function groupCover(group: ServiceGroup) {
   return resolvePreviewMediaUrl(group.coverUrl || group.items[0]?.coverUrl || group.items[0]?.gallery?.[0] || '');
 }
 
+/**
+ * CARTE DE COLLECTION — une photo pleine, voilée de noir en bas, le nom posé
+ * dessus en police de titre. Plus de bouton plein : toute la carte s'ouvre.
+ */
 export function CollectionGrid({ groups }: { groups: ServiceGroup[] }) {
   return (
     <div className="mt-5 grid grid-cols-2 gap-3 sm:mt-10 sm:gap-5 lg:grid-cols-3" data-testid="collection-grid">
@@ -50,28 +54,24 @@ export function CollectionGrid({ groups }: { groups: ServiceGroup[] }) {
           <Link
             key={group.slug}
             to={`/prestations/${group.slug}`}
-            className="group flex h-full flex-col overflow-hidden rounded-lg border transition-transform hover:-translate-y-1"
-            style={{ borderColor: 'var(--v-border)', background: 'var(--v-surface)' }}
+            className="group relative block aspect-[4/5] overflow-hidden rounded-xl ring-1 ring-black/10 sm:aspect-[4/3] sm:rounded-2xl"
+            style={{ background: 'var(--v-menu-background)' }}
             data-testid="collection-card"
           >
-            <div className="relative aspect-square w-full overflow-hidden sm:aspect-[16/10]" style={{ background: 'color-mix(in srgb, var(--v-foreground) 5%, var(--v-background))' }}>
-              {cover ? (
-                <img src={cover} alt={group.title} loading="lazy" className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />
-              ) : (
-                <div className="grid h-full place-items-center" style={{ color: 'var(--v-muted-foreground)' }}><ImageIcon className="h-8 w-8" /></div>
-              )}
-              <span className="absolute left-2 top-2 rounded-full px-2 py-0.5 text-[10px] font-semibold sm:left-3 sm:top-3 sm:px-3 sm:py-1 sm:text-xs" style={{ background: 'var(--v-background)', color: 'var(--v-foreground)' }}>
-                {group.items.length} prestation{group.items.length > 1 ? 's' : ''}
-              </span>
-            </div>
-            <div className="flex flex-1 flex-col gap-2 p-3 sm:gap-3 sm:p-5">
-              <h2 className="text-base font-semibold leading-snug tracking-normal sm:text-2xl">{group.title}</h2>
-              {group.description && <p className="line-clamp-2 text-sm leading-6 max-sm:!hidden" style={{ color: 'var(--v-muted-foreground)' }}>{group.description}</p>}
-              <span
-                className="mt-auto inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold sm:gap-2 sm:px-5 sm:py-3 sm:text-sm"
-                style={{ background: 'var(--v-primary)', color: 'var(--v-primary-foreground)', borderRadius: 'var(--v-radius)' }}
-              >
-                <span className="sm:hidden">Voir</span><span className="max-sm:hidden">Voir les prestations</span> <ArrowRight className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+            {cover ? (
+              <img src={cover} alt={group.title} loading="lazy" decoding="async" className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.05]" />
+            ) : (
+              <div className="absolute inset-0 grid place-items-center" style={{ color: 'color-mix(in srgb, var(--v-menu-foreground) 50%, transparent)' }}><ImageIcon className="h-8 w-8" /></div>
+            )}
+            <div className="pointer-events-none absolute inset-0" style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.82) 0%, rgba(0,0,0,0.35) 45%, rgba(0,0,0,0) 70%)' }} />
+            <span className="absolute left-2 top-2 rounded-full bg-white/90 px-2 py-0.5 text-[10px] font-semibold text-black backdrop-blur sm:left-3 sm:top-3 sm:px-2.5 sm:py-1 sm:text-xs">
+              {group.items.length} prestation{group.items.length > 1 ? 's' : ''}
+            </span>
+            <div className="absolute inset-x-0 bottom-0 p-3 text-white sm:p-5">
+              <h2 className="text-[1.05rem] font-semibold leading-tight tracking-normal sm:text-2xl" style={{ fontFamily: 'var(--font-heading)' }}>{group.title}</h2>
+              {group.description && <p className="mt-1 line-clamp-2 text-sm leading-6 text-white/75 max-sm:!hidden">{group.description}</p>}
+              <span className="mt-1.5 inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] sm:mt-3 sm:text-xs" style={{ color: 'var(--v-accent)' }}>
+                Découvrir <ArrowRight className="h-3 w-3 transition-transform group-hover:translate-x-1 sm:h-3.5 sm:w-3.5" />
               </span>
             </div>
           </Link>
@@ -85,13 +85,7 @@ export function CollectionGridSkeleton() {
   return (
     <div className="mt-5 grid grid-cols-2 gap-3 sm:mt-10 sm:gap-5 lg:grid-cols-3" aria-busy="true">
       {[0, 1, 2].map((i) => (
-        <div key={i} className="overflow-hidden rounded-lg border" style={{ borderColor: 'var(--v-border)' }}>
-          <div className="aspect-square animate-pulse sm:aspect-[16/10]" style={{ background: 'color-mix(in srgb, var(--v-foreground) 8%, var(--v-background))' }} />
-          <div className="grid gap-3 p-3 sm:p-5">
-            <div className="h-6 w-2/3 animate-pulse rounded" style={{ background: 'color-mix(in srgb, var(--v-foreground) 8%, var(--v-background))' }} />
-            <div className="h-10 animate-pulse rounded" style={{ background: 'color-mix(in srgb, var(--v-foreground) 8%, var(--v-background))' }} />
-          </div>
-        </div>
+        <div key={i} className="aspect-[4/5] animate-pulse rounded-xl sm:aspect-[4/3] sm:rounded-2xl" style={{ background: 'color-mix(in srgb, var(--v-foreground) 8%, var(--v-background))' }} />
       ))}
     </div>
   );
