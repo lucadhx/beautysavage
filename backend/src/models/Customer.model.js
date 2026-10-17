@@ -28,6 +28,16 @@ const customerSchema = new mongoose.Schema(
       expiresAt: { type: Date, default: null },
       requestedAt: { type: Date, default: null },
       verifiedAt: { type: Date, default: null },
+      /**
+       * Codes encore valides envoyés AVANT le dernier. Une cliente qui redemande
+       * un code reçoit plusieurs e-mails, parfois dans le désordre : celui
+       * qu'elle ouvre doit fonctionner, quel qu'il soit (incident du 15/10/2026).
+       */
+      previousHashes: {
+        type: [{ _id: false, tokenHash: String, expiresAt: Date }],
+        default: [],
+        select: false,
+      },
     },
     passwordReset: {
       tokenHash: { type: String, default: '', select: false },

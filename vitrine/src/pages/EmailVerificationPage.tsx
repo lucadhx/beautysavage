@@ -25,9 +25,22 @@ export default function EmailVerificationPage() {
   const [info, setInfo] = React.useState('');
   const [done, setDone] = React.useState(false);
   const inputs = React.useRef<(HTMLInputElement | null)[]>([]);
-
-  if (!loading && !customer) return <Navigate to="/connexion-client" replace />;
-  if (!loading && customer?.emailVerified && !done) return <Navigate to={target} replace />;
+  /**
+   * LE BOUTON « CONFIRMER MON ADRESSE » DE L'E-MAIL — `?code=123456`.
+   *
+   * Il s'ouvre souvent dans un AUTRE navigateur (l'application Mail du
+   * téléphone), où la cliente n'est pas connectée. Valider un code ne demande
+   * pas de session : on le valide tout de suite, et la réponse la connecte.
+   */
+  const linkCode = /^\d{6}$/.test(params.get('code') || '') ? String(params.get('code')) : '';
+  const linkTried = React.useRef(false);
+  /** Secondes avant de pouvoir redemander un code (un double-clic n'envoie plus trois e-mails). */
+  const [cooldown, setCooldown] = React.useState(0);
+  React.useEffect(() => {
+    if (cooldown <= 0) return;
+    const t = window.setTimeout(() => setCooldown((s) => s - 1), 1000);
+    return () => window.clearTimeout(t);
+  }, [cooldown]);
 
   const code = digits.join('');
 
@@ -49,6 +62,18 @@ export default function EmailVerificationPage() {
     }
   }
 
+  React.useEffect(() => {
+    if (!linkCode || linkTried.current || loading || customer?.emailVerified) return;
+    linkTried.current = true;
+    setDigits(linkCode.split(''));
+    void submit(linkCode);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [linkCode, loading, customer?.emailVerified]);
+
+  // Sans session, la page ne sert qu'à valider le lien de l'e-mail.
+  if (!loading && !customer && !linkCode && !done) return <Navigate to="/connexion-client" replace />;
+  if (!loading && customer?.emailVerified && !done) return <Navigate to={target} replace />;
+
   function setAt(i: number, raw: string) {
     const only = raw.replace(/\D/g, '');
     if (only.length > 1) {
@@ -68,11 +93,15 @@ export default function EmailVerificationPage() {
   }
 
   async function resend() {
+    if (cooldown > 0) return;
     setError(''); setInfo('');
+    setCooldown(60);
     try {
-      const r = await customerApi.requestEmailVerification();
+      const r = await customerApi.requestEmailVerification() as { message?: string; verificationCode?: string; retryAfterSeconds?: number };
+      if (r.retryAfterSeconds) setCooldown(r.retryAfterSeconds);
       setInfo(r.verificationCode ? `${r.message} Code TEST : ${r.verificationCode}` : r.message || 'Un nouveau code vient de vous être envoyé.');
     } catch (err) {
+      setCooldown(0);
       setError(err instanceof Error ? err.message : 'Envoi impossible pour le moment.');
     }
   }
@@ -92,7 +121,9 @@ export default function EmailVerificationPage() {
               <span className="mx-auto grid h-16 w-16 place-items-center rounded-full" style={{ background: 'color-mix(in srgb, var(--v-accent) 18%, transparent)', color: 'var(--v-accent)' }}><MailCheck className="h-7 w-7" /></span>
               <h1 className="mt-4 text-2xl font-semibold sm:text-3xl">Vérifiez votre e-mail</h1>
               <p className="mt-2 text-sm leading-6" style={{ color: 'var(--v-muted-foreground)' }}>
-                Nous avons envoyé un code à 6 chiffres à <strong style={{ color: 'var(--v-foreground)' }}>{customer?.email}</strong>. Saisissez-le pour activer votre compte.
+                {customer
+                  ? <>Nous avons envoyé un code à 6 chiffres à <strong style={{ color: 'var(--v-foreground)' }}>{customer.email}</strong>. Saisissez-le pour activer votre compte.</>
+                  : <>Confirmation de votre adresse en cours… Si le code a expiré, <a href={`/connexion-client?retour=${encodeURIComponent('/verification-email')}`} className="font-semibold underline">connectez-vous</a> pour en recevoir un nouveau.</>}
               </p>
               <form onSubmit={(e) => { e.preventDefault(); void submit(); }} className="mt-6">
                 <motion.div animate={error ? { x: [0, -8, 8, -5, 5, 0] } : { x: 0 }} transition={{ duration: 0.35 }} className="flex justify-center gap-1.5 sm:gap-2">
@@ -117,7 +148,14 @@ export default function EmailVerificationPage() {
                   {busy && <Loader2 className="h-4 w-4 animate-spin" />} Vérifier mon e-mail
                 </button>
               </form>
-              <button type="button" onClick={resend} className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold"><RotateCw className="h-4 w-4" /> Renvoyer un code</button>
+              <p className="mt-4 text-xs leading-5" style={{ color: 'var(--v-muted-foreground)' }}>
+                Rien reçu ? Vérifiez vos courriers indésirables. Vous pouvez aussi cliquer sur le bouton « Confirmer mon adresse » de l’e-mail. Chaque code reçu reste valable 48 h.
+              </p>
+              {customer && (
+                <button type="button" onClick={resend} disabled={cooldown > 0} className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold disabled:opacity-50" data-testid="otp-resend">
+                  <RotateCw className="h-4 w-4" /> {cooldown > 0 ? `Renvoyer un code (${cooldown} s)` : 'Renvoyer un code'}
+                </button>
+              )}
               <p className="mt-6 text-xs" style={{ color: 'var(--v-muted-foreground)' }}>
                 Pas le bon compte ? <button type="button" onClick={() => { signOutNow(); navigate('/connexion-client', { replace: true }); }} className="font-semibold underline">Utiliser une autre adresse</button>
               </p>

@@ -27,6 +27,8 @@ export async function resolveCustomerEmailVerification({ event }) {
   return {
     ...(await customerVariables(event?.entityId || event?.payloadSafe?.customerId)),
     verificationCode: event.payloadSafe.verificationPin,
+    // Le bouton de l'e-mail confirme en un clic : la page lit le code et le valide seule.
+    actionUrl: await customerAccountUrl(`/verification-email?code=${encodeURIComponent(event.payloadSafe.verificationPin)}`),
     expiresAt: event.payloadSafe.expiresAt,
   };
 }

@@ -1004,33 +1004,59 @@ export async function loginCustomer(email, password) {
   return { customer: await Customer.findById(customer._id).lean(), token: signCustomerToken(customer) };
 }
 
+/** Délai minimal entre deux envois de code : un double-clic n'envoie plus trois e-mails. */
+export const VERIFICATION_RESEND_SECONDS = 60;
+const MAX_PREVIOUS_CODES = 5;
+
 export async function requestCustomerEmailVerification(customerId) {
-  const customer = await Customer.findById(customerId).select('+emailVerification.tokenHash');
+  const customer = await Customer.findById(customerId).select('+emailVerification.tokenHash +emailVerification.previousHashes');
   if (!customer) throw ApiError.notFound('Compte client introuvable');
   if (customer.emailVerified) return { message: 'Adresse e-mail déjà vérifiée.' };
+  const now = new Date();
+  const last = customer.emailVerification?.requestedAt ? new Date(customer.emailVerification.requestedAt) : null;
+  const elapsed = last ? Math.floor((now - last) / 1000) : Infinity;
+  if (elapsed < VERIFICATION_RESEND_SECONDS) {
+    // Un code vient de partir : on n'en génère pas d'autre, il arrive.
+    return {
+      message: 'Un code vient de vous être envoyé. Patientez quelques instants et pensez à vérifier vos courriers indésirables.',
+      code: 'VERIFICATION_RECENTLY_SENT',
+      retryAfterSeconds: VERIFICATION_RESEND_SECONDS - elapsed,
+    };
+  }
   const code = verificationCode();
-  const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000);
+  const expiresAt = new Date(now.getTime() + 48 * 60 * 60 * 1000);
+  // Le code précédent RESTE valable jusqu'à son expiration : la cliente peut
+  // ouvrir n'importe lequel des e-mails reçus.
+  const previous = [
+    ...(customer.emailVerification?.previousHashes || []),
+    ...(customer.emailVerification?.tokenHash ? [{ tokenHash: customer.emailVerification.tokenHash, expiresAt: customer.emailVerification.expiresAt }] : []),
+  ].filter((p) => p.tokenHash && p.expiresAt && new Date(p.expiresAt) > now).slice(-MAX_PREVIOUS_CODES);
   customer.emailVerification = {
     tokenHash: hashCustomerSecret(code),
     expiresAt,
-    requestedAt: new Date(),
+    requestedAt: now,
     verifiedAt: null,
+    previousHashes: previous,
   };
   await customer.save();
   await emitCustomerVerificationRequested(customer, code, expiresAt);
-  return { message: 'Code de vérification envoyé.', ...(process.env.ENV === 'TEST' ? { verificationCode: code } : {}) };
+  return { message: 'Code de vérification envoyé.', retryAfterSeconds: VERIFICATION_RESEND_SECONDS, ...(process.env.ENV === 'TEST' ? { verificationCode: code } : {}) };
 }
 
 export async function verifyCustomerEmail(code) {
-  const tokenHash = hashCustomerSecret(code);
+  const tokenHash = hashCustomerSecret(String(code || '').trim());
+  const now = new Date();
   const customer = await Customer.findOne({
-    'emailVerification.tokenHash': tokenHash,
-    'emailVerification.expiresAt': { $gt: new Date() },
-  }).select('+emailVerification.tokenHash');
+    $or: [
+      { 'emailVerification.tokenHash': tokenHash, 'emailVerification.expiresAt': { $gt: now } },
+      { 'emailVerification.previousHashes': { $elemMatch: { tokenHash, expiresAt: { $gt: now } } } },
+    ],
+  }).select('+emailVerification.tokenHash +emailVerification.previousHashes');
   if (!customer) throw ApiError.badRequest('Code de vérification invalide ou expiré');
   customer.emailVerified = true;
   customer.emailVerification.verifiedAt = new Date();
   customer.emailVerification.tokenHash = '';
+  customer.emailVerification.previousHashes = [];
   await customer.save();
   await emitAndDispatch({
     type: 'customer.email_verified',

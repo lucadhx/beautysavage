@@ -19,9 +19,10 @@ export const INSTITUTE_TEMPLATES = Object.freeze({
     subject: '{{verificationCode}} est votre code de vérification',
     preheader: 'Saisissez ce code pour activer votre compte.',
     title: 'Confirmez votre adresse e-mail',
-    paragraphs: ['Bonjour {{clientFirstName}},', 'Voici votre code pour activer votre compte. Saisissez-le sur la page de vérification :'],
+    paragraphs: ['Bonjour {{clientFirstName}},', 'Pour activer votre compte, cliquez sur le bouton « Confirmer mon adresse » ci-dessous, ou saisissez ce code sur la page de vérification :'],
     code: '{{verificationCode}}',
-    note: 'Ce code expire le {{expiresAt}}. Si vous n’êtes pas à l’origine de cette inscription, ignorez simplement cet e-mail.',
+    cta: { label: 'Confirmer mon adresse', url: '{{actionUrl}}' },
+    note: 'Ce code expire le {{expiresAt}}. Vous avez reçu plusieurs e-mails ? Chacun fonctionne tant qu’il n’a pas expiré. Si vous n’êtes pas à l’origine de cette inscription, ignorez simplement cet e-mail.',
   },
   CUSTOMER_PASSWORD_RESET: {
     subject: 'Réinitialisation de votre mot de passe',
