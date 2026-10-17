@@ -125,7 +125,7 @@ function ServiceCard({ item, review, showKind }: { item: CommerceProduct; review
   return (
     <Link to={`/catalogue/${item.slug}`} className="group flex h-full flex-col" data-card="service">
       <div
-        className="relative aspect-[4/5] w-full overflow-hidden rounded-xl shadow-[0_1px_2px_rgba(0,0,0,0.06)] ring-1 ring-black/5 sm:rounded-2xl"
+        className="relative aspect-square w-full overflow-hidden rounded-xl shadow-[0_1px_2px_rgba(0,0,0,0.06)] ring-1 ring-black/5 sm:aspect-[4/5] sm:rounded-2xl"
         style={{ background: 'color-mix(in srgb, var(--v-foreground) 5%, var(--v-background))' }}
       >
         <PromoBadge product={item} />
