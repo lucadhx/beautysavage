@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, BadgeCheck, CheckCircle2, GraduationCap, PawPrint } from 'lucide-react';
+import { ArrowLeft, ArrowRight, BadgeCheck, CheckCircle2, GraduationCap, PawPrint } from 'lucide-react';
 import { useSiteData } from '@/context/SiteDataContext';
 import { CommerceProductCard, buildReviewSummaries, type ProductReviewSummary } from '@/components/CommerceProductCard';
 import { type CommerceProduct } from '@/lib/api';
@@ -39,16 +39,22 @@ export default function HomePage() {
     <>
       <section className="pb-8 pt-16 sm:px-5 sm:pb-12 sm:pt-28 md:px-8" style={{ background: 'var(--v-background)' }}>
         <div className="mx-auto max-w-7xl">
-          <div className="relative overflow-hidden sm:min-h-[520px] sm:rounded-lg">
-            {heroImage ? (
-              <img src={heroImage} alt="" className="absolute inset-0 h-full w-full object-cover" />
-            ) : (
-              <div className="absolute inset-0" style={{ background: 'var(--v-menu-background)' }} />
-            )}
-            {/* Téléphone : l'image respire en haut, le noir monte seulement sous le texte. */}
-            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-black/0 sm:hidden" />
+          {/*
+            TÉLÉPHONE : l'image s'affiche sur toute sa largeur, sans recadrage
+            latéral, puis se prolonge vers le bas par un fondu noir qui porte le
+            texte et les boutons. GRAND ÉCRAN : l'image couvre le bandeau, voilée.
+          */}
+          <div className="relative overflow-hidden sm:min-h-[520px] sm:rounded-lg" style={{ background: 'var(--v-menu-background)' }} data-testid="hero">
+            <div className="relative sm:absolute sm:inset-0">
+              {heroImage ? (
+                <img src={heroImage} alt="" className="block max-h-[52svh] w-full object-cover sm:absolute sm:inset-0 sm:h-full sm:max-h-none" data-testid="hero-image" />
+              ) : (
+                <div className="h-32 sm:absolute sm:inset-0 sm:h-auto" />
+              )}
+              <div className="pointer-events-none absolute inset-x-0 bottom-0 h-2/3 sm:hidden" style={{ background: 'linear-gradient(to bottom, transparent, var(--v-menu-background))' }} />
+            </div>
             <div className="absolute inset-0 hidden bg-black/45 sm:block" />
-            <div className="relative flex min-h-[calc(100svh-4rem-1.75rem)] max-w-5xl flex-col justify-end px-5 pb-6 pt-28 text-white sm:min-h-[520px] sm:justify-center sm:px-7 sm:py-14 md:px-16">
+            <div className="relative -mt-14 flex max-w-5xl flex-col px-5 pb-7 text-white sm:mt-0 sm:min-h-[520px] sm:justify-center sm:px-7 sm:py-14 md:px-16">
               {/* Accroche, titre et slogan : ceux de la page « Informations » du Manager, en direct. */}
               <p className="text-[10px] font-semibold uppercase tracking-[0.16em] sm:text-sm sm:tracking-[0.18em]" style={{ color: 'var(--v-accent)' }} data-testid="hero-kicker">
                 {company?.heroKicker?.trim() || "Le geste. La certification. L'institut."}
@@ -119,18 +125,23 @@ export default function HomePage() {
 }
 
 /**
- * LES AVIS — une bande SOMBRE, couleurs inversées : le titre à gauche, les
- * avis en colonnes séparées d'un filet, comme une page de magazine. Les
- * pattes de la maison restent la note. Téléphone : un défilement horizontal
- * aimanté qui démarre bien aligné à gauche.
+ * LES AVIS — une bande SOMBRE, couleurs inversées, le titre à gauche et les
+ * avis sur UNE SEULE LIGNE en carrousel, séparés d'un filet. Les pattes de la
+ * maison restent la note. Défilement aimanté au doigt ; flèches sur grand écran.
  */
 function ReviewsCarousel({ reviews }: { reviews: any[] }) {
+  const track = React.useRef<HTMLDivElement | null>(null);
   const visible = reviews
     .filter((review) => Number(review.rating || 0) > 0 && String(review.comment || '').trim())
-    .slice(0, 6);
+    .slice(0, 12);
   if (visible.length === 0) return null;
   const filet = 'color-mix(in srgb, var(--v-menu-foreground) 18%, transparent)';
   const muet = 'color-mix(in srgb, var(--v-menu-foreground) 58%, transparent)';
+  const slide = (direction: number) => {
+    const el = track.current;
+    if (el) el.scrollBy({ left: direction * el.clientWidth * 0.9, behavior: 'smooth' });
+  };
+  const arrow = 'grid h-10 w-10 place-items-center rounded-full border transition hover:bg-white/10';
   return (
     <section id="avis" className="py-12 sm:py-20" style={{ background: 'var(--v-menu-background)', color: 'var(--v-menu-foreground)' }} data-testid="home-reviews">
       <div className="mx-auto max-w-6xl px-4 sm:px-5 md:px-8">
@@ -142,15 +153,21 @@ function ReviewsCarousel({ reviews }: { reviews: any[] }) {
             <h2 className="mt-3 text-[1.75rem] font-normal leading-[1.1] tracking-[-0.01em] sm:mt-4 sm:text-4xl" style={{ fontFamily: 'var(--font-heading)' }}>
               Elles ont testé BeautySavage.
             </h2>
+            {visible.length > 3 && (
+              <div className="mt-6 hidden gap-2 lg:flex">
+                <button type="button" onClick={() => slide(-1)} className={arrow} style={{ borderColor: filet }} aria-label="Avis précédents"><ArrowLeft className="h-4 w-4" /></button>
+                <button type="button" onClick={() => slide(1)} className={arrow} style={{ borderColor: filet }} aria-label="Avis suivants"><ArrowRight className="h-4 w-4" /></button>
+              </div>
+            )}
           </div>
-          <div className="no-scrollbar -mx-4 flex snap-x snap-mandatory scroll-px-4 overflow-x-auto px-4 sm:-mx-5 sm:scroll-px-5 sm:px-5 lg:mx-0 lg:grid lg:grid-cols-3 lg:gap-y-10 lg:overflow-visible lg:px-0">
+          <div ref={track} className="no-scrollbar -mx-4 flex snap-x snap-mandatory scroll-px-4 overflow-x-auto px-4 sm:-mx-5 sm:scroll-px-5 sm:px-5 lg:mx-0 lg:scroll-px-0 lg:px-0" data-testid="home-reviews-track">
             {visible.map((review, index) => {
               const rating = Math.round(Number(review.rating || 0));
               const productTitle = review.productId?.title || '';
               return (
                 <figure
                   key={review._id || index}
-                  className="w-[74vw] max-w-[300px] shrink-0 snap-start border-l px-5 lg:w-auto lg:max-w-none lg:px-8"
+                  className="w-[74vw] max-w-[300px] shrink-0 snap-start border-l px-5 sm:w-[44%] sm:max-w-none lg:w-1/3 lg:px-8"
                   style={{ borderColor: filet }}
                   data-testid="home-review"
                 >
