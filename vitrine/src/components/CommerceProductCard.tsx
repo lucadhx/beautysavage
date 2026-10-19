@@ -153,7 +153,7 @@ function ServiceCard({ item, review, showKind }: { item: CommerceProduct; review
         <h3 className="mt-1 line-clamp-2 text-[0.95rem] font-semibold leading-snug tracking-normal sm:text-lg" style={{ fontFamily: 'var(--font-heading)' }}>
           {item.title}
         </h3>
-        <p className="mt-1.5 line-clamp-2 text-sm leading-6 max-sm:!hidden" style={{ color: 'var(--v-muted-foreground)' }}>
+        <p className="mt-1 line-clamp-3 text-[11.5px] leading-[1.45] sm:mt-1.5 sm:line-clamp-2 sm:text-sm sm:leading-6" style={{ color: 'var(--v-muted-foreground)' }} data-testid="card-summary">
           {item.subtitle || richTextToPlain(item.description)}
         </p>
         <div className="mt-auto flex items-center justify-between gap-2 pt-1.5 text-sm sm:pt-3 sm:text-base">
@@ -196,6 +196,11 @@ function TrainingCard({ item, review }: { item: CommerceProduct; review?: Produc
           {item.title}
         </h3>
         <p className="mt-1 text-[11px] sm:text-xs" style={{ color: 'color-mix(in srgb, var(--v-menu-foreground) 62%, transparent)' }}>{detail}</p>
+        {(item.subtitle || item.description) && (
+          <p className="mt-1.5 line-clamp-3 pb-2.5 text-[11.5px] leading-[1.45] sm:mt-2 sm:line-clamp-2 sm:pb-3 sm:text-sm sm:leading-6" style={{ color: 'color-mix(in srgb, var(--v-menu-foreground) 78%, transparent)' }} data-testid="card-summary">
+            {item.subtitle || richTextToPlain(item.description)}
+          </p>
+        )}
         <div
           className="mt-auto flex items-center justify-between gap-2 border-t pt-2.5 text-sm sm:pt-4 sm:text-base"
           style={{ borderColor: 'color-mix(in srgb, var(--v-menu-foreground) 14%, transparent)', }}
