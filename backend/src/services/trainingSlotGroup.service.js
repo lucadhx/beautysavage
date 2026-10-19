@@ -52,13 +52,52 @@ export async function inspectSessionSlot(product, days, { ignoreSessionId = null
   return { blocking: null, sessions: [...sessions.values()] };
 }
 
+/** Une vente dont le paiement n'a pas abouti : ses places ne sont qu'une retenue. */
+const UNSETTLED_PAYMENT = { $nin: ['PAID', 'PROCESSING', 'REFUNDED'] };
+
+/**
+ * Places RETENUES par des paiements en cours (non aboutis), par session.
+ * `reservedCount` les compte déjà ; la différence, ce sont les vraies
+ * réservations (payées, ou en paiement différé chez Stripe).
+ */
+export async function pendingSeatsBySession(sessionIds) {
+  const out = new Map();
+  if (!sessionIds.length) return out;
+  const wanted = new Set(sessionIds.map(id));
+  const sales = await CommerceSale.find({ seatsHeld: true, paymentStatus: UNSETTLED_PAYMENT, 'lines.sessionId': { $in: sessionIds } })
+    .select('lines customerId holdExpiresAt createdAt').lean();
+  for (const sale of sales) {
+    for (const line of sale.lines || []) {
+      if (!line.sessionId || !wanted.has(id(line.sessionId))) continue;
+      const entry = out.get(id(line.sessionId)) || { seats: 0, sales: [] };
+      entry.seats += line.quantity || 1;
+      entry.sales.push({ sale, line });
+      out.set(id(line.sessionId), entry);
+    }
+  }
+  return out;
+}
+
+/** Réservations CONFIRMÉES d'une session (hors paiements en cours). */
+function bookedSeats(session, pending) {
+  return Math.max(0, Number(session?.reservedCount || 0) - Number(pending.get(id(session?._id))?.seats || 0));
+}
+
 /** Une session peut-elle rejoindre un créneau partagé ? Sinon, pourquoi. */
 export async function assertSessionsCanShare(sessions) {
+  const pending = await pendingSeatsBySession(sessions.map((s) => s.sessionId));
   let groupId = null;
   for (const s of sessions) {
     const product = await CommerceProduct.findById(s.productId).select('title sessions').lean();
     const session = product?.sessions?.find((x) => id(x._id) === id(s.sessionId));
     if (!session || session.status === 'CANCELLED') continue;
+    // Une vraie réservation (payée) sur la session chevauchée : la date est prise,
+    // aucune alternative possible. Un paiement seulement EN COURS n'empêche pas :
+    // s'il aboutit, l'attribution retirera la nouvelle session.
+    const booked = bookedSeats(session, pending);
+    if (booked > 0) {
+      throw ApiError.conflict(`Alternative impossible : « ${product.title} » a déjà ${booked} réservation${booked > 1 ? 's' : ''} sur ce créneau. Choisissez une autre date.`, { code: 'SLOT_ALREADY_BOOKED', productTitle: product.title, booked });
+    }
     if (session.slotGroupId) {
       const group = await TrainingSlotGroup.findById(session.slotGroupId).lean();
       if (group?.status === 'ASSIGNED') {
@@ -67,11 +106,7 @@ export async function assertSessionsCanShare(sessions) {
       if (group?.status === 'OPEN') {
         if (groupId && groupId !== id(group._id)) throw ApiError.conflict('Ce créneau chevauche deux groupes d’alternatives différents : choisissez une autre date.', { code: 'SLOT_GROUP_MIXED' });
         groupId = id(group._id);
-        continue;
       }
-    }
-    if (Number(session.reservedCount || 0) > 0) {
-      throw ApiError.conflict(`« ${product.title} » a déjà des inscrites sur ce créneau : il ne peut plus être proposé en alternative.`, { code: 'SLOT_ALREADY_BOOKED' });
     }
   }
   return groupId;
@@ -106,6 +141,19 @@ export async function linkSessions(members) {
   group.startsAt = new Date(Math.min(group.startsAt.getTime(), span.startsAt.getTime()));
   group.endsAt = new Date(Math.max(group.endsAt.getTime(), span.endsAt.getTime()));
   group.history.push({ at: now(), action: 'LINKED', detail: resolved.map((r) => r.title).join(' · ') });
+  // Un paiement était déjà EN COURS sur l'une des sessions (ouvert avant que le
+  // groupe n'existe) : sa retenue devient celle du groupe — les alternatives
+  // restent fermées jusqu'à son issue, comme s'il avait été ouvert après.
+  if (!holdActive(group)) {
+    const pending = await pendingSeatsBySession(resolved.map((r) => r.sessionId));
+    const open = [...pending.values()].flatMap((e) => e.sales)
+      .filter(({ sale }) => sale.holdExpiresAt && new Date(sale.holdExpiresAt) > now())
+      .sort((a, b) => new Date(a.sale.createdAt) - new Date(b.sale.createdAt))[0];
+    if (open) {
+      group.hold = { saleId: open.sale._id, customerId: open.sale.customerId || null, sessionId: open.line.sessionId, expiresAt: open.sale.holdExpiresAt };
+      group.history.push({ at: now(), action: 'HOLD_INHERITED', detail: id(open.sale._id) });
+    }
+  }
   await group.save();
   for (const r of resolved) {
     await CommerceProduct.updateOne({ _id: r.productId, 'sessions._id': r.sessionId }, { $set: { 'sessions.$.slotGroupId': group._id } });
@@ -302,48 +350,113 @@ async function refundLateLoser(sale, line, group, issues) {
  * Écriture conditionnelle — un seul gagnant, même pour deux paiements
  * simultanés. Les autres sessions sont annulées, l'institut prévenu.
  */
+/**
+ * Attribue un groupe OUVERT à une session — écriture conditionnelle, un seul
+ * gagnant quel que soit le chemin (encaissement ou vérification de fond).
+ * Renvoie le groupe attribué, ou `null` si quelqu'un l'a attribué avant.
+ */
+async function assignGroup(groupId, { productId, sessionId, title }, sale, detail) {
+  const won = await TrainingSlotGroup.findOneAndUpdate(
+    { _id: groupId, status: 'OPEN' },
+    {
+      $set: {
+        status: 'ASSIGNED',
+        winner: { productId, sessionId, saleId: sale?._id || null, title: title || '', at: now() },
+        hold: { saleId: null, customerId: null, sessionId: null, expiresAt: null },
+      },
+      $push: { history: { at: now(), action: 'ASSIGNED', detail } },
+    },
+    { new: true },
+  );
+  if (!won) return null;
+  await cancelLosers(won, sessionId);
+  if (sale) {
+    await emitAndDispatch({
+      type: 'formation.slot_group.assigned',
+      entityType: 'CommerceSale',
+      entityId: sale._id,
+      payloadSafe: {
+        saleId: id(sale._id),
+        groupId: id(won._id),
+        winnerTitle: String(won.winner.title || '').slice(0, 180),
+        withdrawnTitles: won.members.filter((m) => id(m.sessionId) !== id(sessionId)).map((m) => String(m.title).slice(0, 180)),
+        slotStart: new Date(won.startsAt).toISOString(),
+        slotEnd: new Date(won.endsAt).toISOString(),
+        assignedAt: now().toISOString(),
+      },
+      idempotencyKey: `slot-group-assigned:${won._id}`,
+    });
+  }
+  return won;
+}
+
 export async function assignGroupsForSale(sale, issues = null) {
   const lines = (sale.lines || []).filter((l) => l.productSnapshot?.kind === 'IN_PERSON_TRAINING' && l.sessionId);
   for (const line of lines) {
     const group = await TrainingSlotGroup.findOne({ 'members.sessionId': line.sessionId }).lean();
     if (!group || group.status === 'DISSOLVED') continue;
     const member = group.members.find((m) => id(m.sessionId) === id(line.sessionId));
-    const won = await TrainingSlotGroup.findOneAndUpdate(
-      { _id: group._id, status: 'OPEN' },
-      {
-        $set: {
-          status: 'ASSIGNED',
-          winner: { productId: line.productId, sessionId: line.sessionId, saleId: sale._id, title: member?.title || line.productSnapshot?.title || '', at: now() },
-          hold: { saleId: null, customerId: null, sessionId: null, expiresAt: null },
-        },
-        $push: { history: { at: now(), action: 'ASSIGNED', detail: `${member?.title || ''} — ${sale.saleNumber || id(sale._id)}` } },
-      },
-      { new: true },
+    const won = await assignGroup(
+      group._id,
+      { productId: line.productId, sessionId: line.sessionId, title: member?.title || line.productSnapshot?.title || '' },
+      sale,
+      `${member?.title || ''} — ${sale.saleNumber || id(sale._id)}`,
     );
-    if (won) {
-      await cancelLosers(won, line.sessionId);
-      await emitAndDispatch({
-        type: 'formation.slot_group.assigned',
-        entityType: 'CommerceSale',
-        entityId: sale._id,
-        payloadSafe: {
-          saleId: id(sale._id),
-          groupId: id(won._id),
-          winnerTitle: String(won.winner.title || '').slice(0, 180),
-          withdrawnTitles: won.members.filter((m) => id(m.sessionId) !== id(line.sessionId)).map((m) => String(m.title).slice(0, 180)),
-          slotStart: new Date(won.startsAt).toISOString(),
-          slotEnd: new Date(won.endsAt).toISOString(),
-          assignedAt: now().toISOString(),
-        },
-        idempotencyKey: `slot-group-assigned:${won._id}`,
-      });
-      continue;
-    }
+    if (won) continue;
     const fresh = await TrainingSlotGroup.findById(group._id).lean();
     if (fresh?.status === 'ASSIGNED' && id(fresh.winner?.sessionId) !== id(line.sessionId)) {
       await refundLateLoser(sale, line, fresh, issues);
     }
   }
+}
+
+/* ─────────────────────── Vérification permanente ─────────────────────── */
+
+/**
+ * FILET PERMANENT — chaque groupe encore ouvert est confronté aux vraies
+ * réservations de ses sessions. Dès que l'une en porte une (payée, ou en
+ * paiement différé), elle est retenue et les autres retirées, quel que soit le
+ * chemin par lequel la réservation est arrivée : paiement ouvert avant le
+ * regroupement, encaissement interrompu, course entre deux écritures.
+ * Plusieurs réservées à la fois : la vente payée la plus ancienne l'emporte,
+ * les autres sont annulées et remboursées intégralement (annulation de session).
+ */
+export async function reconcileSlotGroups({ groupIds = null } = {}) {
+  const filter = { status: 'OPEN', endsAt: { $gt: new Date(Date.now() - 24 * 3600e3) } };
+  if (groupIds) filter._id = { $in: groupIds };
+  const groups = await TrainingSlotGroup.find(filter).lean();
+  let assigned = 0;
+  for (const group of groups) {
+    try {
+      if (await reconcileGroup(group)) assigned += 1;
+    } catch (err) {
+      logger.error(`[créneau partagé] vérification du groupe ${id(group._id)} impossible : ${err.message}`);
+    }
+  }
+  return { checked: groups.length, assigned };
+}
+
+async function reconcileGroup(group) {
+  const pending = await pendingSeatsBySession(group.members.map((m) => m.sessionId));
+  const booked = [];
+  for (const m of group.members) {
+    const product = await CommerceProduct.findById(m.productId).select('title sessions').lean();
+    const session = product?.sessions?.find((s) => id(s._id) === id(m.sessionId));
+    if (!session || session.status === 'CANCELLED') continue;
+    if (bookedSeats(session, pending) > 0) booked.push({ productId: m.productId, sessionId: m.sessionId, title: product.title || m.title });
+  }
+  if (!booked.length) return null;
+  // La vente payée la plus ancienne sur l'une des sessions réservées.
+  const sales = await CommerceSale.find({
+    paymentStatus: { $in: ['PAID', 'PROCESSING'] },
+    'lines.sessionId': { $in: booked.map((b) => b.sessionId) },
+  }).sort({ createdAt: 1 }).limit(1).lean();
+  const sale = sales[0] || null;
+  const line = sale?.lines?.find((l) => booked.some((b) => id(b.sessionId) === id(l.sessionId)));
+  const winner = (line && booked.find((b) => id(b.sessionId) === id(line.sessionId))) || booked[0];
+  const won = await assignGroup(group._id, winner, sale, `${winner.title} — vérification automatique (réservation détectée)`);
+  if (won) logger.info(`[créneau partagé] réservation détectée sur « ${winner.title} » : créneau attribué, ${won.members.length - 1} alternative(s) retirée(s).`);
+  return won;
 }
 
 /* ───────────────────────────── Manager ───────────────────────────── */

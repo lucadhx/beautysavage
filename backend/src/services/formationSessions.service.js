@@ -9,7 +9,7 @@ import { logger } from '../utils/logger.js';
 import { assertNoOverlap, minutesOf, sessionBlocks, sessionEventId, zonedWallTime } from './calendar.service.js';
 import { emitAndDispatch } from './events/domainEvent.service.js';
 import { refundInstitutePayment } from './instituteStripe.service.js';
-import { assertSessionsCanShare, detachSession, inspectSessionSlot, linkSessions } from './trainingSlotGroup.service.js';
+import { assertSessionsCanShare, detachSession, inspectSessionSlot, linkSessions, reconcileSlotGroups } from './trainingSlotGroup.service.js';
 
 /**
  * LES SESSIONS D'UNE FORMATION PRÉSENTIELLE — leurs propres opérations.
@@ -163,7 +163,12 @@ export async function createSession(productId, payload = {}) {
   const created = product.sessions.at(-1);
   if (slot.sessions.length) {
     const group = await linkSessions([...slot.sessions, { productId: product._id, sessionId: created._id }]);
-    if (group) created.slotGroupId = group._id;
+    if (group) {
+      created.slotGroupId = group._id;
+      // Un paiement a pu aboutir sur l'autre session entre la vérification et le
+      // regroupement : la réservation l'emporte aussitôt, la nouvelle est retirée.
+      await reconcileSlotGroups({ groupIds: [group._id] });
+    }
   }
   return created;
 }

@@ -255,18 +255,26 @@ function SessionDaysPicker({ productId, template, mode, session, onClose, onSave
    * pas encore attribuée. Un rendez-vous, un blocage ou une session de cette
    * même formation restent des conflits francs.
    */
-  const alternativeIds = new Set((busyList || [])
-    .filter((e) => {
-      const ev = e as Busy & { productId?: string; slotGroupStatus?: string; status?: string };
-      return ev.type === 'FORMATION_SESSION' && ev.productId !== productId && ev.slotGroupStatus !== 'ASSIGNED';
-    })
-    .map((e) => e.id));
+  type SeatEvent = Busy & { productId?: string; slotGroupStatus?: string; bookedCount?: number; pendingCount?: number };
+  const seatInfo = new Map((busyList || []).map((e) => [e.id, e as SeatEvent]));
+  const otherSession = (e: SeatEvent) => e.type === 'FORMATION_SESSION' && e.productId !== productId && e.slotGroupStatus !== 'ASSIGNED';
+  // Une autre formation déjà RÉSERVÉE (payée) sur ce créneau : la date est prise, pas d'alternative.
+  const bookedIds = new Set((busyList || []).filter((e) => otherSession(e as SeatEvent) && Number((e as SeatEvent).bookedCount || 0) > 0).map((e) => e.id));
+  const alternativeIds = new Set((busyList || []).filter((e) => otherSession(e as SeatEvent) && !bookedIds.has(e.id)).map((e) => e.id));
   const perDay = dates.map((d, i) => {
     const busy = busyOfDay(busyList || [], d);
     const clashes = overlaps(busy, ranges[i].from, ranges[i].to);
     const alternatives = mode === 'create' ? clashes.filter((c) => alternativeIds.has(c.id)) : [];
-    return { date: d, range: ranges[i], busy, clashes: clashes.filter((c) => !alternatives.includes(c)), alternatives };
+    const booked = mode === 'create' ? clashes.filter((c) => bookedIds.has(c.id)) : [];
+    return { date: d, range: ranges[i], busy, clashes: clashes.filter((c) => !alternatives.includes(c)), alternatives, booked };
   });
+  const bookedTitles = [...new Set(perDay.flatMap((d) => d.booked.map((c) => {
+    const n = Number(seatInfo.get(c.id)?.bookedCount || 0);
+    return `« ${c.title.replace(/ · jour \d+\/\d+$/, '')} » (${n} réservation${n > 1 ? 's' : ''})`;
+  })))];
+  const pendingTitles = [...new Set(perDay.flatMap((d) => d.alternatives
+    .filter((c) => Number(seatInfo.get(c.id)?.pendingCount || 0) > 0)
+    .map((c) => `« ${c.title.replace(/ · jour \d+\/\d+$/, '')} »`)))];
   const past = day1 ? atMinutes(day1, ranges[0].from) < new Date() : false;
   const conflict = perDay.some((d) => d.clashes.length > 0);
   const alternativeTitles = [...new Set(perDay.flatMap((d) => d.alternatives.map((c) => c.title.replace(/ · jour \d+\/\d+$/, ''))))];
@@ -329,6 +337,8 @@ function SessionDaysPicker({ productId, template, mode, session, onClose, onSave
                 <div className="flex items-center gap-2">
                   {busyList === null ? (
                     <span className="inline-flex items-center gap-1 text-xs text-muted-foreground"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Vérification</span>
+                  ) : d.booked.length ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2.5 py-1 text-xs font-semibold text-rose-800" data-testid="session-day-state"><TriangleAlert className="h-3.5 w-3.5" /> Déjà réservé</span>
                   ) : d.clashes.length ? (
                     <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2.5 py-1 text-xs font-semibold text-rose-800" data-testid="session-day-state"><TriangleAlert className="h-3.5 w-3.5" /> Occupé</span>
                   ) : d.alternatives.length ? (
@@ -352,20 +362,29 @@ function SessionDaysPicker({ productId, template, mode, session, onClose, onSave
               ) : (
                 <>
                   <DayTimeline busy={d.busy} from={d.range.from} to={d.range.to} testId={`session-day-timeline-${i + 1}`} />
-                  {d.clashes.length > 0 && (
-                    <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">Chevauche : {d.clashes.map((c) => `${c.title} (${hm(c.from)}–${hm(c.to)})`).join(', ')}</p>
+                  {d.clashes.length > d.booked.length && (
+                    <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">Chevauche : {d.clashes.filter((c) => !d.booked.includes(c)).map((c) => `${c.title} (${hm(c.from)}–${hm(c.to)})`).join(', ')}</p>
                   )}
                 </>
               )}
             </div>
           ))}
           {past && <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">Le jour 1 commence dans le passé.</p>}
+          {bookedTitles.length > 0 && (
+            <div className="rounded-xl border border-rose-300 bg-rose-50 p-3 text-sm text-rose-900" role="alert" data-testid="session-alternative-blocked">
+              <p className="font-semibold">Alternative impossible sur ce créneau</p>
+              <p className="mt-1">Déjà réservé à cette date : {bookedTitles.join(', ')}. La date est acquise et ne peut plus être proposée pour une autre formation. Choisissez un autre jour ou d’autres horaires.</p>
+            </div>
+          )}
           {needsAlternative && !conflict && (
             <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950" data-testid="session-alternative">
               <input type="checkbox" className="mt-0.5 h-4 w-4 accent-amber-600" checked={asAlternative} onChange={(e) => setAsAlternative(e.target.checked)} data-testid="session-alternative-check" />
               <span>
                 <span className="font-semibold">Proposer en alternative</span> — ce créneau est déjà proposé pour {alternativeTitles.map((t) => `« ${t} »`).join(', ')}.
                 <span className="mt-1 block text-amber-900/80">La première formation réservée et payée sera retenue ; les autres seront retirées automatiquement de la vente à cette date.</span>
+                {pendingTitles.length > 0 && (
+                  <span className="mt-1 block font-medium" data-testid="session-alternative-pending">Un paiement est en cours sur {pendingTitles.join(', ')} : s’il aboutit, cette nouvelle session sera retirée automatiquement.</span>
+                )}
               </span>
             </label>
           )}

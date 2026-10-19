@@ -154,10 +154,19 @@ export async function listEvents(query = {}) {
     ...activeHoldFilter(),
   }).sort({ startsAt: 1 }).lean();
   const generated = await generatedFormationEvents(from, to);
+  const { pendingSeatsBySession, slotGroupIdsForSessions } = await import('./trainingSlotGroup.service.js');
+  // Réservations confirmées / paiements en cours : le formulaire de session dit
+  // si une alternative reste possible sur ce créneau.
+  const withSeats = [...new Set(generated.filter((e) => e.reservedCount > 0).map((e) => e.sessionId))];
+  const pending = await pendingSeatsBySession(withSeats);
+  for (const e of generated) {
+    const held = Number(pending.get(String(e.sessionId))?.seats || 0);
+    e.pendingCount = held;
+    e.bookedCount = Math.max(0, Number(e.reservedCount || 0) - held);
+  }
   // Créneaux partagés : le planning empile les sessions d'un même groupe.
   const grouped = generated.filter((e) => e.slotGroupId).map((e) => e.sessionId);
   if (grouped.length) {
-    const { slotGroupIdsForSessions } = await import('./trainingSlotGroup.service.js');
     const states = await slotGroupIdsForSessions(grouped);
     for (const e of generated) {
       const state = states.get(String(e.sessionId));
