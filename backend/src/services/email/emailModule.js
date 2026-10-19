@@ -25,6 +25,7 @@ import {
   resolveSessionRescheduledClient,
   resolveSessionCancelledClient,
   resolveReviewRequestClient,
+  resolveSlotGroupAssignedAdmin,
   resolveCustomerEmailVerification,
   resolveCustomerPasswordReset,
   resolveGiftCardIssuedClient,
@@ -81,6 +82,7 @@ export async function initEmailModule({ skipBootstrap = false } = {}) {
   registerVariableResolver('FORMATION_SESSION_RESCHEDULED_CLIENT', resolveSessionRescheduledClient);
   registerVariableResolver('FORMATION_SESSION_CANCELLED_CLIENT', resolveSessionCancelledClient);
   registerVariableResolver('REVIEW_REQUEST_CLIENT', resolveReviewRequestClient);
+  registerVariableResolver('FORMATION_SLOT_ASSIGNED_ADMIN', resolveSlotGroupAssignedAdmin);
   // Un avis reçu entre la planification et l'envoi annule l'e-mail.
   registerRelevanceGuard('review.requested', reviewRequestStillRelevant);
 

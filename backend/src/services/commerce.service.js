@@ -33,6 +33,7 @@ import { view as commissionView } from './commissionPayment.service.js';
 import { emitAppointmentsBooked, isPendingInstituteAccount, rotatePasswordResetToken, sendCustomerAccessLink } from './commerceCustomer.service.js';
 import { emitAndDispatch } from './events/domainEvent.service.js';
 import { normalizeReviewRequestConfig } from './reviewRequestConfig.js';
+import { assignGroupsForSale, holdGroupsForSale, publicSlotStates, releaseGroupsForSale, sessionBlockedReason } from './trainingSlotGroup.service.js';
 import {
   activeInstituteMode,
   assertInstituteKeyMatchesMode,
@@ -937,6 +938,14 @@ export async function getProductBySlug(slug, { customerId = null } = {}) {
       if (own) session.remaining = Math.min(session.capacity || 0, session.remaining + own);
     }
   }
+  // Créneau partagé : la date est proposée pour d'autres formations, ou retenue.
+  if (view.sessions?.length) {
+    const states = await publicSlotStates(view.sessions.map((x) => x.id), customerId);
+    for (const session of view.sessions) {
+      const state = states.get(String(session.id));
+      if (state) session.sharedSlot = state;
+    }
+  }
   return view;
 }
 
@@ -1205,6 +1214,9 @@ async function buildOrderLine(payload = {}, { allowUnscheduled = false, customer
     // Ses propres places retenues (paiement quitté) ne comptent pas contre elle.
     const own = await seatsHeldBy(customerId, payload.sessionId);
     if ((session.reservedCount || 0) - own >= (session.capacity || 0)) throw ApiError.conflict('Cette session est complète');
+    // Créneau partagé : déjà attribué à une autre formation, ou en cours de réservation.
+    const blocked = await sessionBlockedReason(payload.sessionId, customerId);
+    if (blocked) throw ApiError.conflict(blocked.message, { code: blocked.code, ...(blocked.heldUntil ? { heldUntil: blocked.heldUntil } : {}) });
   }
   const hasSlot = Boolean(payload.serviceBooking?.startsAt || payload.bookingSnapshot?.startsAt);
   if (product.kind === 'SERVICE' && (hasSlot || !allowUnscheduled)) {
@@ -1862,6 +1874,8 @@ async function holdServiceSlots(sale, customer, holdExpiresAt) {
 }
 
 async function holdTrainingSeats(sale, holdExpiresAt) {
+  // Créneau partagé : retenue EXCLUSIVE du groupe pour cette vente, ou refus.
+  await holdGroupsForSale(sale, holdExpiresAt);
   // Places de formation : comptées tout de suite (et rendues si le paiement n'aboutit pas).
   if (!sale.seatsHeld) {
     /**
@@ -1909,6 +1923,7 @@ async function holdTrainingSeats(sale, holdExpiresAt) {
 
 /** Rend les créneaux et places retenus par une vente qui n'aboutit pas. Aucun e-mail : rien n'était confirmé. */
 async function releaseSaleHolds(sale, reason) {
+  await releaseGroupsForSale(sale);
   await CalendarEvent.updateMany(
     { 'source.saleId': String(sale._id), status: 'HELD' },
     { $set: { status: 'CANCELLED', holdExpiresAt: null, 'cancellation.reason': reason, 'cancellation.cancelledAt': new Date() } },
@@ -2326,6 +2341,8 @@ export async function finalizePaidSale(saleOrId, stripePayload = {}) {
     }
     if (!sale.finalizeSteps?.sessions) {
       await incrementReservedSessions(sale, issues);
+      // Créneau partagé : la première vente payée l'emporte, les alternatives sont retirées.
+      await assignGroupsForSale(sale, issues);
       sale.finalizeSteps.sessions = true;
       await sale.save();
     }

@@ -51,6 +51,8 @@ const sessionSchema = new mongoose.Schema(
     // choisir l'un des deux faisait échouer tout l'enregistrement de la formation.
     status: { type: String, enum: ['ACTIVE', 'FULL', 'BLOCKED', 'CANCELLED'], default: 'ACTIVE' },
     cancellationReason: { type: String, default: '' },
+    /** Créneau partagé (sessions proposées en alternative) — voir TrainingSlotGroup. */
+    slotGroupId: { type: mongoose.Schema.Types.ObjectId, default: null },
     /**
      * LES JOURS DE LA SESSION — une formation de 2 jours réserve 2 plages
      * (jour 1, jour 2), pas la nuit entre les deux. `startsAt` / `endsAt`

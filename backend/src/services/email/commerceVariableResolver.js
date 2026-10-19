@@ -240,6 +240,20 @@ export async function resolveReviewRequestClient({ event }) {
   };
 }
 
+/** Créneau partagé attribué : quelle formation est retenue, lesquelles sont retirées. */
+export async function resolveSlotGroupAssignedAdmin({ event }) {
+  const p = event.payloadSafe;
+  const sale = await CommerceSale.findById(p.saleId).select('saleNumber customerId').lean();
+  return {
+    ...(sale?.customerId ? await customerIdentity(sale.customerId) : { clientName: 'Cliente', clientEmail: '' }),
+    winnerTitle: p.winnerTitle,
+    withdrawnTitles: (p.withdrawnTitles || []).join(', ') || 'aucune',
+    slotStart: p.slotStart,
+    saleNumber: sale?.saleNumber || '',
+    managerCalendarUrl: await managerUrl('/commerce/calendrier'),
+  };
+}
+
 export async function resolveSessionRescheduledClient({ event }) {
   const p = event.payloadSafe;
   return {
@@ -286,6 +300,7 @@ export default {
   resolveTrainingSubmissionAdmin,
   resolveTrainingDecisionClient,
   resolveReviewRequestClient,
+  resolveSlotGroupAssignedAdmin,
   resolveSessionRescheduledClient,
   resolveSessionCancelledClient,
 };

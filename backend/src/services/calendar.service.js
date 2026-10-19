@@ -71,7 +71,7 @@ function sameSession(eventId, ignoreId) {
   return Boolean(ignoreId) && (eventId === ignoreId || String(eventId).startsWith(`${ignoreId}:`));
 }
 
-async function generatedFormationEvents(from, to) {
+export async function generatedFormationEvents(from, to) {
   const products = await CommerceProduct.find({
     kind: 'IN_PERSON_TRAINING',
     'sessions.startsAt': { $lt: to },
@@ -109,6 +109,7 @@ async function generatedFormationEvents(from, to) {
           capacity: session.capacity || 0,
           reservedCount: session.reservedCount || 0,
           sessionId: String(session._id),
+          slotGroupId: session.slotGroupId ? String(session.slotGroupId) : null,
           dayIndex: index + 1,
           dayCount: blocks.length,
           location: product.training?.location || '',
@@ -153,6 +154,17 @@ export async function listEvents(query = {}) {
     ...activeHoldFilter(),
   }).sort({ startsAt: 1 }).lean();
   const generated = await generatedFormationEvents(from, to);
+  // Créneaux partagés : le planning empile les sessions d'un même groupe.
+  const grouped = generated.filter((e) => e.slotGroupId).map((e) => e.sessionId);
+  if (grouped.length) {
+    const { slotGroupIdsForSessions } = await import('./trainingSlotGroup.service.js');
+    const states = await slotGroupIdsForSessions(grouped);
+    for (const e of generated) {
+      const state = states.get(String(e.sessionId));
+      if (state) Object.assign(e, { slotGroupId: state.groupId, slotGroupStatus: state.status, slotGroupHeld: state.held });
+      else if (e.slotGroupId) e.slotGroupId = null;
+    }
+  }
   return [...stored.map(publicEvent), ...generated].sort((a, b) => new Date(a.startsAt) - new Date(b.startsAt));
 }
 
@@ -491,6 +503,8 @@ export async function getFormationSession(productId, sessionId) {
     seatsLeft: Math.max(0, Number(session.capacity || 0) - Math.max(seatsTaken, Number(session.reservedCount || 0))),
     revenueCents: participants.reduce((sum, row) => sum + row.paidCents, 0),
     balanceDueCents: participants.reduce((sum, row) => sum + row.balanceDueCents, 0),
+    // Créneau partagé : les autres formations proposées sur cette date, et son état.
+    slotGroup: await (await import('./trainingSlotGroup.service.js')).describeSlotGroup(session._id),
   };
 }
 

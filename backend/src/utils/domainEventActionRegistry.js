@@ -168,6 +168,16 @@ export const DOMAIN_EVENT_ACTION_REGISTRY = Object.freeze({
       description: 'Invite la cliente a laisser son avis sur ses prestations/formations terminees.',
     },
   ],
+  'formation.slot_group.assigned': [
+    {
+      actionId: 'notify-admins-slot-group-assigned',
+      actionType: ACTION_TYPE.SEND_EMAIL,
+      enabled: true,
+      templateId: 'FORMATION_SLOT_ASSIGNED_ADMIN',
+      recipientResolver: 'ADMIN_EMAILS',
+      description: "Previent l'institut qu'un creneau partage est attribue et que les autres formations sont retirees.",
+    },
+  ],
   'training.submission.rejected': [
     {
       actionId: 'send-customer-training-rejected',

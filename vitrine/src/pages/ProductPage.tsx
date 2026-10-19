@@ -908,7 +908,9 @@ function BookingDialog({
               <div className="grid gap-3 md:grid-cols-2" data-testid="booking-sessions">
                 {product.sessions.map((item) => {
                   const active = item.id === sessionId;
-                  const full = item.remaining <= 0;
+                  /** Créneau partagé retenu par un paiement en cours d'une autre cliente. */
+                  const held = Boolean(item.sharedSlot?.heldUntil);
+                  const full = item.remaining <= 0 || held;
                   const days = item.days?.length ? item.days : [{ startsAt: item.startsAt, endsAt: item.endsAt }];
                   const time = (v: string) => new Date(v).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
                   const date = (v: string, o: Intl.DateTimeFormatOptions) => new Date(v).toLocaleDateString('fr-FR', o);
@@ -930,9 +932,15 @@ function BookingDialog({
                             : first(date(item.startsAt, { weekday: 'long', day: 'numeric', month: 'long' }))}
                         </span>
                         <span className="shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold" style={{ background: 'color-mix(in srgb, var(--v-muted-foreground) 14%, transparent)' }}>
-                          {full ? 'Complet' : `${item.remaining} place${item.remaining > 1 ? 's' : ''}`}
+                          {held ? 'En cours de réservation' : full ? 'Complet' : `${item.remaining} place${item.remaining > 1 ? 's' : ''}`}
                         </span>
                       </span>
+                      {item.sharedSlot?.shared && (
+                        <span className="rounded-md px-3 py-2 text-xs leading-5" style={{ background: 'color-mix(in srgb, var(--v-accent) 14%, transparent)' }} data-testid="booking-session-shared">
+                          <span className="font-semibold" style={{ color: 'var(--v-accent)' }}>Date partagée</span> — cette date est aussi proposée pour {item.sharedSlot.alternatives.map((t) => `« ${t} »`).join(', ')}. Dès qu’une formation est réservée, les autres ne sont plus disponibles à cette date.
+                          {held && <span className="mt-1 block font-semibold">Une réservation est en cours : revenez dans quelques minutes.</span>}
+                        </span>
+                      )}
                       <span className="grid gap-1.5" data-testid="booking-session-days">
                         {days.map((d, i) => (
                           <span key={i} className="flex items-center justify-between gap-3 rounded-md px-3 py-2 text-sm" style={{ background: 'color-mix(in srgb, var(--v-foreground) 5%, transparent)' }}>

@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { CalendarDays, CheckCircle2, Clock, Loader2, Plus, TriangleAlert, Users } from 'lucide-react';
+import { CalendarDays, CheckCircle2, Clock, Layers, Loader2, Plus, TriangleAlert, Users } from 'lucide-react';
 import { DayTimeline, MonthCalendar, RangeEditor, atMinutes, busyOfDay, durationLabel, hm, longDay, minutesOfDate, overlaps, type Busy } from '@/components/ui/TimeRange';
 import { api } from '@/lib/api';
 import { Button, Field, Input, Textarea } from '@/components/ui/primitives';
@@ -230,6 +230,8 @@ function SessionDaysPicker({ productId, template, mode, session, onClose, onSave
   const [note, setNote] = React.useState('');
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState('');
+  /** Créneau partagé : l'institut accepte de proposer cette session en alternative. */
+  const [asAlternative, setAsAlternative] = React.useState(false);
   const registered = session?.reservedCount || 0;
   const ownPrefix = session ? `${productId}:${session._id}` : '';
   const dates = day1 ? ranges.map((_, i) => addDays(day1, i)) : [];
@@ -248,12 +250,27 @@ function SessionDaysPicker({ productId, template, mode, session, onClose, onSave
     return () => { alive = false; };
   }, [key, ownPrefix]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  /**
+   * CE QUI PEUT DEVENIR UN CRÉNEAU PARTAGÉ — une session d'une AUTRE formation,
+   * pas encore attribuée. Un rendez-vous, un blocage ou une session de cette
+   * même formation restent des conflits francs.
+   */
+  const alternativeIds = new Set((busyList || [])
+    .filter((e) => {
+      const ev = e as Busy & { productId?: string; slotGroupStatus?: string; status?: string };
+      return ev.type === 'FORMATION_SESSION' && ev.productId !== productId && ev.slotGroupStatus !== 'ASSIGNED';
+    })
+    .map((e) => e.id));
   const perDay = dates.map((d, i) => {
     const busy = busyOfDay(busyList || [], d);
-    return { date: d, range: ranges[i], busy, clashes: overlaps(busy, ranges[i].from, ranges[i].to) };
+    const clashes = overlaps(busy, ranges[i].from, ranges[i].to);
+    const alternatives = mode === 'create' ? clashes.filter((c) => alternativeIds.has(c.id)) : [];
+    return { date: d, range: ranges[i], busy, clashes: clashes.filter((c) => !alternatives.includes(c)), alternatives };
   });
   const past = day1 ? atMinutes(day1, ranges[0].from) < new Date() : false;
   const conflict = perDay.some((d) => d.clashes.length > 0);
+  const alternativeTitles = [...new Set(perDay.flatMap((d) => d.alternatives.map((c) => c.title.replace(/ · jour \d+\/\d+$/, ''))))];
+  const needsAlternative = alternativeTitles.length > 0;
   const moved = Boolean(session) && day1 !== null && JSON.stringify(own.map((d) => [new Date(d.startsAt).getTime(), new Date(d.endsAt).getTime()]))
     !== JSON.stringify(perDay.map((d) => [atMinutes(d.date, d.range.from).getTime(), atMinutes(d.date, d.range.to).getTime()]));
 
@@ -264,7 +281,7 @@ function SessionDaysPicker({ productId, template, mode, session, onClose, onSave
     try {
       const days = perDay.map((d) => ({ startsAt: atMinutes(d.date, d.range.from).toISOString(), endsAt: atMinutes(d.date, d.range.to).toISOString() }));
       if (mode === 'create') {
-        await api.createFormationSession(productId, { days, capacity });
+        await api.createFormationSession(productId, { days, capacity, ...(needsAlternative && asAlternative ? { alternative: true } : {}) });
         onSaved(days.length > 1 ? `Session de ${days.length} jours ajoutée.` : 'Session ajoutée.');
       } else {
         const result = await api.updateFormationSession(productId, session!._id!, { ...(moved ? { days } : {}), capacity, ...(note.trim() ? { message: note.trim() } : {}) });
@@ -314,6 +331,8 @@ function SessionDaysPicker({ productId, template, mode, session, onClose, onSave
                     <span className="inline-flex items-center gap-1 text-xs text-muted-foreground"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Vérification</span>
                   ) : d.clashes.length ? (
                     <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2.5 py-1 text-xs font-semibold text-rose-800" data-testid="session-day-state"><TriangleAlert className="h-3.5 w-3.5" /> Occupé</span>
+                  ) : d.alternatives.length ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-900" data-testid="session-day-state"><Layers className="h-3.5 w-3.5" /> En option</span>
                   ) : (
                     <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-800" data-testid="session-day-state"><CheckCircle2 className="h-3.5 w-3.5" /> Libre</span>
                   )}
@@ -341,6 +360,15 @@ function SessionDaysPicker({ productId, template, mode, session, onClose, onSave
             </div>
           ))}
           {past && <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">Le jour 1 commence dans le passé.</p>}
+          {needsAlternative && !conflict && (
+            <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950" data-testid="session-alternative">
+              <input type="checkbox" className="mt-0.5 h-4 w-4 accent-amber-600" checked={asAlternative} onChange={(e) => setAsAlternative(e.target.checked)} data-testid="session-alternative-check" />
+              <span>
+                <span className="font-semibold">Proposer en alternative</span> — ce créneau est déjà proposé pour {alternativeTitles.map((t) => `« ${t} »`).join(', ')}.
+                <span className="mt-1 block text-amber-900/80">La première formation réservée et payée sera retenue ; les autres seront retirées automatiquement de la vente à cette date.</span>
+              </span>
+            </label>
+          )}
           {moved && registered > 0 && (
             <div className="grid gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
               <p className="font-semibold">{registered} inscrite(s) seront prévenues de la nouvelle date par e-mail.</p>
@@ -350,8 +378,8 @@ function SessionDaysPicker({ productId, template, mode, session, onClose, onSave
           {error && <p className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700" role="alert">{error}</p>}
           <div className="grid grid-cols-2 gap-2 sm:flex sm:justify-end">
             <Button variant="outline" className="h-11" onClick={onClose} disabled={saving}>Annuler</Button>
-            <Button className="h-11" onClick={save} disabled={saving || !day1 || busyList === null || conflict || past || editing !== null} data-testid="session-save">
-              {saving && <Loader2 className="h-4 w-4 animate-spin" />} {mode === 'create' ? 'Créer la session' : moved ? 'Déplacer la session' : 'Enregistrer'}
+            <Button className="h-11" onClick={save} disabled={saving || !day1 || busyList === null || conflict || past || editing !== null || (needsAlternative && !asAlternative)} data-testid="session-save">
+              {saving && <Loader2 className="h-4 w-4 animate-spin" />} {mode === 'create' ? (needsAlternative ? 'Créer en alternative' : 'Créer la session') : moved ? 'Déplacer la session' : 'Enregistrer'}
             </Button>
           </div>
         </div>

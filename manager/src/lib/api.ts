@@ -1143,12 +1143,15 @@ export const api = {
   createCalendarEvent: (data: any) =>
     request<any>('/calendar/events', { method: 'POST', body: data }),
   /** Sessions d'une formation présentielle — opérations propres, hors enregistrement de la fiche. */
-  createFormationSession: (productId: string, data: { startsAt?: string; endsAt?: string; days?: { startsAt: string; endsAt: string }[]; day?: string; capacity: number }) =>
+  createFormationSession: (productId: string, data: { startsAt?: string; endsAt?: string; days?: { startsAt: string; endsAt: string }[]; day?: string; capacity: number; alternative?: boolean }) =>
     request<any>(`/commerce/products/${productId}/sessions`, { method: 'POST', body: data }),
   updateFormationSession: (productId: string, sessionId: string, data: Record<string, unknown>) =>
     request<any>(`/commerce/products/${productId}/sessions/${sessionId}`, { method: 'PUT', body: data }),
   cancelFormationSession: (productId: string, sessionId: string, data: { reason: string; refundMode: 'FULL' | 'NONE' }) =>
     request<any>(`/commerce/products/${productId}/sessions/${sessionId}/cancel`, { method: 'POST', body: data }),
+  /** Créneau partagé : remettre en vente les alternatives retirées par l'attribution. */
+  reopenSlotGroup: (groupId: string) =>
+    request<any>(`/commerce/slot-groups/${encodeURIComponent(groupId)}/reopen`, { method: 'POST', body: {} }),
   deleteFormationSession: (productId: string, sessionId: string) =>
     request<any>(`/commerce/products/${productId}/sessions/${sessionId}`, { method: 'DELETE' }),
   /** Mise en avant sur l'accueil : la liste ordonnée d'une rubrique. */

@@ -14,6 +14,7 @@ import { siteUrlFor } from '../utils/siteOrigin.js';
 import * as customerAgenda from '../services/customerAgenda.service.js';
 import * as commerce from '../services/commerce.service.js';
 import * as reviewRequests from '../services/reviewRequest.service.js';
+import * as slotGroups from '../services/trainingSlotGroup.service.js';
 import * as calendar from '../services/calendar.service.js';
 import * as sessions from '../services/formationSessions.service.js';
 
@@ -127,6 +128,7 @@ managerCommerceRoutes.put('/home-featured/:group', authorize(ROLES.ADMIN, ROLES.
 managerCommerceRoutes.post('/products/:id/sessions', authorize(ROLES.ADMIN, ROLES.DEV), asyncHandler(async (req, res) => created(res, await sessions.createSession(req.params.id, req.body))));
 managerCommerceRoutes.put('/products/:id/sessions/:sessionId', authorize(ROLES.ADMIN, ROLES.DEV), asyncHandler(async (req, res) => ok(res, await sessions.updateSession(req.params.id, req.params.sessionId, req.body))));
 managerCommerceRoutes.post('/products/:id/sessions/:sessionId/cancel', authorize(ROLES.ADMIN, ROLES.DEV), asyncHandler(async (req, res) => ok(res, await sessions.cancelSession(req.params.id, req.params.sessionId, req.body, req.user?._id || null))));
+managerCommerceRoutes.post('/slot-groups/:id/reopen', authorize(ROLES.ADMIN, ROLES.DEV), asyncHandler(async (req, res) => ok(res, await slotGroups.reopenSlotGroup(req.params.id))));
 managerCommerceRoutes.delete('/products/:id/sessions/:sessionId', authorize(ROLES.ADMIN, ROLES.DEV), asyncHandler(async (req, res) => ok(res, await sessions.deleteSession(req.params.id, req.params.sessionId))));
 managerCommerceRoutes.post('/videos/resolve-streamable', authorize(ROLES.ADMIN, ROLES.DEV), asyncHandler(async (req, res) => ok(res, await commerce.resolveStreamableVideo(req.body))));
 managerCommerceRoutes.post('/videos/resolve-drive', authorize(ROLES.ADMIN, ROLES.DEV), asyncHandler(async (req, res) => ok(res, await commerce.resolveGoogleDriveVideo(req.body))));

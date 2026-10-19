@@ -9,6 +9,7 @@ import { logger } from '../utils/logger.js';
 import { assertNoOverlap, minutesOf, sessionBlocks, sessionEventId, zonedWallTime } from './calendar.service.js';
 import { emitAndDispatch } from './events/domainEvent.service.js';
 import { refundInstitutePayment } from './instituteStripe.service.js';
+import { assertSessionsCanShare, detachSession, inspectSessionSlot, linkSessions } from './trainingSlotGroup.service.js';
 
 /**
  * LES SESSIONS D'UNE FORMATION PRÉSENTIELLE — leurs propres opérations.
@@ -133,7 +134,22 @@ export async function createSession(productId, payload = {}) {
   const product = await CommerceProduct.findById(productId);
   if (!product || product.kind !== 'IN_PERSON_TRAINING') throw ApiError.notFound('Formation presentielle introuvable');
   const days = buildSessionDays(product, payload);
-  await assertSlotFree(product, days);
+  /**
+   * CRÉNEAU PARTAGÉ — un rendez-vous ou un blocage reste un refus net ; une
+   * session d'une AUTRE formation sur ce créneau peut être proposée en
+   * alternative (la première réservée sera retenue). Le Manager reçoit
+   * d'abord la question (`SESSION_ALTERNATIVE_POSSIBLE`), puis renvoie
+   * `alternative: true` si l'institut accepte.
+   */
+  const slot = await inspectSessionSlot(product, days);
+  if (slot.blocking) await assertSlotFree(product, days);
+  if (slot.sessions.length) {
+    if (!payload.alternative) {
+      const names = slot.sessions.map((x) => `« ${x.title} »`).join(', ');
+      throw ApiError.conflict(`Ce créneau est déjà proposé pour ${names}. Vous pouvez le proposer en alternative : la première formation réservée sera retenue, les autres retirées.`, { code: 'SESSION_ALTERNATIVE_POSSIBLE', sessions: slot.sessions });
+    }
+    await assertSessionsCanShare(slot.sessions);
+  }
   const capacity = Math.max(1, Math.round(Number(payload.capacity || 6)));
   product.sessions.push({
     startsAt: days[0].startsAt,
@@ -144,7 +160,12 @@ export async function createSession(productId, payload = {}) {
     status: 'ACTIVE',
   });
   await product.save();
-  return product.sessions.at(-1);
+  const created = product.sessions.at(-1);
+  if (slot.sessions.length) {
+    const group = await linkSessions([...slot.sessions, { productId: product._id, sessionId: created._id }]);
+    if (group) created.slotGroupId = group._id;
+  }
+  return created;
 }
 
 /**
@@ -171,6 +192,9 @@ export async function updateSession(productId, sessionId, payload = {}) {
   const endsAt = days.at(-1).endsAt;
   const before = sessionBlocks(session).map((d) => `${d.startsAt.getTime()}-${d.endsAt.getTime()}`).join('|');
   const moved = before !== days.map((d) => `${d.startsAt.getTime()}-${d.endsAt.getTime()}`).join('|');
+  if (moved && session.slotGroupId) {
+    throw ApiError.conflict('Cette session est proposée en alternative sur un créneau partagé : supprimez-la ou annulez-la, puis recréez-la à la nouvelle date.', { code: 'SLOT_GROUP_MOVE' });
+  }
   if (moved) await assertSlotFree(product, days, session._id);
 
   if (payload.capacity !== undefined) {
@@ -299,6 +323,8 @@ export async function cancelSession(productId, sessionId, payload = {}, userId =
   session.cancellationReason = reason;
   product.markModified('sessions');
   await product.save();
+  // Annulée par l'institut sur un créneau encore ouvert : elle quitte le groupe.
+  if (session.slotGroupId) await detachSession(product._id, session._id);
 
   const results = [];
   for (const { sale, line } of lines) {
@@ -342,6 +368,7 @@ export async function deleteSession(productId, sessionId) {
   if (lines.length > 0 || Number(session.reservedCount || 0) > 0) {
     throw ApiError.conflict('Cette session a des inscrites : annulez-la pour les prevenir et les rembourser');
   }
+  if (session.slotGroupId) await detachSession(product._id, session._id);
   session.deleteOne();
   await product.save();
   return { deleted: true };

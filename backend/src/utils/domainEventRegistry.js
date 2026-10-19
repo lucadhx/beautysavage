@@ -375,6 +375,22 @@ export const DOMAIN_EVENT_REGISTRY = Object.freeze({
     }).strict(),
   },
 
+  'formation.slot_group.assigned': {
+    type: 'formation.slot_group.assigned',
+    description: "Creneau partage : la premiere vente payee a retenu une formation ; les alternatives proposees sur la meme date sont retirees.",
+    entityTypes: [ENTITY_TYPE.COMMERCE_SALE],
+    retentionClass: RETENTION_CLASS.OPERATIONAL,
+    payloadSchema: z.object({
+      saleId: z.string().max(64),
+      groupId: z.string().max(64),
+      winnerTitle: z.string().max(180),
+      withdrawnTitles: z.array(z.string().max(180)).max(20),
+      slotStart: z.string().max(40),
+      slotEnd: z.string().max(40),
+      assignedAt: z.string().max(40),
+    }).strict(),
+  },
+
   'formation.session.cancelled': {
     type: 'formation.session.cancelled',
     description: "Une session de formation presentielle a ete annulee par l'institut ; chaque inscrite est prevenue (et remboursee selon le choix).",

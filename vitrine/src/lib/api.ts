@@ -125,7 +125,7 @@ export interface CommerceProduct {
   trailer?: { title?: string; url?: string; sourceUrl?: string; streamableShortcode?: string; coverUrl?: string };
   /** `extraMinutes` : temps ajouté au rendez-vous quand l'option est cochée (prestations). */
   options: { key: string; label: string; description: string; priceCents: number; extraMinutes?: number }[];
-  sessions: { id: string; startsAt: string; endsAt: string; capacity: number; remaining: number; days?: { startsAt: string; endsAt: string }[] }[];
+  sessions: { id: string; startsAt: string; endsAt: string; capacity: number; remaining: number; days?: { startsAt: string; endsAt: string }[]; sharedSlot?: { shared: boolean; alternatives: string[]; heldUntil: string | null } }[];
   requiresLegalWaiver?: boolean;
   faq?: { question: string; answer: string }[];
   consentRequirements?: { key: string; label: string; required: boolean }[];

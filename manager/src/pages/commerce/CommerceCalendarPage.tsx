@@ -12,6 +12,7 @@ import { ClientPicker, clientName } from './ClientPicker';
 import { DayTimeline, DAY_CLOSE, MonthCalendar, RangeEditor, STEP as QUARTER, TimeSelect, atMinutes, busyOfDay, durationLabel, hm, longDay, overlaps, sameDate, type Busy } from '@/components/ui/TimeRange';
 import { CardsSkeleton, Skeleton, TableSkeleton } from '@/components/ui/Skeleton';
 import { CommercePageFrame, StatusBadge, cents } from './CommerceShared';
+import { SlotGroupPanel, StackCard, StackCarousel, type SlotGroupInfo } from './SlotGroupStack';
 
 interface CalendarEvent {
   id: string;
@@ -32,6 +33,10 @@ interface CalendarEvent {
   reservedCount?: number;
   sessionId?: string;
   location?: string;
+  /** Créneau partagé : sessions de formations proposées en alternative sur la même date. */
+  slotGroupId?: string | null;
+  slotGroupStatus?: 'OPEN' | 'ASSIGNED' | null;
+  slotGroupHeld?: boolean;
 }
 
 interface FormationSessionSheet {
@@ -40,6 +45,7 @@ interface FormationSessionSheet {
   participants: { customerId: string; name: string; email: string; phone: string; seats: number; paidCents: number; totalCents?: number; balanceDueCents?: number; saleId: string; saleNumber: string; registeredAt: string }[];
   seatsTaken: number;
   seatsLeft: number;
+  slotGroup?: SlotGroupInfo | null;
   revenueCents: number;
   balanceDueCents?: number;
 }
@@ -191,6 +197,9 @@ export default function CommerceCalendarPage() {
   /** Rendez-vous en cours de modification (même fenêtre que la création). */
   const [editing, setEditing] = React.useState<CalendarEvent | null>(null);
   const [selectedOpen, setSelectedOpen] = React.useState(false);
+  /** Pile d'un créneau partagé déployée en carrousel (la fiche s'ouvre au-dessus). */
+  const [stack, setStack] = React.useState<{ events: CalendarEvent[]; origin: DOMRect } | null>(null);
+  const [stackOpen, setStackOpen] = React.useState(false);
   const [cancelOpen, setCancelOpen] = React.useState(false);
   const [balanceOpen, setBalanceOpen] = React.useState(false);
   const [cancelReason, setCancelReason] = React.useState('');
@@ -455,7 +464,27 @@ export default function CommerceCalendarPage() {
                             <Skeleton className={`absolute inset-x-1 h-24 ${dayIndex % 3 ? 'top-[46%]' : 'top-[58%]'}`} />
                           </>
                         )}
-                        {dayEvents.map((event) => {
+                        {(() => {
+                          /*
+                            CRÉNEAU PARTAGÉ — les sessions d'un même groupe (même jour) ne se
+                            superposent plus : elles forment UNE pile, déployée au clic.
+                          */
+                          const groups = new Map<string, CalendarEvent[]>();
+                          for (const e of dayEvents) {
+                            if (!isFormationSession(e) || !e.slotGroupId || e.status === 'CANCELLED') continue;
+                            groups.set(e.slotGroupId, [...(groups.get(e.slotGroupId) || []), e]);
+                          }
+                          return [...groups.values()].filter((g) => g.length > 1).map((g) => (
+                            <StackCard
+                              key={`stack-${g[0].slotGroupId}-${g[0].id}`}
+                              events={g}
+                              style={eventPosition(g[0])}
+                              onOpen={(origin) => { setStack({ events: g, origin }); setStackOpen(true); }}
+                            />
+                          ));
+                        })()}
+                        {dayEvents.filter((event) => !(isFormationSession(event) && event.slotGroupId && event.status !== 'CANCELLED'
+                          && dayEvents.filter((o) => o.slotGroupId === event.slotGroupId && o.status !== 'CANCELLED').length > 1)).map((event) => {
                           const position = eventPosition(event);
                           return (
                             <button
@@ -517,6 +546,14 @@ export default function CommerceCalendarPage() {
           }}
         />
       </Modal>
+      <StackCarousel
+        open={stackOpen}
+        events={stack?.events || []}
+        origin={stack?.origin || null}
+        onPick={(event) => selectEvent(event as CalendarEvent)}
+        onClose={() => setStackOpen(false)}
+        modalOpen={selectedOpen}
+      />
       <Modal
         open={selectedOpen && Boolean(selected)}
         onClose={() => setSelectedOpen(false)}
@@ -527,7 +564,7 @@ export default function CommerceCalendarPage() {
         className="max-w-3xl"
         busy={saving}
       >
-        {selected && isFormationSession(selected) && <FormationSessionPanel selected={selected} />}
+        {selected && isFormationSession(selected) && <FormationSessionPanel selected={selected} onChanged={refresh} />}
         {selected && !isFormationSession(selected) && (
           <EventPanel
             selected={selected}
@@ -952,9 +989,11 @@ function EventPanel({
  * solde à encaisser, pas d'annulation individuelle. Ce que l'institut vient y
  * chercher, c'est QUI vient, combien de places restent, et où.
  */
-function FormationSessionPanel({ selected }: { selected: CalendarEvent }) {
+function FormationSessionPanel({ selected, onChanged }: { selected: CalendarEvent; onChanged?: () => void }) {
   const [sheet, setSheet] = React.useState<FormationSessionSheet | null>(null);
   const [error, setError] = React.useState('');
+  const [reopening, setReopening] = React.useState(false);
+  const [reloadKey, setReloadKey] = React.useState(0);
   const productId = String(selected.productId || '');
   const sessionId = String(selected.sessionId || selected.source?.sessionId || '');
 
@@ -966,7 +1005,21 @@ function FormationSessionPanel({ selected }: { selected: CalendarEvent }) {
       .then((data) => { if (alive) setSheet(data as FormationSessionSheet); })
       .catch((err) => { if (alive) setError(err instanceof Error ? err.message : 'Session introuvable'); });
     return () => { alive = false; };
-  }, [productId, sessionId]);
+  }, [productId, sessionId, reloadKey]);
+
+  async function reopenGroup(groupId: string) {
+    setReopening(true);
+    setError('');
+    try {
+      await api.reopenSlotGroup(groupId);
+      setReloadKey((k) => k + 1);
+      onChanged?.();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Réouverture impossible');
+    } finally {
+      setReopening(false);
+    }
+  }
 
   const rawDay = new Date(selected.startsAt).toLocaleDateString('fr-FR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
   const day = rawDay.charAt(0).toUpperCase() + rawDay.slice(1);
@@ -1007,6 +1060,7 @@ function FormationSessionPanel({ selected }: { selected: CalendarEvent }) {
         </div>
       </div>
 
+      {sheet.slotGroup && <SlotGroupPanel group={sheet.slotGroup} busy={reopening} onReopen={() => reopenGroup(sheet.slotGroup!.id)} />}
       <div className={`grid gap-3 ${sheet.balanceDueCents ? 'sm:grid-cols-4' : 'sm:grid-cols-3'}`}>
         <AmountCard label="Inscrites" value={String(sheet.participants.length)} />
         <AmountCard label="Places restantes" value={String(sheet.seatsLeft)} />
