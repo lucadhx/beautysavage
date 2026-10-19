@@ -197,7 +197,7 @@ function TrainingCard({ item, review }: { item: CommerceProduct; review?: Produc
         </h3>
         <p className="mt-1 text-[11px] sm:text-xs" style={{ color: 'color-mix(in srgb, var(--v-menu-foreground) 62%, transparent)' }}>{detail}</p>
         {(item.subtitle || item.description) && (
-          <p className="mt-1.5 line-clamp-3 pb-2.5 text-[11.5px] leading-[1.45] sm:mt-2 sm:line-clamp-2 sm:pb-3 sm:text-sm sm:leading-6" style={{ color: 'color-mix(in srgb, var(--v-menu-foreground) 78%, transparent)' }} data-testid="card-summary">
+          <p className="mb-2.5 mt-1.5 line-clamp-3 text-[11.5px] leading-[1.45] sm:mb-3 sm:mt-2 sm:line-clamp-2 sm:text-sm sm:leading-6" style={{ color: 'color-mix(in srgb, var(--v-menu-foreground) 78%, transparent)' }} data-testid="card-summary">
             {item.subtitle || richTextToPlain(item.description)}
           </p>
         )}
