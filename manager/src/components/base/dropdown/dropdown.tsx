@@ -68,7 +68,9 @@ function Popover({
   offset?: number;
 }) {
   const { open, anchorRef } = useDropdown();
+  const panelRef = React.useRef<HTMLDivElement | null>(null);
   const [position, setPosition] = React.useState<React.CSSProperties>({});
+  const [above, setAbove] = React.useState(false);
 
   React.useLayoutEffect(() => {
     if (!open || !anchorRef.current) return;
@@ -77,13 +79,30 @@ function Popover({
       const rect = anchorRef.current.getBoundingClientRect();
       const width = 224;
       const gap = 6;
-      const top = placement.includes('top')
-        ? Math.max(gap, rect.top - gap)
-        : rect.bottom + gap;
       const left = placement.includes('right')
         ? rect.right + gap
         : Math.min(window.innerWidth - width - gap, Math.max(gap, rect.right - width));
-      setPosition({ position: 'fixed', top, left, width, zIndex: 80 });
+      // Hauteur naturelle du menu (sans transformation ni plafond) : il s'ouvre
+      // là où il tient en entier — dessous par défaut, au-dessus si la page
+      // s'arrête trop tôt (tableau d'une seule ligne en bas d'écran). S'il ne
+      // tient nulle part, il prend le côté le plus grand et défile en lui-même.
+      const height = panelRef.current?.scrollHeight || 0;
+      const spaceBelow = window.innerHeight - rect.bottom - gap * 2;
+      const spaceAbove = rect.top - gap * 2;
+      const wantsTop = placement.includes('top');
+      const fitsBelow = height <= spaceBelow;
+      const fitsAbove = height <= spaceAbove;
+      const openAbove = wantsTop
+        ? fitsAbove || (!fitsBelow && spaceAbove >= spaceBelow)
+        : !fitsBelow && (fitsAbove || spaceAbove > spaceBelow);
+      const room = openAbove ? spaceAbove : spaceBelow;
+      const shown = Math.min(height, room);
+      const top = openAbove ? Math.max(gap, rect.top - gap - shown) : rect.bottom + gap;
+      setAbove(openAbove);
+      setPosition({
+        position: 'fixed', top, left, width, zIndex: 80,
+        ...(height > room ? { maxHeight: Math.max(120, room), overflowY: 'auto', overscrollBehavior: 'contain' } : {}),
+      });
     };
     updatePosition();
     window.addEventListener('scroll', updatePosition, true);
@@ -98,10 +117,12 @@ function Popover({
     <AnimatePresence>
       {open && (
         <motion.div
+          ref={panelRef}
           data-dropdown-popover="true"
-          initial={{ opacity: 0, y: -4, scale: 0.98 }}
+          data-placement={above ? 'top' : 'bottom'}
+          initial={{ opacity: 0, y: above ? 4 : -4, scale: 0.98 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, y: -4, scale: 0.98 }}
+          exit={{ opacity: 0, y: above ? 4 : -4, scale: 0.98 }}
           transition={{ duration: 0.14 }}
           className={cn('overflow-hidden rounded-md border p-1 shadow-xl', className)}
           style={{ background: 'var(--m-card)', color: 'var(--m-foreground)', ...position }}
