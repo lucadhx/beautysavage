@@ -101,7 +101,7 @@ function Popover({
       setAbove(openAbove);
       setPosition({
         position: 'fixed', top, left, width, zIndex: 80,
-        ...(height > room ? { maxHeight: Math.max(120, room), overflowY: 'auto', overscrollBehavior: 'contain' } : {}),
+        ...(height > room ? { maxHeight: Math.max(48, room), overflowY: 'auto', overscrollBehavior: 'contain' } : {}),
       });
     };
     updatePosition();
