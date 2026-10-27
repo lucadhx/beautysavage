@@ -174,7 +174,44 @@ export async function listEvents(query = {}) {
       else if (e.slotGroupId) e.slotGroupId = null;
     }
   }
-  return [...stored.map(publicEvent), ...generated].sort((a, b) => new Date(a.startsAt) - new Date(b.startsAt));
+  return [...(await withLiveIdentity(stored)).map((e) => publicEvent(e, { productSummary: e.productSummary, ...(e.holdExpiresAt ? { holdExpiresAt: e.holdExpiresAt } : {}) })), ...generated].sort((a, b) => new Date(a.startsAt) - new Date(b.startsAt));
+}
+
+/**
+ * LE PLANNING DIT QUI VIENT — et ce qu'elle a réservé.
+ *
+ * Le nom figé au moment de la réservation était souvent l'e-mail (les clientes
+ * ne donnaient pas leur nom). Il est relu sur la fiche cliente à l'affichage :
+ * une cliente qui complète son profil apparaît aussitôt sous son prénom et son
+ * nom, rendez-vous passés compris. La description courte de la prestation
+ * (sous-titre, sinon le début de la description) accompagne le titre — deux
+ * prestations de même nom se distinguent par elle.
+ */
+async function withLiveIdentity(events) {
+  const { Customer } = await import('../models/Customer.model.js');
+  const { richTextToPlain } = await import('../utils/richText.js');
+  const customerIds = [...new Set(events.map((e) => String(e.customerSnapshot?.customerId || '')).filter((v) => mongoose.isValidObjectId(v)))];
+  const productIds = [...new Set(events.map((e) => String(e.productId || '')).filter((v) => mongoose.isValidObjectId(v)))];
+  const [customers, products] = await Promise.all([
+    customerIds.length ? Customer.find({ _id: { $in: customerIds } }).select('firstName lastName phone email').lean() : [],
+    productIds.length ? CommerceProduct.find({ _id: { $in: productIds } }).select('subtitle description').lean() : [],
+  ]);
+  const byCustomer = new Map(customers.map((c) => [String(c._id), c]));
+  const byProduct = new Map(products.map((p) => [String(p._id), p]));
+  return events.map((e) => {
+    const c = byCustomer.get(String(e.customerSnapshot?.customerId || ''));
+    const p = byProduct.get(String(e.productId || ''));
+    const name = c ? [c.firstName, c.lastName].map((v) => String(v || '').trim()).filter(Boolean).join(' ') : '';
+    return {
+      ...e,
+      customerSnapshot: {
+        ...(e.customerSnapshot || {}),
+        ...(name ? { name } : {}),
+        ...(c?.phone && !e.customerSnapshot?.phone ? { phone: c.phone } : {}),
+      },
+      productSummary: p ? (String(p.subtitle || '').trim() || richTextToPlain(p.description || '', { maxLength: 220 })) : '',
+    };
+  });
 }
 
 export function minutesOf(value) {

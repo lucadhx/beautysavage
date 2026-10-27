@@ -2,16 +2,18 @@ import * as React from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { AlertTriangle, CheckCircle2, LockKeyhole, MailCheck, UserPlus } from 'lucide-react';
 import { useCustomer } from '@/context/CustomerContext';
-import { customerApi, customerTokenStore } from '@/lib/api';
+import { customerApi, customerTokenStore, type Customer } from '@/lib/api';
 import { CustomerDashboard } from '@/components/account/CustomerDashboard';
+import { IdentityFields, identityComplete, identityOf, phoneOk, type Identity } from '@/components/account/IdentityFields';
 
 export default function CustomerAccountPage() {
-  const { customer, login, register, refresh, logout } = useCustomer();
+  const { customer, login, register, refresh, logout, setCustomerProfile } = useCustomer();
   const location = useLocation();
   const [params, setParams] = useSearchParams();
   const [mode, setMode] = React.useState<'login' | 'register'>(location.pathname.includes('inscription') ? 'register' : 'login');
   const [email, setEmail] = React.useState('');
   const [password, setPassword] = React.useState('');
+  const [identity, setIdentity] = React.useState<Identity>({ firstName: '', lastName: '', phone: '' });
   const [verificationCode, setVerificationCode] = React.useState('');
   const [message, setMessage] = React.useState('');
   // Une erreur (compte existant, mot de passe faux…) s'affiche en rouge ; une information, en neutre.
@@ -56,7 +58,11 @@ export default function CustomerAccountPage() {
         await login(email, password);
         setMessage('');
       } else {
-        await register({ email, password });
+        if (!identity.firstName.trim() || !identity.lastName.trim() || !phoneOk(identity.phone)) {
+          fail(null, 'Indiquez votre prénom, votre nom et un numéro de téléphone valide.');
+          return;
+        }
+        await register({ email, password, ...identity });
         // Compte créé : direction la vérification du code, et nulle part ailleurs.
         navigate(`/verification-email${retourQuery}`, { replace: true });
       }
@@ -121,6 +127,7 @@ export default function CustomerAccountPage() {
             Accédez à vos achats, factures, cartes cadeaux et formations BeautySavage.
           </p>
           <form onSubmit={submit} className="mt-6 grid gap-4">
+            {mode === 'register' && <IdentityFields value={identity} onChange={(next) => { setIdentity(next); setMessage(''); }} />}
             <label className="grid gap-2 text-sm font-medium">
               E-mail
               <input className="v-field rounded-md px-3 py-3" type="email" value={email} onChange={(e) => { setEmail(e.target.value); setMessage(''); }} required />
@@ -171,6 +178,11 @@ export default function CustomerAccountPage() {
     <section className="max-w-xl rounded-2xl border p-5" style={{ borderColor: 'var(--v-border)', background: 'var(--v-surface)' }} data-testid="profile-tab">
       <h2 className="text-xl font-semibold">Profil</h2>
       <p className="mt-3 text-sm" style={{ color: 'var(--v-muted-foreground)' }}>{customer.email}</p>
+      <ProfileIdentityForm
+        customer={customer}
+        onSaved={(next) => { setCustomerProfile(next); tell('Vos coordonnées sont enregistrées.'); }}
+        onError={(err) => fail(err, 'Enregistrement impossible')}
+      />
       {customer.emailVerified ? (
         <div className="mt-4 flex items-center gap-2 rounded-md border p-3 text-sm" style={{ borderColor: 'var(--v-border)' }}>
           <CheckCircle2 className="h-4 w-4" style={{ color: 'var(--v-accent)' }} />
@@ -198,7 +210,48 @@ export default function CustomerAccountPage() {
       <span className="flex items-center gap-2"><MailCheck className="h-4 w-4" /> Confirmez votre e-mail pour pouvoir réserver et acheter.</span>
       <Link to="?onglet=profil" className="font-semibold underline">Saisir mon code</Link>
     </div>
+  ) : !identityComplete(customer) ? (
+    <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border p-4 text-sm" style={{ borderColor: '#fcd34d', background: '#fffbeb', color: '#92400e' }} data-testid="identity-banner">
+      <span>Ajoutez votre prénom, votre nom et votre téléphone : ils sont nécessaires pour réserver.</span>
+      <Link to="?onglet=profil" className="font-semibold underline">Compléter</Link>
+    </div>
   ) : null;
 
   return <CustomerDashboard firstName={customer.firstName} profile={profile} banner={banner} />;
+}
+
+/**
+ * COORDONNÉES DU PROFIL — prénom, nom, téléphone. Une cliente inscrite avant
+ * que ces champs deviennent obligatoires les complète ici (ou au moment de
+ * réserver) ; l'encadré le lui signale tant qu'il manque quelque chose.
+ */
+function ProfileIdentityForm({ customer, onSaved, onError }: {
+  customer: Customer;
+  onSaved: (next: Customer) => void;
+  onError: (err: unknown) => void;
+}) {
+  const [value, setValue] = React.useState<Identity>(() => identityOf(customer));
+  const [saving, setSaving] = React.useState(false);
+  const complete = identityComplete(customer);
+  const dirty = JSON.stringify(value) !== JSON.stringify(identityOf(customer));
+  async function save(event: React.FormEvent) {
+    event.preventDefault();
+    setSaving(true);
+    try {
+      onSaved(await customerApi.updateProfile(value));
+    } catch (err) {
+      onError(err);
+    } finally {
+      setSaving(false);
+    }
+  }
+  return (
+    <form onSubmit={save} className="mt-4 grid gap-4 rounded-md border p-4" style={{ borderColor: complete ? 'var(--v-border)' : '#fcd34d', background: complete ? 'transparent' : '#fffbeb' }} data-testid="profile-identity">
+      {!complete && <p className="text-sm font-medium" style={{ color: '#92400e' }}>Complétez vos coordonnées : elles sont nécessaires pour réserver.</p>}
+      <IdentityFields value={value} onChange={setValue} compact />
+      <button disabled={saving || !dirty} className="justify-self-start rounded-md px-4 py-2 text-sm font-semibold disabled:opacity-50" style={{ background: 'var(--v-primary)', color: 'var(--v-primary-foreground)' }} data-testid="profile-identity-save">
+        {saving ? 'Enregistrement…' : 'Enregistrer mes coordonnées'}
+      </button>
+    </form>
+  );
 }

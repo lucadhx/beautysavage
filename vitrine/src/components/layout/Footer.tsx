@@ -1,11 +1,12 @@
 import { Link } from 'react-router-dom';
-import { Globe, ArrowUpRight } from 'lucide-react';
+import { Globe, ArrowUpRight, MapPin } from 'lucide-react';
 import { useSiteData } from '@/context/SiteDataContext';
 import { MediaIcon } from '@/components/MediaIcon';
 import type { LegalDocumentType } from '@/types';
 import { mediaHref } from '@/lib/utils';
 import { copyrightNotice } from '@/lib/copyright';
 import { resolvePreviewMediaUrl } from '@/lib/media';
+import { instituteAddress } from '@/lib/instituteAddress';
 
 /**
  * TYPE DE DOCUMENT → ROUTE FRANÇAISE.
@@ -39,7 +40,8 @@ export function Footer() {
   const { data } = useSiteData();
   const company = data?.company;
   const developer = data?.developer;
-  const enabledMedia = (company?.media || []).filter((m) => m.enabled && m.value);
+  // L'adresse a son propre bloc (avec Google Maps) : pas d'icône en double, qui ne mènerait nulle part.
+  const enabledMedia = (company?.media || []).filter((m) => m.enabled && m.value && m.key !== 'address');
   const chapitres = (data?.chapters ?? []).filter((c) => c.showInNav);
   /**
    * Le backend ne renvoie que les documents RÉELLEMENT servis. On filtre tout
@@ -48,6 +50,8 @@ export function Footer() {
    */
   const legalDocuments = (data?.legalDocuments ?? []).filter((doc) => LEGAL_ROUTES[doc.type]);
   const logo = resolvePreviewMediaUrl(company?.logos?.header, data?.network?.backendUrl);
+  // L'adresse de l'institut (Manager → Informations) et son lien Google Maps.
+  const address = instituteAddress(company);
 
   return (
     /*
@@ -108,6 +112,19 @@ export function Footer() {
               >
                 {company.tagline}
               </p>
+            )}
+            {address.lines.length > 0 && (
+              <div className="mt-6 flex items-start gap-2.5 text-sm leading-relaxed" data-testid="footer-address">
+                <MapPin className="mt-0.5 h-4 w-4 shrink-0" style={{ color: 'var(--v-accent)' }} aria-hidden="true" />
+                <address className="not-italic">
+                  {address.lines.map((line, i) => <span key={i} className="block">{line}</span>)}
+                  {address.mapsUrl && (
+                    <a href={address.mapsUrl} target="_blank" rel="noopener noreferrer" className="mt-1.5 inline-flex items-center gap-1 font-semibold underline-offset-4 hover:underline" data-testid="footer-maps-link">
+                      Voir sur Google Maps <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
+                    </a>
+                  )}
+                </address>
+              </div>
             )}
             {enabledMedia.length > 0 && (
               <div className="mt-7 flex flex-wrap gap-2">

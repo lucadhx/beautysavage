@@ -2,6 +2,7 @@ import { logger } from '../utils/logger.js';
 import { reconcileInstituteCheckouts } from './commerce.service.js';
 import { notifyFinishedCommissionMonths, reconcileCommissionPayments } from './commissionPayment.service.js';
 import { processReviewRequests } from './reviewRequest.service.js';
+import { processAppointmentReminders } from './appointmentReminder.service.js';
 import { reconcileSlotGroups } from './trainingSlotGroup.service.js';
 
 /**
@@ -41,6 +42,12 @@ async function cycle() {
       await notifyFinishedCommissionMonths();
     } catch (err) {
       logger.warn(`[commission] rattrapage interrompu : ${err.message}`);
+    }
+    try {
+      // Rappels avant rendez-vous et session : ceux dont l'heure est arrivée.
+      await processAppointmentReminders();
+    } catch (err) {
+      logger.warn(`[rappel] passage interrompu : ${err.message}`);
     }
     try {
       // Demandes d'avis : prestations terminées détectées, envois et relances dus.

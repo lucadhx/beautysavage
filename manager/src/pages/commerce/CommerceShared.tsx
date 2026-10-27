@@ -36,6 +36,8 @@ export interface CommerceProduct {
   paymentRules?: Record<string, unknown>;
   bookingRules?: Record<string, unknown>;
   reviewRequest?: { enabled: boolean; delay: { value: number; unit: string }; reminders: { value: number; unit: string }[] } | null;
+  /** Rappels avant rendez-vous / session : délais AVANT le début (voir AppointmentReminderEditor). */
+  appointmentReminder?: { enabled: boolean; reminders: { value: number; unit: string }[] } | null;
   seo?: { metaTitle?: string; metaDescription?: string };
 }
 

@@ -158,6 +158,16 @@ export const DOMAIN_EVENT_ACTION_REGISTRY = Object.freeze({
       description: 'Annonce a la cliente que sa formation est validee.',
     },
   ],
+  'appointment.reminder': [
+    {
+      actionId: 'send-customer-appointment-reminder',
+      actionType: ACTION_TYPE.SEND_EMAIL,
+      enabled: true,
+      templateId: 'APPOINTMENT_REMINDER_CLIENT',
+      recipientResolver: 'CUSTOMER_EMAIL',
+      description: 'Rappelle a la cliente son rendez-vous ou sa session de formation a venir (delais regles sur la fiche).',
+    },
+  ],
   'review.requested': [
     {
       actionId: 'send-customer-review-request',

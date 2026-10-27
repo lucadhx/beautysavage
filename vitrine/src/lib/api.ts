@@ -153,6 +153,7 @@ export interface Customer {
   email: string;
   firstName?: string;
   lastName?: string;
+  phone?: string;
   emailVerified?: boolean;
 }
 
@@ -304,8 +305,11 @@ export const commerceApi = {
 };
 
 export const customerApi = {
-  register: (body: { email: string; password: string; firstName?: string; lastName?: string }) =>
+  register: (body: { email: string; password: string; firstName: string; lastName: string; phone: string }) =>
     publicSend<{ customer: Customer; token: string; verificationCode?: string }>('/customer/register', body),
+  /** Prénom, nom, téléphone : obligatoires pour réserver (voir backend customerIdentity). */
+  updateProfile: (body: { firstName: string; lastName: string; phone: string }) =>
+    publicSend<Customer>('/customer/profile', body, customerTokenStore.get(), 'PUT'),
   login: (email: string, password: string) =>
     publicSend<{ customer: Customer; token: string }>('/customer/login', { email, password }),
   requestEmailVerification: () =>

@@ -85,6 +85,7 @@ export const CHAMPS_METIER = [
       { legacy: 'logos.header', descriptor: 'logosMedia.header', mediaType: 'logo' },
       { legacy: 'logos.favicon', descriptor: 'logosMedia.favicon', mediaType: 'favicon' },
       { legacy: 'heroImage', descriptor: 'heroImageMedia', mediaType: 'hero' },
+      { legacy: 'about.image', descriptor: 'about.imageMedia', mediaType: 'team-photo' },
     ],
   },
   {

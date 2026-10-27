@@ -1,0 +1,23 @@
+// RAPPELS AVANT RENDEZ-VOUS — règle d'échéance et configuration (sans base).
+process.env.ENV = process.env.ENV || 'TEST';
+const src = (rel) => new URL(`../${rel}`, import.meta.url).href;
+const { dueReminders } = await import(src('services/appointmentReminder.service.js'));
+const { normalizeAppointmentReminderConfig, effectiveAppointmentReminderConfig, whenLabel } = await import(src('services/appointmentReminderConfig.js'));
+const now = new Date('2026-10-20T10:00:00Z');
+const h = (n) => new Date(now.getTime() + n * 3600_000);
+const cfg = normalizeAppointmentReminderConfig({ enabled: true, reminders: [{ value: 2, unit: 'HOURS' }, { value: 1, unit: 'DAYS' }, { value: 24, unit: 'HOURS' }] });
+let ok = 0, ko = 0; const check = (n, c) => { c ? ok++ : ko++; console.log(`${c ? '✓' : '✗'} ${n}`); };
+check('doublon 1 jour / 24 h fusionné, tri du plus éloigné', JSON.stringify(cfg.reminders) === JSON.stringify([{ value: 1, unit: 'DAYS' }, { value: 2, unit: 'HOURS' }]));
+check('défaut = 24 h', JSON.stringify(effectiveAppointmentReminderConfig({}).reminders) === JSON.stringify([{ value: 24, unit: 'HOURS' }]));
+const ev = (startIn, bookedAgo) => ({ startsAt: h(startIn), createdAt: h(-bookedAgo) });
+check('rdv dans 23 h, réservé il y a 3 j : rappel 24 h dû seul', JSON.stringify(dueReminders(ev(23, 72), cfg, now).map((r) => r.offsetMinutes)) === '[1440]');
+check('rdv dans 1 h 30, réservé il y a 3 j : 24 h et 2 h dus (le plus proche en dernier)', JSON.stringify(dueReminders(ev(1.5, 72), cfg, now).map((r) => r.offsetMinutes)) === '[1440,120]');
+check('rdv dans 1 h 30, réservé il y a 1 h : seul le 2 h (24 h précède la réservation)', JSON.stringify(dueReminders(ev(1.5, 1), cfg, now).map((r) => r.offsetMinutes)) === '[120]');
+check('rdv dans 3 j : rien encore', dueReminders(ev(72, 1), cfg, now).length === 0);
+check('rdv passé : rien', dueReminders(ev(-1, 72), cfg, now).length === 0);
+check('désactivé : rien', dueReminders(ev(23, 72), { ...cfg, enabled: false }, now).length === 0);
+check('libellé « demain » à 24 h', whenLabel(h(24), now) === 'demain');
+check('libellé « dans moins de 2 heures » à 1 h', whenLabel(h(1), now) === 'dans moins de 2 heures');
+check('libellé « dans 3 jours »', whenLabel(h(72), now) === 'dans 3 jours');
+console.log(`${ok} réussis, ${ko} échoués`);
+process.exit(ko ? 1 : 0);

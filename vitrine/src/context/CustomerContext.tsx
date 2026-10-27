@@ -7,7 +7,9 @@ interface CustomerContextValue {
   customer: Customer | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (payload: { email: string; password: string; firstName?: string; lastName?: string }) => Promise<{ verificationCode?: string }>;
+  register: (payload: { email: string; password: string; firstName: string; lastName: string; phone: string }) => Promise<{ verificationCode?: string }>;
+  /** Remplace la cliente en mémoire (profil complété). */
+  setCustomerProfile: (next: Customer) => void;
   refresh: () => Promise<void>;
   /** Demande la déconnexion : fenêtre de confirmation, puis animation et confirmation. */
   logout: () => void;
@@ -46,7 +48,7 @@ export function CustomerProvider({ children }: { children: React.ReactNode }) {
     setCustomer(result.customer);
   }, []);
 
-  const register = React.useCallback(async (payload: { email: string; password: string; firstName?: string; lastName?: string }) => {
+  const register = React.useCallback(async (payload: { email: string; password: string; firstName: string; lastName: string; phone: string }) => {
     const result = await customerApi.register(payload);
     customerTokenStore.set(result.token);
     setCustomer(result.customer);
@@ -62,7 +64,7 @@ export function CustomerProvider({ children }: { children: React.ReactNode }) {
   const logout = React.useCallback(() => setAskLogout(true), []);
 
   return (
-    <CustomerContext.Provider value={{ customer, loading, login, register, refresh, logout, signOutNow }}>
+    <CustomerContext.Provider value={{ customer, loading, login, register, refresh, logout, signOutNow, setCustomerProfile: setCustomer }}>
       {children}
       <LogoutDialog
         open={askLogout}

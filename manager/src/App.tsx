@@ -53,6 +53,7 @@ const CommerceVentesPage = lazyPage(() => import('@/pages/commerce/CommerceVente
 const CommerceCartesCadeauxPage = lazyPage(() => import('@/pages/commerce/CommerceCartesCadeauxPage'));
 const CommerceValidationFormationsPage = lazyPage(() => import('@/pages/commerce/CommerceValidationFormationsPage'));
 const CommerceAvisPage = lazyPage(() => import('@/pages/commerce/CommerceAvisPage'));
+const BookingNoticesPage = lazyPage(() => import('@/pages/commerce/BookingNoticesPage'));
 const CommerceRemboursementsPage = lazyPage(() => import('@/pages/commerce/CommerceRemboursementsPage'));
 const CommerceApiKeysPage = lazyPage(() => import('@/pages/commerce/CommerceApiKeysPage'));
 const SitePagesPage = lazyPage(() => import('@/pages/SitePagesPage'));
@@ -164,6 +165,7 @@ export function App() {
             <Route path="commerce/validation-formations" element={<CommerceValidationFormationsPage />} />
             <Route path="commerce/validation-formations/:submissionId" element={<CommerceValidationFormationsPage />} />
             <Route path="commerce/avis" element={<CommerceAvisPage />} />
+            <Route path="commerce/mentions-reservation" element={<BookingNoticesPage />} />
             {/* Ancienne adresse admin : les modèles d'e-mail sont désormais une page DEV. */}
             <Route path="commerce/mails" element={<Navigate to="/dev/templates-email" replace />} />
             <Route path="commerce/remboursements" element={<CommerceRemboursementsPage />} />

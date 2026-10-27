@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Award, Image as ImageIcon, MapPin } from 'lucide-react';
+import { Award, ExternalLink, Image as ImageIcon, MapPin, UserRound } from 'lucide-react';
 import { BrandLoader } from '@/components/ui/BrandLoader';
 import { api } from '@/lib/api';
 import { useResource, useAction } from '@/hooks/useResource';
@@ -45,6 +45,23 @@ export default function CompanyPage() {
 
   const update = (patch: Partial<Company>) => setData({ ...data, ...patch });
 
+  /**
+   * L'ADRESSE DE L'INSTITUT — le contact « Adresse » de la fiche (le même que
+   * l'écran Coordonnées) : une seule valeur pour la vitrine, les e-mails et les
+   * rappels. Renseignée, elle est publiée ; vidée, elle disparaît partout.
+   */
+  const addressItem = data.media.find((m) => m.key === 'address');
+  const address = addressItem?.value ?? '';
+  const setAddress = (value: string) => update({
+    media: addressItem
+      ? data.media.map((m) => (m.key === 'address' ? { ...m, value, enabled: value.trim().length > 0 } : m))
+      : [...data.media, { key: 'address', label: 'Adresse', icon: 'MapPin', kind: 'text', value, enabled: value.trim().length > 0, order: data.media.length } as Company['media'][number]],
+  });
+  const oneLine = address.split(/\r?\n/).map((l) => l.trim()).filter(Boolean).join(', ');
+  const mapsUrl = /^https:\/\//i.test(data.googleMapsUrl || '') ? data.googleMapsUrl! : oneLine ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(oneLine)}` : '';
+  const about = data.about ?? {};
+  const setAbout = (patch: Partial<NonNullable<Company['about']>>) => update({ about: { ...about, ...patch } });
+
   return (
     <div className="pb-20">
       <PageHeader
@@ -87,6 +104,62 @@ export default function CompanyPage() {
                 placeholder="Vos prestations, vos formations et ce qui rend l'experience institut unique..."
               />
             </Field>
+          </CardContent>
+        </Card>
+
+        {/* Adresse de l'institut */}
+        <Card data-testid="company-address">
+          <CardHeader>
+            <CardTitle className="inline-flex items-center gap-2"><MapPin className="h-5 w-5 text-muted-foreground" /> Adresse de l’institut</CardTitle>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Affichée en bas de chaque page du site avec le lien Google Maps, dans la fenêtre de réservation, et mise en évidence
+              dans les e-mails de confirmation et de rappel envoyés aux clientes.
+            </p>
+          </CardHeader>
+          <CardContent className="grid gap-4 md:grid-cols-2">
+            <Field label="Adresse" hint="Une ligne par ligne d'adresse : rue, puis code postal et ville.">
+              <Textarea rows={3} value={address} onChange={(e) => setAddress(e.target.value)} placeholder={'12 rue de France\n06000 Nice'} data-testid="company-address-input" />
+            </Field>
+            <div className="grid content-start gap-3">
+              <Field label="Lien Google Maps" unit="facultatif" hint="Le lien de votre fiche Google (« Partager » sur Google Maps). Vide : une recherche sur l'adresse.">
+                <Input value={data.googleMapsUrl ?? ''} onChange={(e) => update({ googleMapsUrl: e.target.value })} placeholder="https://maps.app.goo.gl/…" data-testid="company-maps-input" />
+              </Field>
+              {mapsUrl && (
+                <a href={mapsUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-sm font-medium text-primary underline-offset-2 hover:underline">
+                  <ExternalLink className="h-4 w-4" /> Vérifier sur Google Maps
+                </a>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Qui suis-je */}
+        <Card data-testid="company-about">
+          <CardHeader>
+            <CardTitle className="inline-flex items-center gap-2"><UserRound className="h-5 w-5 text-muted-foreground" /> Qui suis-je</CardTitle>
+            <p className="mt-1 text-sm text-muted-foreground">
+              La présentation de la fondatrice, sur la page d'accueil. Laissez le texte vide pour masquer la section.
+            </p>
+          </CardHeader>
+          <CardContent className="grid gap-6 md:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
+            <div className="min-w-0">
+              <ImageUpload
+                value={about.image ?? ''}
+                previewUrl={data.mediaResolution?.['about.image']?.url ?? null}
+                mediaType="team-photo"
+                onChange={(url, descriptor) => setAbout({ image: url, imageMedia: descriptor })}
+                aspect="aspect-[4/5]"
+                hint="Un portrait, format vertical."
+              />
+            </div>
+            <div className="grid content-start gap-4">
+              <Field label="Sur-titre"><Input value={about.eyebrow ?? ''} onChange={(e) => setAbout({ eyebrow: e.target.value })} placeholder="Qui suis-je" /></Field>
+              <Field label="Titre"><Input value={about.title ?? ''} onChange={(e) => setAbout({ title: e.target.value })} placeholder="Romane, fondatrice de BeautySavage" data-testid="company-about-title" /></Field>
+              <Field label="Texte" hint="Les retours à la ligne sont conservés.">
+                <Textarea rows={9} value={about.text ?? ''} onChange={(e) => setAbout({ text: e.target.value })} data-testid="company-about-text" />
+              </Field>
+              <Field label="Signature" unit="facultatif"><Input value={about.signature ?? ''} onChange={(e) => setAbout({ signature: e.target.value })} placeholder="Romane" /></Field>
+            </div>
           </CardContent>
         </Card>
 

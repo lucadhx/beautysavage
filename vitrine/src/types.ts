@@ -26,6 +26,12 @@ export interface Company {
   media: MediaItem[];
   logos: { header: string; favicon: string };
   heroImage: string;
+  /** Lien Google Maps de l'institut (fiche Google). Vide : dérivé de l'adresse. */
+  googleMapsUrl?: string;
+  /** « Qui suis-je » de l'accueil — image DÉJÀ RÉSOLUE par le serveur. */
+  about?: { eyebrow?: string; title?: string; text?: string; signature?: string; image?: string };
+  /** Mentions importantes affichées dans la fenêtre de réservation. */
+  bookingNotices?: { _id?: string; text: string }[];
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════

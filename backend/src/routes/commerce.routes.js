@@ -67,6 +67,7 @@ customerRoutes.post('/email-verification/request', authenticateCustomer, asyncHa
 customerRoutes.post('/password-reset/request', customerResetRequestLimiter, asyncHandler(async (req, res) => ok(res, await commerce.requestCustomerPasswordReset(req.body.email, { siteUrl: await siteUrlFor(req) }))));
 customerRoutes.post('/password-reset/confirm', customerResetConfirmLimiter, asyncHandler(async (req, res) => ok(res, await commerce.resetCustomerPassword(req.body))));
 customerRoutes.get('/me', authenticateCustomer, asyncHandler(async (req, res) => ok(res, req.customer)));
+customerRoutes.put('/profile', authenticateCustomer, rateLimit({ windowMs: 60_000, max: 20 }), asyncHandler(async (req, res) => ok(res, await commerce.updateCustomerProfile(req.customer._id, req.body))));
 customerRoutes.get('/cart', authenticateCustomer, asyncHandler(async (req, res) => ok(res, await commerce.getCustomerCart(req.customer._id))));
 customerRoutes.post('/cart/items', authenticateCustomer, requireSiteOpenForPurchase, asyncHandler(async (req, res) => ok(res, await commerce.addCartItem(req.customer._id, req.body))));
 customerRoutes.put('/cart/items/:lineId/booking', authenticateCustomer, requireSiteOpenForPurchase, asyncHandler(async (req, res) => ok(res, await commerce.setCartItemBooking(req.customer._id, req.params.lineId, req.body))));

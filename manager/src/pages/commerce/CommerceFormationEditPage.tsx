@@ -11,6 +11,7 @@ import { Dropdown } from '@/components/base/dropdown/dropdown';
 import { CommercePageFrame, KIND_LABEL, PromotionStateBadge, cents, type CommerceProduct, type ProductKind } from './CommerceShared';
 import { ToneSection, toneTabClass, type EditorTone } from './editorTones';
 import { DEFAULT_REVIEW_REQUEST, ReviewRequestEditor } from './ReviewRequestEditor';
+import { AppointmentReminderEditor } from './AppointmentReminderEditor';
 import { OptionsManager } from './OptionsManager';
 import { ProductSeoSection } from './ProductSeoSection';
 import { PublicationStatusWidget } from './PublicationStatusWidget';
@@ -22,7 +23,7 @@ import { FloatingSaveWidget } from '@/components/ui/FloatingSaveWidget';
 import { useFloatingSave } from '@/hooks/useFloatingSave';
 import { useGuardedNavigate } from '@/components/LeaveGuard';
 
-type TabId = 'infos' | 'horaires' | 'modules' | 'sessions' | 'promotion' | 'options' | 'evaluation' | 'reviews';
+type TabId = 'infos' | 'horaires' | 'modules' | 'sessions' | 'promotion' | 'options' | 'evaluation' | 'reviews' | 'reminders';
 
 const EMPTY: Partial<CommerceProduct> = {
   title: '',
@@ -159,6 +160,8 @@ export default function CommerceFormationEditPage() {
     { id: 'options', label: 'Options', tone: 'options' },
     { id: 'evaluation', label: 'Évaluation finale', tone: 'evaluation' },
     { id: 'reviews', label: 'Avis', tone: 'reviews' },
+    // Les rappels visent une SESSION : rien à rappeler pour une formation à distance.
+    ...(distanciel ? [] : [{ id: 'reminders' as const, label: 'Rappels', tone: 'advanced' as const }]),
   ] satisfies { id: TabId; label: string; tone: EditorTone }[];
 
   const patch = (path: string, value: unknown) => setProduct((p) => writePath(p as Record<string, unknown>, path, value) as Partial<CommerceProduct>);
@@ -331,6 +334,9 @@ export default function CommerceFormationEditPage() {
           onChange={(c) => patch('reviewRequest', c)}
           anchor={distanciel ? 'après votre validation manuelle de la formation' : 'après la fin de la session'}
         />
+      )}
+      {tab === 'reminders' && !distanciel && (
+        <AppointmentReminderEditor kind="training" value={product.appointmentReminder} onChange={(c) => patch('appointmentReminder', c)} />
       )}
       <ConfirmDialog
         open={Boolean(pendingKind)}

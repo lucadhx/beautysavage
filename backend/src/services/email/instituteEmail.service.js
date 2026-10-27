@@ -130,6 +130,9 @@ async function brand() {
   ]);
   const media = (company?.media || []).filter((m) => m.enabled && m.value);
   const contact = (key) => media.find((m) => m.key === key)?.value || '';
+  // L'adresse se saisit sur plusieurs lignes ; l'e-mail la lit sur une seule.
+  const address = contact('address').split(/\r?\n/).map((l) => l.trim()).filter(Boolean).join(', ');
+  const customMaps = String(company?.googleMapsUrl || '').trim();
   const primary = /^#[0-9a-f]{6}$/i.test(theme?.colors?.primary || '') ? theme.colors.primary : '#111111';
   const accent = /^#[0-9a-f]{6}$/i.test(theme?.colors?.accent || '') ? theme.colors.accent : '#c7a98a';
   return {
@@ -139,7 +142,9 @@ async function brand() {
     onPrimary: readableOn(primary),
     accent,
     siteUrl: siteUrl || '',
-    address: contact('address'),
+    address,
+    // La fiche Google de l'institut si elle est renseignée, sinon une recherche sur l'adresse.
+    mapsUrl: /^https:\/\//i.test(customMaps) ? customMaps : address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}` : '',
     phone: contact('phone'),
     email: contact('email'),
   };
@@ -164,6 +169,13 @@ export async function renderInstituteEmail(templateId, variables, brandOverride 
   const ctaUrl = tpl.cta ? fill(tpl.cta.url, vars, { html: false }) : null;
   const note = fill(tpl.note, vars);
   const preheader = fill(tpl.preheader, vars) || '';
+  /**
+   * L'ADRESSE MISE EN ÉVIDENCE — rendez-vous, rappel, réservation : la cliente
+   * doit savoir OÙ venir sans chercher. `addressBlock: true` l'affiche
+   * toujours ; une chaîne `{{variable}}` seulement si le résolveur la remplit
+   * (une commande sans rendez-vous ni formation sur place n'en a pas besoin).
+   */
+  const showAddress = Boolean(b.address) && (tpl.addressBlock === true || (typeof tpl.addressBlock === 'string' && Boolean(fill(tpl.addressBlock, vars))));
 
   const P = (t) => `<p style="margin:0 0 14px;font-size:15px;line-height:1.65;color:#27272a;">${t}</p>`;
   const html = `<!DOCTYPE html>
@@ -184,12 +196,17 @@ ${paragraphs.map(P).join('\n')}
 ${code ? `<div class="code" style="margin:8px 0 22px;padding:18px;border-radius:12px;background:#fafafa;border:1px dashed ${b.accent};text-align:center;font-size:36px;font-weight:700;letter-spacing:12px;color:#111111;font-family:'SFMono-Regular',Menlo,Consolas,monospace;">${code}</div>` : ''}
 ${list ? `<div style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#27272a;">${list}</div>` : ''}
 ${rows.length ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:6px 0 8px;border-top:1px solid #eeeeef;">${rows.map(([label, v]) => `<tr><td style="padding:10px 0;border-bottom:1px solid #eeeeef;font-size:14px;color:#71717a;width:42%;vertical-align:top;">${escapeHtml(label)}</td><td style="padding:10px 0;border-bottom:1px solid #eeeeef;font-size:14px;color:#111111;font-weight:600;">${v}</td></tr>`).join('')}</table>` : ''}
+${showAddress ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:18px 0 8px;border-radius:12px;background:#fafafa;border:1px solid ${b.accent};"><tr><td style="padding:16px 18px;">
+<p style="margin:0 0 6px;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:${b.accent};">&#128205; Adresse de l’institut</p>
+<p style="margin:0;font-size:16px;line-height:1.5;font-weight:700;color:#111111;">${escapeHtml(b.address)}</p>
+${b.mapsUrl ? `<p style="margin:10px 0 0;"><a href="${escapeHtml(b.mapsUrl)}" style="display:inline-block;padding:9px 16px;border-radius:8px;border:1px solid #d4d4d8;background:#ffffff;font-size:14px;font-weight:600;color:#111111;text-decoration:none;">Itinéraire Google Maps</a></p>` : ''}
+</td></tr></table>` : ''}
 ${quote ? `<div style="margin:6px 0 18px;padding:14px 16px;border-left:3px solid ${b.accent};background:#fafafa;font-size:14px;line-height:1.6;color:#3f3f46;">${quote}</div>` : ''}
 ${ctaUrl ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:26px 0 6px;"><tr><td style="background:${b.primary};border-radius:8px;"><a href="${escapeHtml(ctaUrl)}" style="display:inline-block;padding:14px 26px;font-size:15px;font-weight:600;color:${b.onPrimary};text-decoration:none;">${escapeHtml(tpl.cta.label)}</a></td></tr></table>` : ''}
 ${note ? `<p style="margin:22px 0 0;font-size:13px;line-height:1.6;color:#71717a;">${note}</p>` : ''}
 </td></tr>
 <tr><td style="padding:20px 36px;background:#fafafa;border-top:1px solid #eeeeef;font-size:12px;line-height:1.7;color:#71717a;text-align:center;">
-<strong style="color:#3f3f46;">${escapeHtml(b.name)}</strong>${b.address ? `<br>${escapeHtml(b.address)}` : ''}
+<strong style="color:#3f3f46;">${escapeHtml(b.name)}</strong>${b.address ? `<br>${escapeHtml(b.address)}${b.mapsUrl ? ` · <a href="${escapeHtml(b.mapsUrl)}" style="color:#71717a;">Itinéraire</a>` : ''}` : ''}
 ${[b.phone, b.email].filter(Boolean).length ? `<br>${[b.phone, b.email].filter(Boolean).map(escapeHtml).join(' · ')}` : ''}
 ${b.siteUrl ? `<br><a href="${escapeHtml(b.siteUrl)}" style="color:#71717a;">${escapeHtml(b.siteUrl.replace(/^https?:\/\//, ''))}</a>` : ''}
 </td></tr>
@@ -202,6 +219,7 @@ ${b.siteUrl ? `<br><a href="${escapeHtml(b.siteUrl)}" style="color:#71717a;">${e
     code ? `\n${stripTags(code)}\n` : '',
     list ? stripTags(list.replace(/<li>/g, '\n- ')) : '',
     ...rows.map(([label, v]) => `${label} : ${stripTags(v)}`),
+    showAddress ? `\nAdresse de l’institut : ${b.address}${b.mapsUrl ? `\nItinéraire : ${b.mapsUrl}` : ''}` : '',
     quote ? `\n« ${stripTags(quote)} »` : '',
     ctaUrl ? `\n${tpl.cta.label} : ${ctaUrl}` : '',
     note ? `\n${stripTags(note)}` : '',

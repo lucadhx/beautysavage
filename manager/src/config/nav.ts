@@ -36,6 +36,7 @@ import {
   Rocket,
   Server,
   type LucideIcon,
+  ClipboardList,
 } from 'lucide-react';
 
 export interface NavItem {
@@ -66,6 +67,8 @@ export const NAV_ITEMS: NavItem[] = [
   { to: '/commerce/prestations', label: 'Prestations', icon: Sparkles, section: 'manager', group: 'Commerce' },
   { to: '/commerce/collections', label: 'Collections', icon: Layers, section: 'manager', group: 'Commerce' },
   { to: '/commerce/calendrier', label: 'Calendrier', icon: CalendarDays, section: 'manager', group: 'Commerce' },
+  // Ce que chaque cliente lit avant de payer — réglé une fois pour toutes les réservations.
+  { to: '/commerce/mentions-reservation', label: 'Mentions de réservation', icon: ClipboardList, section: 'manager', group: 'Commerce' },
   { to: '/commerce/cartes-cadeaux', label: 'Cartes cadeaux', icon: Gift, section: 'manager', group: 'Commerce' },
   { to: '/commerce/validation-formations', label: 'Validation formations', icon: ShieldCheck, section: 'manager', group: 'Commerce' },
   { to: '/commerce/avis', label: 'Avis', icon: Star, section: 'manager', group: 'Commerce' },

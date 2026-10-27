@@ -288,6 +288,19 @@ export interface Company {
   } | null;
   heroImage: string;
   heroImageMedia?: StoredMediaDescriptor | null;
+  /** Lien de la fiche Google de l'institut. Vide : recherche Google Maps sur l'adresse. */
+  googleMapsUrl?: string;
+  /** « Qui suis-je » de la page d'accueil. */
+  about?: {
+    eyebrow?: string;
+    title?: string;
+    text?: string;
+    signature?: string;
+    image?: string;
+    imageMedia?: StoredMediaDescriptor | null;
+  };
+  /** Mentions affichées dans la fenêtre de réservation (prestations, formations en présentiel). */
+  bookingNotices?: { _id?: string; text: string }[];
   /**
    * ADRESSES D'AFFICHAGE — calculées par le serveur à chaque lecture, jamais
    * renvoyées en enregistrant. Indexé par le chemin du média.

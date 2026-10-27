@@ -48,6 +48,8 @@ export const INSTITUTE_TEMPLATES = Object.freeze({
     paragraphs: ['Bonjour {{clientFirstName}},', 'Nous avons bien reçu votre commande. En voici le récapitulatif :'],
     list: '{{itemsHtml}}',
     rows: [['Commande', '{{saleNumber}}'], ['Total', '{{totalAmount}}'], ['Paiement', '{{paymentStatus}}']],
+    // Un rendez-vous ou une formation sur place dans la commande : l'adresse en évidence.
+    addressBlock: '{{hasVenue}}',
     cta: { label: 'Voir ma facture', url: '{{invoiceUrl}}' },
   },
   APPOINTMENT_CONFIRMED_CLIENT: {
@@ -56,6 +58,7 @@ export const INSTITUTE_TEMPLATES = Object.freeze({
     title: 'Rendez-vous confirmé',
     paragraphs: ['Bonjour {{clientFirstName}},', 'Votre rendez-vous <strong>{{serviceName}}</strong> est confirmé. Nous avons hâte de vous recevoir.'],
     rows: [['Date', '{{appointmentStart}}'], ['Fin prévue', '{{appointmentEnd}}'], ['Déjà réglé', '{{paidAmount}}'], ['Reste à régler sur place', '{{balanceDueAmount}}']],
+    addressBlock: true,
     cta: { label: 'Voir mon espace client', url: '{{accountUrl}}' },
     note: 'Un empêchement ? Vous pouvez annuler depuis votre espace client, selon les conditions d’annulation de votre réservation.',
   },
@@ -73,6 +76,7 @@ export const INSTITUTE_TEMPLATES = Object.freeze({
     title: 'Votre session change de date',
     paragraphs: ['Bonjour {{clientFirstName}},', 'La session de votre formation <strong>{{trainingTitle}}</strong> a été déplacée.', '{{message}}'],
     rows: [['Ancienne date', '{{previousStart}}'], ['Nouvelle date', '{{newStart}}'], ['Fin', '{{newEnd}}'], ['Lieu', '{{location}}']],
+    addressBlock: true,
     cta: { label: 'Voir mon espace client', url: '{{accountUrl}}' },
   },
   FORMATION_SESSION_CANCELLED_CLIENT: {
@@ -98,6 +102,16 @@ export const INSTITUTE_TEMPLATES = Object.freeze({
     paragraphs: ['Bonjour {{clientFirstName}},', 'Votre dossier final pour la formation <strong>{{trainingTitle}}</strong> demande encore quelques ajustements avant validation. Voici le retour de votre formatrice :'],
     quote: '{{comment}}',
     cta: { label: 'Reprendre mon dossier', url: '{{accountUrl}}' },
+  },
+  APPOINTMENT_REMINDER_CLIENT: {
+    subject: '{{subjectLine}}',
+    preheader: 'Votre {{appointmentKind}} {{serviceName}} approche.',
+    title: 'À très bientôt',
+    paragraphs: ['Bonjour {{clientFirstName}},', '{{introText}}'],
+    rows: [['Réservation', '{{serviceName}}'], ['Date', '{{appointmentStart}}'], ['Fin prévue', '{{appointmentEnd}}'], ['Reste à régler sur place', '{{balanceDueAmount}}']],
+    addressBlock: true,
+    cta: { label: 'Voir mon espace client', url: '{{accountUrl}}' },
+    note: 'Un empêchement ? Prévenez-nous au plus tôt depuis votre espace client, selon les conditions d’annulation de votre réservation.',
   },
   REVIEW_REQUEST_CLIENT: {
     subject: '{{subjectLine}}',

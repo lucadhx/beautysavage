@@ -309,6 +309,27 @@ export const DOMAIN_EVENT_REGISTRY = Object.freeze({
     }).strict(),
   },
 
+  'appointment.reminder': {
+    type: 'appointment.reminder',
+    description: "Rappel envoye a la cliente avant un rendez-vous prestation ou une session de formation en presentiel (delais regles sur la fiche).",
+    entityTypes: [ENTITY_TYPE.CALENDAR_EVENT, ENTITY_TYPE.COMMERCE_SALE],
+    retentionClass: RETENTION_CLASS.OPERATIONAL,
+    payloadSchema: z.object({
+      kind: z.enum(['SERVICE', 'TRAINING']),
+      calendarEventId: z.string().max(64),
+      // La session de formation (« sessionId » est une clé interdite : elle évoque une session de connexion).
+      slotId: z.string().max(64),
+      saleId: z.string().max(64),
+      customerId: z.string().max(64),
+      appointmentTitle: z.string().max(180),
+      appointmentStart: z.string().max(40),
+      appointmentEnd: z.string().max(40),
+      balanceDueAmount: z.number().int().nonnegative(),
+      offsetMinutes: z.number().int().positive(),
+      remindedAt: z.string().max(40),
+    }).strict(),
+  },
+
   'review.requested': {
     type: 'review.requested',
     description: "Une ou plusieurs prestations/formations terminees : la cliente est invitee a laisser son avis (premier envoi ou relance).",

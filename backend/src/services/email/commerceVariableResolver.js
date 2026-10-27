@@ -55,6 +55,8 @@ export async function resolveSaleConfirmationClient({ event }) {
     saleNumber: sale.saleNumber,
     itemsHtml: `<ul>${itemsHtml}</ul>`,
     totalAmount: euro(sale.totalCents),
+    // Rendez-vous ou formation sur place : l'e-mail met l'adresse en évidence.
+    hasVenue: (sale.lines || []).some((l) => l.serviceBooking?.startsAt || l.bookingSnapshot?.startsAt || l.sessionId || ['SERVICE', 'IN_PERSON_TRAINING'].includes(l.productSnapshot?.kind)) ? 'oui' : '',
     ...(await stripeInvoiceLink(sale)),
     paymentStatus: 'Payé',
   };
@@ -240,6 +242,32 @@ export async function resolveReviewRequestClient({ event }) {
   };
 }
 
+/**
+ * RAPPEL AVANT RENDEZ-VOUS OU SESSION — prestation ou formation, date, reste à
+ * régler. L'adresse de l'institut est mise en évidence par le rendu (bloc
+ * « Adresse de l'institut »). L'objet dit QUAND (« demain », « dans 2 heures ») :
+ * c'est ce que la cliente lit dans sa boîte sans ouvrir l'e-mail.
+ */
+export async function resolveAppointmentReminderClient({ event }) {
+  const p = event.payloadSafe;
+  const { whenLabel } = await import('../appointmentReminderConfig.js');
+  const when = whenLabel(p.appointmentStart, new Date(p.remindedAt || Date.now()));
+  const training = p.kind === 'TRAINING';
+  const quoi = training ? 'votre session de formation' : 'votre rendez-vous';
+  return {
+    ...(await customerVariables(p.customerId)),
+    appointmentKind: training ? 'session' : 'rendez-vous',
+    subjectLine: `Rappel : ${quoi} ${p.appointmentTitle} ${when}`,
+    // Texte nu : le rendu de l'institut l'échappe (seules les variables « …Html » passent telles quelles).
+    introText: `Petit rappel : ${quoi} « ${p.appointmentTitle} » a lieu ${when}. Nous avons hâte de vous recevoir.`,
+    serviceName: p.appointmentTitle,
+    appointmentStart: p.appointmentStart,
+    appointmentEnd: p.appointmentEnd,
+    balanceDueAmount: p.balanceDueAmount > 0 ? euro(p.balanceDueAmount) : '',
+    accountUrl: await customerAccountUrl(),
+  };
+}
+
 /** Créneau partagé attribué : quelle formation est retenue, lesquelles sont retirées. */
 export async function resolveSlotGroupAssignedAdmin({ event }) {
   const p = event.payloadSafe;
@@ -300,6 +328,7 @@ export default {
   resolveTrainingSubmissionAdmin,
   resolveTrainingDecisionClient,
   resolveReviewRequestClient,
+  resolveAppointmentReminderClient,
   resolveSlotGroupAssignedAdmin,
   resolveSessionRescheduledClient,
   resolveSessionCancelledClient,

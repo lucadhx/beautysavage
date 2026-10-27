@@ -24,6 +24,8 @@ interface CalendarEvent {
   /** Créneau retenu pendant un paiement en ligne (status HELD) : occupé jusqu'à cette heure. */
   holdExpiresAt?: string | null;
   customerSnapshot?: { name?: string; email?: string; phone?: string };
+  /** Description courte de la prestation (sous-titre, sinon début de la description). */
+  productSummary?: string;
   paymentSnapshot?: { totalCents?: number; paidCents?: number; depositCents?: number; balanceDueCents?: number; balancePaidCents?: number; balancePaymentMethod?: string };
   notes?: string;
   cancellation?: { reason?: string; refundedCents?: number };
@@ -509,7 +511,7 @@ export default function CommerceCalendarPage() {
                                 <div className="font-medium">{event.reservedCount || 0}/{event.capacity || 0} inscrite(s)</div>
                               ) : (
                                 <>
-                                  {event.customerSnapshot?.email && <div className="truncate">{event.customerSnapshot.email}</div>}
+                                  {(event.customerSnapshot?.name || event.customerSnapshot?.email) && <div className="truncate font-medium" data-testid="event-customer">{event.customerSnapshot?.name || event.customerSnapshot?.email}</div>}
                                   {event.paymentSnapshot && <div>{cents(event.paymentSnapshot.paidCents)} paye - {cents(event.paymentSnapshot.balanceDueCents)} restant</div>}
                                 </>
                               )}
@@ -939,7 +941,9 @@ function EventPanel({
           <div className="min-w-0">
             <p className="text-xs font-medium text-muted-foreground">{eventLabel(selected.type)}</p>
             <h2 className="truncate text-lg font-semibold">{selected.title}</h2>
+            {selected.productSummary && <p className="mt-0.5 line-clamp-3 text-sm text-muted-foreground" data-testid="event-product-summary">{selected.productSummary}</p>}
             <p className="text-sm text-muted-foreground">{timeLabel(selected.startsAt)} - {timeLabel(selected.endsAt)}</p>
+            {selected.customerSnapshot?.name && <p className="mt-1 text-base font-semibold" data-testid="event-customer-name">{selected.customerSnapshot.name}</p>}
           </div>
           <StatusBadge>{selected.status}</StatusBadge>
         </div>

@@ -103,6 +103,8 @@ const commerceProductSchema = new mongoose.Schema(
     bookingRules: { type: mongoose.Schema.Types.Mixed, default: {} },
     /** Demande d'avis : délai après la prestation, puis relances (voir reviewRequest.service). */
     reviewRequest: { type: mongoose.Schema.Types.Mixed, default: null },
+    /** Rappels avant rendez-vous / session : délais avant le début (voir appointmentReminder.service). */
+    appointmentReminder: { type: mongoose.Schema.Types.Mixed, default: null },
     /**
      * RÉFÉRENCEMENT — facultatif. Vide, le titre et la description de la page
      * sont COMPOSÉS à partir de la fiche (nom, type, prix, lieu, description) :

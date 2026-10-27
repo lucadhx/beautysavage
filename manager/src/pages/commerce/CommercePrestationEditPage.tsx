@@ -11,13 +11,14 @@ import { ToneSection, toneTabClass, type EditorTone } from './editorTones';
 import { OptionsManager } from './OptionsManager';
 import { ProductSeoSection } from './ProductSeoSection';
 import { DEFAULT_REVIEW_REQUEST, ReviewRequestEditor } from './ReviewRequestEditor';
+import { DEFAULT_APPOINTMENT_REMINDER, AppointmentReminderEditor } from './AppointmentReminderEditor';
 import { PublicationStatusWidget } from './PublicationStatusWidget';
 import { FormSkeleton } from '@/components/ui/Skeleton';
 import { FloatingSaveWidget } from '@/components/ui/FloatingSaveWidget';
 import { useFloatingSave } from '@/hooks/useFloatingSave';
 import { useGuardedNavigate } from '@/components/LeaveGuard';
 
-type TabId = 'general' | 'payment' | 'promotion' | 'options' | 'photos' | 'reviews' | 'advanced';
+type TabId = 'general' | 'payment' | 'promotion' | 'options' | 'photos' | 'reviews' | 'reminders' | 'advanced';
 
 const EMPTY: Partial<CommerceProduct> = {
   title: '',
@@ -35,6 +36,7 @@ const EMPTY: Partial<CommerceProduct> = {
   bookingRules: { minBookingHours: 24, freeCancelHours: 72, refundBeforePercent: 100, refundAfterPercent: 0, noShowPolicy: '' },
   promotion: { enabled: false, type: 'PERCENT', value: 0, startsAt: '', endsAt: '' },
   reviewRequest: DEFAULT_REVIEW_REQUEST,
+  appointmentReminder: DEFAULT_APPOINTMENT_REMINDER,
 };
 
 function read<T>(source: unknown, path: string, fallback: T): T {
@@ -128,6 +130,7 @@ export default function CommercePrestationEditPage() {
     ['options', 'Options', 'options'],
     ['photos', 'Photos', 'photos'],
     ['reviews', 'Avis', 'reviews'],
+    ['reminders', 'Rappels', 'advanced'],
     ['advanced', 'Avancé', 'advanced'],
   ] as const satisfies readonly (readonly [TabId, string, EditorTone])[];
 
@@ -181,6 +184,7 @@ export default function CommercePrestationEditPage() {
       {tab === 'options' && <OptionsManager rows={rows('options')} onChange={(r) => setRows('options', r)} subject="la prestation" withDuration />}
       {tab === 'photos' && <GalleryEditor items={product.gallery || []} onChange={(items) => patch('gallery', items)} />}
       {tab === 'reviews' && <ReviewRequestEditor value={product.reviewRequest} onChange={(c) => patch('reviewRequest', c)} anchor="après la fin du rendez-vous" />}
+      {tab === 'reminders' && <AppointmentReminderEditor value={product.appointmentReminder} onChange={(c) => patch('appointmentReminder', c)} />}
       {tab === 'advanced' && (
         <ToneSection tone="advanced" icon={<Settings2 className="h-5 w-5" />} title="Disponibilité et affichage" description="Réglez la visibilité, la réservation et les temps de battement autour de cette prestation.">
           <div className="grid gap-4 md:grid-cols-2">

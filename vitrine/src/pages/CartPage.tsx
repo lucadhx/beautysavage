@@ -11,6 +11,7 @@ import { customerApi, type ApiFailure, type CartView } from '@/lib/api';
 import { useCheckoutAbandon } from '@/lib/checkoutAbandon';
 import { sequenceParam } from '@/lib/bookingSequence';
 import { useCustomer } from '@/context/CustomerContext';
+import { IdentityFields, identityComplete, identityOf, phoneOk, type Identity } from '@/components/account/IdentityFields';
 import { resolvePreviewMediaUrl } from '@/lib/media';
 import { durationText } from '@/components/CommerceProductCard';
 import { GiftCardPayment, PaymentSummary, formatEuro, splitPayment, type AppliedGiftCard } from '@/components/GiftCardPayment';
@@ -51,7 +52,10 @@ function whenOf(line: Line): string[] {
  * à payer, et le bouton qui dit exactement ce qu'il va faire.
  */
 export default function CartPage() {
-  const { customer } = useCustomer();
+  const { customer, setCustomerProfile } = useCustomer();
+  const [identity, setIdentity] = React.useState<Identity>(() => identityOf(customer));
+  // La cliente arrive après le premier rendu : ses coordonnées connues pré-remplissent le formulaire.
+  React.useEffect(() => { if (customer) setIdentity(identityOf(customer)); }, [customer?._id]); // eslint-disable-line react-hooks/exhaustive-deps
   const [cart, setCart] = React.useState<CartView | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [message, setMessage] = React.useState<{ tone: 'error' | 'info'; text: string } | null>(null);
@@ -79,6 +83,8 @@ export default function CartPage() {
   const missing = required.filter((key) => !consents.includes(key));
   // Une prestation ajoutée sans date attend son créneau : le paiement aussi.
   const unscheduled = lines.filter((line) => line.product.kind === 'SERVICE' && !line.bookingSnapshot?.startsAt);
+  // Un rendez-vous ou une formation en présentiel : prénom, nom et téléphone obligatoires.
+  const needIdentity = lines.some((line) => ['SERVICE', 'IN_PERSON_TRAINING'].includes(line.product.kind)) && !identityComplete(customer);
   React.useEffect(() => { if (cart) publishCartCount(cart.lines.length); }, [cart]);
 
   async function remove(line: Line) {
@@ -96,8 +102,13 @@ export default function CartPage() {
       return;
     }
     if (missing.length) { setMessage({ tone: 'error', text: 'Cochez les conditions demandées sous les articles concernés.' }); return; }
+    if (needIdentity && !(identity.firstName.trim() && identity.lastName.trim() && phoneOk(identity.phone))) {
+      setMessage({ tone: 'error', text: 'Indiquez votre prénom, votre nom et votre téléphone dans le récapitulatif.' });
+      return;
+    }
     setPaying(true);
     try {
+      if (needIdentity) setCustomerProfile(await customerApi.updateProfile(identity));
       const result = await customerApi.checkout(consents, split.lines.filter((l) => l.debitCents > 0).map((l) => l.code));
       if (result.checkoutUrl) { window.location.href = result.checkoutUrl; return; }
       setMessage({ tone: 'info', text: result.message });
@@ -177,6 +188,12 @@ export default function CartPage() {
                 <p className="-mt-2 flex justify-between rounded-lg px-3 py-2 text-sm" style={{ background: 'color-mix(in srgb, var(--v-accent) 12%, transparent)' }} data-testid="cart-balance-total">
                   <span>À régler sur place</span><span className="font-semibold tabular-nums">{formatEuro(cart?.balanceDueCents ?? 0)}</span>
                 </p>
+              )}
+              {needIdentity && (
+                <div className="grid gap-3 rounded-lg border p-3" style={{ borderColor: '#fcd34d', background: '#fffbeb' }} data-testid="cart-identity">
+                  <p className="text-sm font-semibold" style={{ color: '#92400e' }}>Vos coordonnées</p>
+                  <IdentityFields value={identity} onChange={setIdentity} compact />
+                </div>
               )}
               {!customer.emailVerified && (
                 <div className="rounded-lg border p-3 text-sm" style={{ borderColor: 'var(--v-border)', background: 'color-mix(in srgb, var(--v-primary) 8%, transparent)' }}>

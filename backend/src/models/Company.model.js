@@ -156,6 +156,35 @@ const companySchema = new mongoose.Schema(
     // Image de fond de la section d'accueil (hero) de la vitrine.
     heroImage: { type: String, default: '' },
     heroImageMedia: { type: mediaDescriptorSchema, default: null },
+    /**
+     * LIEN GOOGLE MAPS — la fiche Google de l'institut. L'ADRESSE, elle, reste
+     * le contact « address » (`media`) : une seule source pour la vitrine, les
+     * e-mails et les rappels. Vide : le lien est une recherche sur l'adresse.
+     */
+    googleMapsUrl: { type: String, default: '', trim: true },
+    /**
+     * « QUI SUIS-JE » — la fondatrice, sur la page d'accueil (Manager →
+     * Informations). Le texte va à la ligne tel que saisi ; l'image suit le
+     * contrat média (descripteur qui fait foi, chemin en repli).
+     */
+    about: {
+      eyebrow: { type: String, default: '', trim: true },
+      title: { type: String, default: '', trim: true },
+      text: { type: String, default: '', trim: true },
+      signature: { type: String, default: '', trim: true },
+      image: { type: String, default: '' },
+      imageMedia: { type: mediaDescriptorSchema, default: null },
+    },
+    /**
+     * MENTIONS DE RÉSERVATION — « +10 min de retard : annulé sans
+     * remboursement », « paiement CB uniquement »… Saisies UNE fois (Manager →
+     * Commerce → Mentions de réservation), affichées dans la fenêtre de
+     * réservation de chaque prestation et formation en présentiel.
+     */
+    bookingNotices: {
+      type: [new mongoose.Schema({ text: { type: String, required: true, trim: true, maxlength: 240 } }, { _id: true })],
+      default: [],
+    },
     // Horaires d'ouverture + fuseau horaire (calcul « ouvert/fermé »).
     /**
      * ── SIGNATAIRE CONTRACTUEL — CHAMP GELÉ, CONSERVÉ EN BASE ────────────────

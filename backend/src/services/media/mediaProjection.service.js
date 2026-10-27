@@ -105,15 +105,17 @@ const nu = (doc) => (doc && typeof doc.toObject === 'function' ? doc.toObject() 
 export async function projectCompanyMedia(company, environment = config.env) {
   const c = nu(company);
   if (!c) return c;
-  const [header, favicon, hero] = await Promise.all([
+  const [header, favicon, hero, about] = await Promise.all([
     resolveOne(c.logosMedia?.header, c.logos?.header, environment),
     resolveOne(c.logosMedia?.favicon, c.logos?.favicon, environment),
     resolveOne(c.heroImageMedia, c.heroImage, environment),
+    resolveOne(c.about?.imageMedia, c.about?.image, environment),
   ]);
   return {
     ...c,
     logos: { ...(c.logos ?? {}), header: header ?? '', favicon: favicon ?? '' },
     heroImage: hero ?? '',
+    ...(c.about ? { about: { ...c.about, image: about ?? '' } } : {}),
   };
 }
 
@@ -246,6 +248,7 @@ export async function companyMediaResolution(company, environment = config.env) 
     ['logos.header', c.logosMedia?.header, c.logos?.header],
     ['logos.favicon', c.logosMedia?.favicon, c.logos?.favicon],
     ['heroImage', c.heroImageMedia, c.heroImage],
+    ['about.image', c.about?.imageMedia, c.about?.image],
   ];
   const resolus = await Promise.all(cibles.map(async ([chemin, descripteur, ancienne]) => {
     const url = await resolveOne(descripteur, ancienne, environment);

@@ -17,6 +17,8 @@ import { flyToCart, publishCartCount } from '@/lib/cartSignal';
 import { useCheckoutAbandon } from '@/lib/checkoutAbandon';
 import { MAX_SEQUENCE_ITEMS, itemMinutes, itemPriceCents, sequenceParam } from '@/lib/bookingSequence';
 import { ServicePicker } from '@/components/ServicePicker';
+import { BookingNotices } from '@/components/BookingNotices';
+import { IdentityFields, identityComplete, identityOf, phoneOk, type Identity } from '@/components/account/IdentityFields';
 
 const formatter = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' });
 
@@ -665,6 +667,19 @@ function BookingDialog({
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState('');
   const [info, setInfo] = React.useState('');
+  /**
+   * COORDONNÉES — une cliente inscrite avant que prénom, nom et téléphone
+   * soient obligatoires les complète ici, une fois : ils sont enregistrés sur
+   * son profil juste avant le paiement.
+   */
+  const { customer, setCustomerProfile } = useCustomer();
+  const needIdentity = needsChoice && !identityComplete(customer);
+  const [identity, setIdentity] = React.useState<Identity>(() => identityOf(customer));
+  const identityReady = !needIdentity || Boolean(identity.firstName.trim() && identity.lastName.trim() && phoneOk(identity.phone));
+  async function saveIdentity() {
+    if (!needIdentity) return;
+    setCustomerProfile(await customerApi.updateProfile(identity));
+  }
 
   const session = product.sessions.find((item) => item.id === sessionId) || null;
   const chainItems = chain.map((item) => (item.main ? { ...item, optionKeys } : item));
@@ -723,13 +738,14 @@ function BookingDialog({
       : session
         ? `Session du ${when(session.startsAt)}`
         : 'Accès depuis votre espace client après paiement';
-  const ready = Boolean(line) && requirements.every((item) => accepted.includes(item.key));
+  const ready = Boolean(line) && identityReady && requirements.every((item) => accepted.includes(item.key));
 
   async function pay() {
     if (!line) return;
     setBusy(true);
     setError('');
     try {
+      await saveIdentity();
       const result = await customerApi.quickCheckout(
         line,
         accepted.map((key) => `${QUICK_BUY_LINE_ID}:${key}`),
@@ -755,6 +771,7 @@ function BookingDialog({
     setBusy(true);
     setError('');
     try {
+      if (needIdentity && identityReady) await saveIdentity();
       const cart = await customerApi.addCartSequence(chainItems.map((item) => ({ productId: item.product.id, optionKeys: item.optionKeys })), slot.startsAt);
       publishCartCount(cart.lines.length, true);
       if (thenPay) { onDone('/panier'); return; }
@@ -772,6 +789,8 @@ function BookingDialog({
     setBusy(true);
     setError('');
     try {
+      // Coordonnées déjà saisies ici : enregistrées, le paiement du panier n'aura pas à les redemander.
+      if (needIdentity && identityReady) await saveIdentity();
       const cart = await customerApi.addCartItem(line);
       publishCartCount(cart.lines.length, true);
       setInfo('Ajouté au panier.');
@@ -998,6 +1017,13 @@ function BookingDialog({
                   </div>
                 )}
               </div>
+              )}
+              {needsChoice && <BookingNotices />}
+              {needIdentity && (
+                <div className="grid gap-3 rounded-md border p-4" style={{ borderColor: '#fcd34d', background: '#fffbeb' }} data-testid="booking-identity">
+                  <p className="text-sm font-semibold" style={{ color: '#92400e' }}>Vos coordonnées — pour que l’institut sache qui vient et puisse vous joindre.</p>
+                  <IdentityFields value={identity} onChange={setIdentity} compact />
+                </div>
               )}
               {/* Prestation : options déjà choisies à la première étape (elles fixent la durée). */}
               {product.kind !== 'GIFT_CARD' && !pickOptions && <ProductOptions product={product} selected={optionKeys} onChange={setOptionKeys} />}

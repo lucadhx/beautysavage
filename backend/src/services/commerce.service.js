@@ -31,8 +31,10 @@ import { paymentSplit, publicPaymentRule } from './commercePaymentRules.js';
 import { configuredSiteUrl } from '../utils/siteOrigin.js';
 import { view as commissionView } from './commissionPayment.service.js';
 import { emitAppointmentsBooked, isPendingInstituteAccount, rotatePasswordResetToken, sendCustomerAccessLink } from './commerceCustomer.service.js';
+import { assertCustomerIdentity, missingIdentityFields } from './customerIdentity.js';
 import { emitAndDispatch } from './events/domainEvent.service.js';
 import { normalizeReviewRequestConfig } from './reviewRequestConfig.js';
+import { normalizeAppointmentReminderConfig } from './appointmentReminderConfig.js';
 import { assignGroupsForSale, holdGroupsForSale, publicSlotStates, releaseGroupsForSale, sessionBlockedReason } from './trainingSlotGroup.service.js';
 import {
   activeInstituteMode,
@@ -954,6 +956,8 @@ export async function registerCustomer(payload) {
   const password = String(payload.password || '');
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw ApiError.badRequest('Adresse e-mail invalide');
   if (password.length < 8) throw ApiError.badRequest('Mot de passe trop court');
+  // Prénom, nom et téléphone : obligatoires dès l'inscription (voir customerIdentity).
+  const identity = assertCustomerIdentity(payload);
   const exists = await Customer.findOne({ email }).lean();
   if (exists) {
     // Compte ouvert par l'institut lors d'une réservation : on le dit, et la
@@ -971,9 +975,7 @@ export async function registerCustomer(payload) {
   const customer = await Customer.create({
     email,
     password,
-    firstName: payload.firstName || '',
-    lastName: payload.lastName || '',
-    phone: payload.phone || '',
+    ...identity,
     marketingConsent: Boolean(payload.marketingConsent),
     emailVerified: false,
     emailVerification: {
@@ -1002,6 +1004,18 @@ export async function registerCustomer(payload) {
     token: signCustomerToken(customer),
     ...(process.env.ENV === 'TEST' ? { verificationCode: code } : {}),
   };
+}
+
+/**
+ * PROFIL — la cliente complète ou corrige son prénom, son nom, son téléphone.
+ * Les rendez-vous à venir suivent : le planning de l'institut affiche le nom à
+ * jour (relu à l'affichage, voir calendar.service).
+ */
+export async function updateCustomerProfile(customerId, payload) {
+  const identity = assertCustomerIdentity(payload);
+  const customer = await Customer.findByIdAndUpdate(customerId, { $set: identity }, { new: true }).lean();
+  if (!customer) throw ApiError.notFound('Compte client introuvable');
+  return customer;
 }
 
 export async function loginCustomer(email, password) {
@@ -1501,6 +1515,13 @@ async function checkoutHydratedLines(customerId, hydrated, payload = {}, { check
   if (!customer) throw ApiError.notFound('Compte client introuvable');
   if (!customer.emailVerified) {
     throw ApiError.forbidden('Vérification e-mail obligatoire avant achat', { code: 'CUSTOMER_EMAIL_NOT_VERIFIED' });
+  }
+  // Un rendez-vous ou une place en formation : l'institut doit savoir qui vient
+  // et pouvoir l'appeler. Une cliente inscrite avant la règle complète ici.
+  const booking = hydrated.lines.some((line) => ['SERVICE', 'IN_PERSON_TRAINING'].includes(line.product?.kind));
+  const missingIdentity = booking ? missingIdentityFields(customer) : [];
+  if (missingIdentity.length) {
+    throw ApiError.badRequest('Complétez votre prénom, votre nom et votre téléphone pour réserver.', { code: 'CUSTOMER_PROFILE_INCOMPLETE', fields: missingIdentity });
   }
   // Les clés de l'environnement courant (ENV=PROD → clés live) décident seules.
   const stripeReady = await instituteStripeReady();
@@ -2730,6 +2751,8 @@ export async function upsertProduct(payload) {
     bookingRules: payload.bookingRules || {},
     // Demande d'avis : normalisée (unités, bornes) ; absente, la fiche garde la sienne.
     reviewRequest: payload.reviewRequest !== undefined ? normalizeReviewRequestConfig(payload.reviewRequest) : (previous?.reviewRequest ?? null),
+    // Rappels avant rendez-vous / session : même règle que la demande d'avis.
+    appointmentReminder: payload.appointmentReminder !== undefined ? normalizeAppointmentReminderConfig(payload.appointmentReminder) : (previous?.appointmentReminder ?? null),
     seo: {
       metaTitle: String(payload.seo?.metaTitle ?? previous?.seo?.metaTitle ?? '').trim().slice(0, 120),
       metaDescription: String(payload.seo?.metaDescription ?? previous?.seo?.metaDescription ?? '').trim().slice(0, 320),

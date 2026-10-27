@@ -2,6 +2,7 @@
 import { registerVariableResolver } from './emailVariableResolvers.js';
 import { resolveCommissionPaymentDue } from './commissionVariableResolver.js';
 import { registerRelevanceGuard } from '../events/actionRelevance.js';
+import { appointmentReminderStillRelevant } from '../appointmentReminder.service.js';
 import { reviewRequestStillRelevant } from '../reviewRequest.service.js';
 import { registerEmailActionHandlers } from './sendEmailHandler.js';
 import { registerReportIncidentHandler } from '../events/reportIncidentHandler.js';
@@ -25,6 +26,7 @@ import {
   resolveSessionRescheduledClient,
   resolveSessionCancelledClient,
   resolveReviewRequestClient,
+  resolveAppointmentReminderClient,
   resolveSlotGroupAssignedAdmin,
   resolveCustomerEmailVerification,
   resolveCustomerPasswordReset,
@@ -85,6 +87,9 @@ export async function initEmailModule({ skipBootstrap = false } = {}) {
   registerVariableResolver('FORMATION_SLOT_ASSIGNED_ADMIN', resolveSlotGroupAssignedAdmin);
   // Un avis reçu entre la planification et l'envoi annule l'e-mail.
   registerRelevanceGuard('review.requested', reviewRequestStillRelevant);
+  registerVariableResolver('APPOINTMENT_REMINDER_CLIENT', resolveAppointmentReminderClient);
+  // Un rendez-vous ou une session annulé, déplacé ou remboursé entre la planification et l'envoi annule le rappel.
+  registerRelevanceGuard('appointment.reminder', appointmentReminderStillRelevant);
 
   /**
    * Cycle de paiement et incidents techniques.

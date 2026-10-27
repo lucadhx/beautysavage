@@ -2,6 +2,7 @@ import * as React from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, BadgeCheck, CheckCircle2, GraduationCap, PawPrint } from 'lucide-react';
 import { useSiteData } from '@/context/SiteDataContext';
+import type { Company } from '@/types';
 import { CommerceProductCard, buildReviewSummaries, type ProductReviewSummary } from '@/components/CommerceProductCard';
 import { type CommerceProduct } from '@/lib/api';
 import { useCatalog, useReviews } from '@/lib/catalogCache';
@@ -98,6 +99,8 @@ export default function HomePage() {
         showKind={false}
       />
 
+      <AboutSection about={company?.about} />
+
       <FormationBand items={trainings} reviews={reviews} />
 
       <ReviewsCarousel reviews={reviewItems} />
@@ -121,6 +124,45 @@ export default function HomePage() {
         </div>
       </section>
     </>
+  );
+}
+
+/**
+ * QUI SUIS-JE — la fondatrice : un portrait, son histoire, sa signature.
+ * Le texte vient du Manager (Entreprise → Informations) et garde ses retours à
+ * la ligne ; vide, la section disparaît. Sans portrait, le texte se centre.
+ */
+function AboutSection({ about }: { about?: Company['about'] }) {
+  const text = about?.text?.trim();
+  if (!text) return null;
+  const image = about?.image ? resolvePreviewMediaUrl(about.image) : '';
+  return (
+    <section className="mx-auto max-w-6xl px-4 py-12 sm:px-5 sm:py-20 md:px-8" data-testid="home-about">
+      <div className={`grid items-center gap-8 md:gap-14 ${image ? 'md:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]' : ''}`}>
+        {image && (
+          <div className="relative mx-auto w-full max-w-sm md:max-w-none">
+            <div className="absolute -inset-3 -z-0 hidden rounded-2xl border md:block" style={{ borderColor: 'color-mix(in srgb, var(--v-accent) 45%, transparent)' }} aria-hidden="true" />
+            <img src={image} alt={about?.title || 'Portrait'} loading="lazy" className="relative aspect-[4/5] w-full rounded-xl object-cover shadow-lg" data-testid="home-about-image" />
+          </div>
+        )}
+        <div className={image ? '' : 'mx-auto max-w-3xl text-center'}>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] sm:text-sm sm:tracking-[0.18em]" style={{ color: 'var(--v-accent)' }}>
+            {about?.eyebrow?.trim() || 'Qui suis-je'}
+          </p>
+          {about?.title?.trim() && (
+            <h2 className="mt-2 text-2xl font-semibold leading-tight tracking-normal sm:mt-3 sm:text-4xl" style={{ fontFamily: 'var(--font-heading)' }} data-testid="home-about-title">
+              {about.title}
+            </h2>
+          )}
+          <p className="mt-4 whitespace-pre-line text-sm leading-7 sm:mt-6 sm:text-base sm:leading-8" style={{ color: 'var(--v-muted-foreground)' }} data-testid="home-about-text">
+            {text}
+          </p>
+          {about?.signature?.trim() && (
+            <p className="mt-5 text-xl italic sm:text-2xl" style={{ fontFamily: 'var(--font-heading)', color: 'var(--v-accent)' }}>{about.signature}</p>
+          )}
+        </div>
+      </div>
+    </section>
   );
 }
 
