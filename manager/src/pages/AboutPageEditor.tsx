@@ -63,7 +63,7 @@ export default function AboutPageEditor() {
     <div className="pb-24">
       <PageHeader
         title="Page À propos"
-        description="Votre histoire, sur une page dédiée du site (/a-propos). Remplissez les blocs à gauche : l'aperçu à droite montre la page telle qu'elle sera publiée."
+        description="Votre histoire, sur une page dédiée du site (/a-propos). Remplissez les blocs : l'aperçu (à droite sur ordinateur, en bas sur téléphone) montre la page telle qu'elle sera publiée."
       />
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,0.95fr)]">
@@ -80,7 +80,7 @@ export default function AboutPageEditor() {
               <p className="mt-1 text-sm text-muted-foreground">Le haut de la page : un portrait, votre titre et une phrase qui vous présente.</p>
             </CardHeader>
             <CardContent className="grid gap-5 sm:grid-cols-[minmax(0,180px)_minmax(0,1fr)]">
-              <div className="min-w-0">
+              <div className="mx-auto w-full min-w-0 max-w-[180px]">
                 <ImageUpload
                   value={page.image ?? ''}
                   previewUrl={preview(page.image) || null}
