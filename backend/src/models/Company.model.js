@@ -170,10 +170,45 @@ const companySchema = new mongoose.Schema(
     about: {
       eyebrow: { type: String, default: '', trim: true },
       title: { type: String, default: '', trim: true },
+      /** Ancien texte long — l'histoire complète vit désormais dans `aboutPage`. */
       text: { type: String, default: '', trim: true },
+      /** Le résumé de l'accueil : deux ou trois phrases, qui mènent à la page « À propos ». */
+      teaser: { type: String, default: '', trim: true },
       signature: { type: String, default: '', trim: true },
       image: { type: String, default: '' },
       imageMedia: { type: mediaDescriptorSchema, default: null },
+    },
+    /**
+     * LA PAGE « À PROPOS » (/a-propos) — l'histoire en sections : un en-tête
+     * (portrait, titre, chapô), des sections numérotées (sur-titre, titre,
+     * texte, image facultative), des valeurs courtes et une citation. Éditée
+     * dans Manager → Le site → Page À propos, avec aperçu en direct.
+     */
+    aboutPage: {
+      enabled: { type: Boolean, default: true },
+      eyebrow: { type: String, default: '', trim: true },
+      title: { type: String, default: '', trim: true },
+      intro: { type: String, default: '', trim: true },
+      image: { type: String, default: '' },
+      imageMedia: { type: mediaDescriptorSchema, default: null },
+      sections: {
+        type: [new mongoose.Schema({
+          eyebrow: { type: String, default: '', trim: true },
+          title: { type: String, default: '', trim: true },
+          text: { type: String, default: '', trim: true },
+          image: { type: String, default: '' },
+          imageMedia: { type: mediaDescriptorSchema, default: null },
+        }, { _id: true })],
+        default: [],
+      },
+      values: {
+        type: [new mongoose.Schema({
+          title: { type: String, default: '', trim: true },
+          text: { type: String, default: '', trim: true },
+        }, { _id: true })],
+        default: [],
+      },
+      quote: { type: String, default: '', trim: true },
     },
     /**
      * MENTIONS DE RÉSERVATION — « +10 min de retard : annulé sans

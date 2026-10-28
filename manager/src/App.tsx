@@ -54,6 +54,7 @@ const CommerceCartesCadeauxPage = lazyPage(() => import('@/pages/commerce/Commer
 const CommerceValidationFormationsPage = lazyPage(() => import('@/pages/commerce/CommerceValidationFormationsPage'));
 const CommerceAvisPage = lazyPage(() => import('@/pages/commerce/CommerceAvisPage'));
 const BookingNoticesPage = lazyPage(() => import('@/pages/commerce/BookingNoticesPage'));
+const AboutPageEditor = lazyPage(() => import('@/pages/AboutPageEditor'));
 const CommerceRemboursementsPage = lazyPage(() => import('@/pages/commerce/CommerceRemboursementsPage'));
 const CommerceApiKeysPage = lazyPage(() => import('@/pages/commerce/CommerceApiKeysPage'));
 const SitePagesPage = lazyPage(() => import('@/pages/SitePagesPage'));
@@ -178,6 +179,7 @@ export function App() {
             {/* `:id` vaut « nouveau » pour une création — une seule page sert
                 les deux cas, donc un seul formulaire à faire évoluer. */}
             <Route path="pages" element={<SitePagesPage />} />
+            <Route path="a-propos" element={<AboutPageEditor />} />
             <Route path="pages/:id" element={<SitePageEditPage />} />
             <Route path="mediatheque" element={<MediaLibraryPage />} />
             <Route path="contacts" element={<ContactsPage />} />

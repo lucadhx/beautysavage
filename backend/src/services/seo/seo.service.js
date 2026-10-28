@@ -742,6 +742,18 @@ export async function resolveRoute(rawPath, { originFallback = '' } = {}) {
       breadcrumbNode(data, url, [{ name: page.title, url }]),
     );
     route.body = pageBody(data, page);
+  } else if (pathname === '/a-propos') {
+    // La page « À propos » : servie seulement si elle est publiée et a du contenu.
+    const page = data.company.aboutPage;
+    if (!aboutPageReady(page)) return notFound(data, route, graph);
+    route.title = composeTitle(data, oneLine(page.title) || 'À propos');
+    route.description = clip(oneLine(page.intro) || oneLine(page.sections?.[0]?.text) || homeDescription(data), 160);
+    if (page.image) route.image = abs(data, page.image);
+    graph.push(
+      webPageNode(data, { url, type: 'AboutPage', name: route.title, description: route.description, image: route.image, breadcrumb: true }),
+      breadcrumbNode(data, url, [{ name: 'À propos', url }]),
+    );
+    route.body = aboutBody(data, page);
   } else if (pathname === '/contact' || pathname === '/presenter-un-projet') {
     route.canonical = `${data.base}/contact`;
     route.title = composeTitle(data, `Contact et accès${city(data) ? ` — ${city(data)}` : ''}`);
@@ -796,6 +808,7 @@ function navHtml(data) {
   if (data.products.some((p) => p.kind === 'GIFT_CARD')) links.push(['/cartes-cadeaux', 'Cartes cadeaux']);
   links.push(['/boutique', 'Boutique']);
   for (const page of data.pages.filter((p) => p.showInNav !== false)) links.push([`/p/${page.slug}`, page.navLabel || page.title]);
+  if (aboutPageReady(data.company.aboutPage)) links.push(['/a-propos', 'À propos']);
   links.push(['/contact', 'Contact']);
   return `<nav aria-label="Navigation principale"><ul>${links.map(([href, label]) => `<li><a href="${esc(href)}">${esc(label)}</a></li>`).join('')}</ul></nav>`;
 }
@@ -896,6 +909,18 @@ function pageBody(data, page) {
     ].join('');
   }).join('');
   return shell(data, `<h1>${esc(page.title)}</h1>${page.intro ? `<p>${esc(page.intro)}</p>` : ''}${blocks}`);
+}
+
+/** Une page « À propos » publiable : activée, et au moins un chapô ou une section. */
+function aboutPageReady(page) {
+  return Boolean(page && page.enabled !== false && (oneLine(page.intro) || (page.sections || []).some((s) => oneLine(s.title) || oneLine(s.text))));
+}
+
+function aboutBody(data, page) {
+  const paras = (text) => String(text || '').split(/\n{2,}/).map((t) => t.trim()).filter(Boolean).map((t) => `<p>${esc(t)}</p>`).join('');
+  const sections = (page.sections || []).map((sec) => `<section>${sec.title ? `<h2>${esc(sec.title)}</h2>` : ''}${paras(sec.text)}</section>`).join('');
+  const values = (page.values || []).filter((v) => v.title).map((v) => `<li><strong>${esc(v.title)}</strong>${v.text ? ` — ${esc(v.text)}` : ''}</li>`).join('');
+  return shell(data, `<h1>${esc(page.title || 'À propos')}</h1>${paras(page.intro)}${sections}${values ? `<ul>${values}</ul>` : ''}${page.quote ? `<blockquote>${esc(page.quote)}</blockquote>` : ''}`);
 }
 
 function contactBody(data) {
@@ -1029,6 +1054,7 @@ export async function sitemapXml() {
       entries.push({ loc: `/catalogue/${encodeURIComponent(p.slug)}`, lastmod: p.updatedAt, priority: p.kind === 'GIFT_CARD' ? '0.6' : '0.8', changefreq: 'weekly', image: productImage(data, p), imageTitle: p.title });
     }
     for (const page of data.pages) entries.push({ loc: `/p/${encodeURIComponent(page.slug)}`, lastmod: page.updatedAt, priority: '0.5', changefreq: 'monthly' });
+    if (aboutPageReady(data.company.aboutPage)) entries.push({ loc: '/a-propos', priority: '0.5', changefreq: 'monthly' });
     entries.push({ loc: '/contact', priority: '0.6', changefreq: 'yearly' });
     for (const [loc, legal] of Object.entries(LEGAL_ROUTES)) if (data.legal.has(legal.type)) entries.push({ loc, priority: '0.2', changefreq: 'yearly' });
   }

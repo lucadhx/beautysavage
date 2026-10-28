@@ -6,6 +6,7 @@ import { useResource, useAction } from '@/hooks/useResource';
 import { useFloatingSave } from '@/hooks/useFloatingSave';
 import { FloatingSaveWidget } from '@/components/ui/FloatingSaveWidget';
 import { useCompany } from '@/context/CompanyContext';
+import { Link } from 'react-router-dom';
 import type { Company } from '@/types';
 import { PageHeader } from '@/components/layout/PageHeader';
 import {
@@ -138,7 +139,8 @@ export default function CompanyPage() {
           <CardHeader>
             <CardTitle className="inline-flex items-center gap-2"><UserRound className="h-5 w-5 text-muted-foreground" /> Qui suis-je</CardTitle>
             <p className="mt-1 text-sm text-muted-foreground">
-              La présentation de la fondatrice, sur la page d'accueil. Laissez le texte vide pour masquer la section.
+              L'encart de la page d'accueil : un portrait, un titre et deux ou trois phrases. Il mène à votre histoire complète, sur la{' '}
+              <Link to="/a-propos" className="font-medium text-primary underline-offset-2 hover:underline" data-testid="company-about-page-link">page À propos</Link>.
             </p>
           </CardHeader>
           <CardContent className="grid gap-6 md:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
@@ -155,8 +157,8 @@ export default function CompanyPage() {
             <div className="grid content-start gap-4">
               <Field label="Sur-titre"><Input value={about.eyebrow ?? ''} onChange={(e) => setAbout({ eyebrow: e.target.value })} placeholder="Qui suis-je" /></Field>
               <Field label="Titre"><Input value={about.title ?? ''} onChange={(e) => setAbout({ title: e.target.value })} placeholder="Romane, fondatrice de BeautySavage" data-testid="company-about-title" /></Field>
-              <Field label="Texte" hint="Les retours à la ligne sont conservés.">
-                <Textarea rows={9} value={about.text ?? ''} onChange={(e) => setAbout({ text: e.target.value })} data-testid="company-about-text" />
+              <Field label="Résumé pour l'accueil" hint={`Deux ou trois phrases (${(about.teaser ?? '').length}/320). L'histoire complète se rédige sur la page À propos.`}>
+                <Textarea rows={3} maxLength={320} value={about.teaser ?? ''} onChange={(e) => setAbout({ teaser: e.target.value })} data-testid="company-about-teaser" />
               </Field>
               <Field label="Signature" unit="facultatif"><Input value={about.signature ?? ''} onChange={(e) => setAbout({ signature: e.target.value })} placeholder="Romane" /></Field>
             </div>

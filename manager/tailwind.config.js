@@ -11,6 +11,8 @@ export default {
       même fichier est correct dans la vitrine.
     */
     '../vitrine/src/components/HeroBanner.tsx',
+    // La page « À propos » : même composant dans la vitrine et dans l'aperçu de son éditeur.
+    '../vitrine/src/components/about/AboutContent.tsx',
   ],
   theme: {
     extend: {

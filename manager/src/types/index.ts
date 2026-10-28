@@ -295,9 +295,23 @@ export interface Company {
     eyebrow?: string;
     title?: string;
     text?: string;
+    /** Résumé de l'accueil (deux ou trois phrases) — l'histoire complète est dans `aboutPage`. */
+    teaser?: string;
     signature?: string;
     image?: string;
     imageMedia?: StoredMediaDescriptor | null;
+  };
+  /** La page « À propos » (/a-propos) : en-tête, sections, valeurs, citation. */
+  aboutPage?: {
+    enabled?: boolean;
+    eyebrow?: string;
+    title?: string;
+    intro?: string;
+    image?: string;
+    imageMedia?: StoredMediaDescriptor | null;
+    sections: { _id?: string; eyebrow?: string; title?: string; text?: string; image?: string; imageMedia?: StoredMediaDescriptor | null }[];
+    values: { _id?: string; title?: string; text?: string }[];
+    quote?: string;
   };
   /** Mentions affichées dans la fenêtre de réservation (prestations, formations en présentiel). */
   bookingNotices?: { _id?: string; text: string }[];

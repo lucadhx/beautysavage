@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useLocation } from 'react-router-dom';
+import { aboutPageReady } from '@/components/about/AboutContent';
 import { AnimatePresence, motion, useScroll, useTransform, type Variants } from 'framer-motion';
 import { Menu, X, ArrowRight, ShoppingBag, UserCircle } from 'lucide-react';
 import { HelpCircle, LogOut01, Settings01, User01 } from '@untitledui/icons';
@@ -86,10 +87,12 @@ export function Navbar() {
       { to: '/prestations', label: 'Prestations' },
       { to: '/boutique', label: 'Boutique' },
       { to: '/cartes-cadeaux', label: 'Cartes cadeaux' },
+      // L'histoire de la fondatrice, dès que la page est publiée.
+      ...(aboutPageReady(data?.company?.aboutPage) ? [{ to: '/a-propos', label: 'À propos' }] : []),
       { to: '/contact', label: 'Contact' },
       ...pages,
     ];
-  }, [data?.pages]);
+  }, [data?.pages, data?.company?.aboutPage]);
 
   const logo = resolvePreviewMediaUrl(data?.company?.logos?.header, data?.network?.backendUrl);
   const nom = data?.company?.name || 'BeautySavage';

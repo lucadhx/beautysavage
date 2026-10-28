@@ -8,6 +8,7 @@ import { useMinimumDuration } from '@/lib/minimumDuration';
 import { useVisualViewportTop } from '@/lib/viewport';
 import { Navbar } from '@/components/layout/Navbar';
 import { Footer } from '@/components/layout/Footer';
+import { InstagramButton } from '@/components/InstagramButton';
 import { CustomerProvider, useCustomer } from '@/context/CustomerContext';
 import { RouteBoundary, RouteFallback } from '@/components/RouteBoundary';
 import { SeoHead } from '@/lib/seoHead';
@@ -26,6 +27,7 @@ const chargerContact = () => import('@/pages/ContactPage');
 const chargerLegal = () => import('@/pages/LegalPage');
 const chargerPage = () => import('@/pages/SitePageView');
 const ContactPage = React.lazy(chargerContact);
+const AboutPage = React.lazy(() => import('@/pages/AboutPage'));
 const MentionsLegalesPage = React.lazy(() => chargerLegal().then((m) => ({ default: m.MentionsLegalesPage })));
 const PolitiqueConfidentialitePage = React.lazy(() => chargerLegal().then((m) => ({ default: m.PolitiqueConfidentialitePage })));
 const SitePageView = React.lazy(chargerPage);
@@ -160,6 +162,7 @@ function PagesEnFondu() {
             */}
             <Route path="/presenter-un-projet" element={<ContactPage />} />
             <Route path="/contact" element={<ContactPage />} />
+            <Route path="/a-propos" element={<AboutPage />} />
             <Route path="/formations" element={<CatalogPage kind="training" />} />
             <Route path="/prestations" element={<CatalogPage kind="service" />} />
             <Route path="/prestations/:slug" element={<ServiceCollectionPage />} />
@@ -328,6 +331,7 @@ function Site() {
         </main>
         <Footer />
       </div>
+      <InstagramButton />
     </CustomerProvider>
   );
 }

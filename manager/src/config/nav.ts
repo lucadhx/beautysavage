@@ -37,6 +37,7 @@ import {
   Server,
   type LucideIcon,
   ClipboardList,
+  UserRound,
 } from 'lucide-react';
 
 export interface NavItem {
@@ -103,6 +104,8 @@ export const NAV_ITEMS: NavItem[] = [
    * qu'une partie de son espace ne le concerne pas — après quoi il cesse de
    * lire le menu.
    */
+  // L'histoire de la fondatrice : la page « À propos » et son aperçu en direct.
+  { to: '/a-propos', label: 'Page À propos', icon: UserRound, section: 'manager', group: 'Le site' },
   { to: '/pages', label: 'Pages du site', icon: FileText, section: 'manager', group: 'Le site' },
   { to: '/mediatheque', label: 'Mediatheque', icon: Images, section: 'manager', group: 'Le site' },
 

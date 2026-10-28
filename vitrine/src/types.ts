@@ -29,7 +29,18 @@ export interface Company {
   /** Lien Google Maps de l'institut (fiche Google). Vide : dérivé de l'adresse. */
   googleMapsUrl?: string;
   /** « Qui suis-je » de l'accueil — image DÉJÀ RÉSOLUE par le serveur. */
-  about?: { eyebrow?: string; title?: string; text?: string; signature?: string; image?: string };
+  about?: { eyebrow?: string; title?: string; text?: string; teaser?: string; signature?: string; image?: string };
+  /** La page « À propos » (/a-propos) — images DÉJÀ RÉSOLUES par le serveur. */
+  aboutPage?: {
+    enabled?: boolean;
+    eyebrow?: string;
+    title?: string;
+    intro?: string;
+    image?: string;
+    sections?: { _id?: string; eyebrow?: string; title?: string; text?: string; image?: string }[];
+    values?: { _id?: string; title?: string; text?: string }[];
+    quote?: string;
+  };
   /** Mentions importantes affichées dans la fenêtre de réservation. */
   bookingNotices?: { _id?: string; text: string }[];
 }

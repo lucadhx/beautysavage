@@ -7,6 +7,7 @@ import { mediaHref } from '@/lib/utils';
 import { copyrightNotice } from '@/lib/copyright';
 import { resolvePreviewMediaUrl } from '@/lib/media';
 import { instituteAddress } from '@/lib/instituteAddress';
+import { aboutPageReady } from '@/components/about/AboutContent';
 
 /**
  * TYPE DE DOCUMENT → ROUTE FRANÇAISE.
@@ -41,7 +42,8 @@ export function Footer() {
   const company = data?.company;
   const developer = data?.developer;
   // L'adresse a son propre bloc (avec Google Maps) : pas d'icône en double, qui ne mènerait nulle part.
-  const enabledMedia = (company?.media || []).filter((m) => m.enabled && m.value && m.key !== 'address');
+  // Instagram a sa pastille flottante (InstagramButton) : pas d'icône en double ici.
+  const enabledMedia = (company?.media || []).filter((m) => m.enabled && m.value && m.key !== 'address' && m.key !== 'instagram');
   const chapitres = (data?.chapters ?? []).filter((c) => c.showInNav);
   /**
    * Le backend ne renvoie que les documents RÉELLEMENT servis. On filtre tout
@@ -184,6 +186,7 @@ export function Footer() {
               <li><Link to="/" className="hover:underline">Accueil</Link></li>
               <li><Link to="/prestations" className="hover:underline">Prestations</Link></li>
               <li><Link to="/formations" className="hover:underline">Formations</Link></li>
+              {aboutPageReady(company?.aboutPage) && <li><Link to="/a-propos" className="hover:underline">À propos</Link></li>}
               <li><Link to="/contact" className="hover:underline">Contact</Link></li>
             </ul>
             {/*
