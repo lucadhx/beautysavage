@@ -114,9 +114,10 @@ export function BookingMonthCalendar({ durationMinutes, productId, optionKeys, c
   // Les heures du jour choisi sont-elles à l'écran ? (le navigateur tient compte de la zone qui défile)
   const hoursShown = Boolean(day && byDay.get(day));
   React.useEffect(() => {
-    const el = hoursRef.current;
+    // Le PREMIER BOUTON d'heure, entier — pas le bloc : son titre peut dépasser en bas de l'écran alors qu'aucune heure n'est visible.
+    const el = hoursRef.current?.querySelector('[data-testid="booking-slot"]');
     if (!el || !hoursShown) { setHoursInView(true); return undefined; }
-    const io = new IntersectionObserver(([entry]) => setHoursInView(entry.isIntersecting), { threshold: 0 });
+    const io = new IntersectionObserver(([entry]) => setHoursInView(entry.isIntersecting && entry.intersectionRatio >= 0.95), { threshold: [0, 0.95, 1] });
     io.observe(el);
     return () => io.disconnect();
   }, [hoursShown, day]);
