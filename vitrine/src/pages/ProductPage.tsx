@@ -17,6 +17,7 @@ import { flyToCart, publishCartCount } from '@/lib/cartSignal';
 import { useCheckoutAbandon } from '@/lib/checkoutAbandon';
 import { MAX_SEQUENCE_ITEMS, itemMinutes, itemPriceCents, sequenceParam } from '@/lib/bookingSequence';
 import { ServicePicker } from '@/components/ServicePicker';
+import { instituteFormat, instituteTime } from '@/lib/instituteTime';
 import { BookingNotices } from '@/components/BookingNotices';
 import { IdentityFields, identityComplete, identityOf, phoneOk, type Identity } from '@/components/account/IdentityFields';
 
@@ -723,7 +724,7 @@ function BookingDialog({
         ? (sessionId ? { productId: product.id, quantity: 1, sessionId, optionKeys } : null)
         : { productId: product.id, quantity: 1, optionKeys };
 
-  const when = (value: string) => new Date(value).toLocaleString('fr-FR', { dateStyle: 'full', timeStyle: 'short' });
+  const when = (value: string) => instituteFormat({ dateStyle: 'full', timeStyle: 'short' }).format(new Date(value));
   const amountCents = product.kind === 'GIFT_CARD'
     ? Math.round(Math.max(giftMinimumEuros, Number(giftAmountEuros || 0)) * 100)
     : product.price.amountCents + optionsTotalCents(product, optionKeys);
@@ -931,8 +932,8 @@ function BookingDialog({
                   const held = Boolean(item.sharedSlot?.heldUntil);
                   const full = item.remaining <= 0 || held;
                   const days = item.days?.length ? item.days : [{ startsAt: item.startsAt, endsAt: item.endsAt }];
-                  const time = (v: string) => new Date(v).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-                  const date = (v: string, o: Intl.DateTimeFormatOptions) => new Date(v).toLocaleDateString('fr-FR', o);
+                  const time = (v: string) => instituteTime(v);
+                  const date = (v: string, o: Intl.DateTimeFormatOptions) => instituteFormat(o).format(new Date(v));
                   const first = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
                   return (
                     <button
@@ -1073,7 +1074,7 @@ function BookingDialog({
                   <ArrowLeft className="h-4 w-4" /> Prestations
                 </button>
               ) : null}
-              <span className="text-sm" style={{ color: 'var(--v-muted-foreground)' }}>{slot ? when(slot.startsAt) : session ? when(session.startsAt) : 'Choisissez un créneau'}</span>
+              <span className={`text-sm max-sm:order-first max-sm:w-full ${slot || session ? '' : 'max-sm:hidden'}`} style={{ color: 'var(--v-muted-foreground)' }} data-testid="booking-choice-summary">{slot ? when(slot.startsAt) : session ? when(session.startsAt) : product.kind === 'SERVICE' ? 'Choisissez un jour puis une heure' : 'Choisissez une session'}</span>
               <button
                 type="button"
                 disabled={!line}
@@ -1138,7 +1139,7 @@ function BookingDialog({
 
 /** L'heure de chaque prestation d'un enchaînement, l'une après l'autre. */
 function SegmentList({ segments, prices }: { segments: SlotSegment[]; prices?: number[] }) {
-  const time = (v: string) => new Date(v).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  const time = (v: string) => instituteTime(v);
   return (
     <ol className="grid gap-1.5" data-testid="booking-segments">
       {segments.map((segment, index) => (

@@ -394,6 +394,12 @@ export default function CommerceCalendarPage() {
       description="Planning type Planity : prestations, formations, blocages, acomptes, soldes et remboursements. Les superpositions sont refusees automatiquement."
     >
       {message && <p className="rounded-md border p-3 text-sm text-muted-foreground">{message}</p>}
+      {/* Le planning suit l'heure de l'appareil : hors de France, il ne faut pas s'y fier sans le savoir. */}
+      {new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) !== new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' }) && (
+        <p className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900" role="alert" data-testid="calendar-timezone-warning">
+          Votre appareil n’est pas à l’heure française : ce planning affiche les heures de votre appareil, pas celles de l’institut.
+        </p>
+      )}
       <div className="grid min-w-0 gap-4">
         <Card className="min-w-0 overflow-visible">
           <CardContent className="grid gap-4">

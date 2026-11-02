@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { instituteFormat } from '@/lib/instituteTime';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { CalendarDays, Check, ChevronLeft, ChevronRight, Loader2, LogOut, PawPrint, Sparkles } from 'lucide-react';
@@ -19,7 +20,7 @@ const LABELS = ['', 'Décevant', 'Moyen', 'Bien', 'Très bien', 'Parfait'];
 
 function longDate(value: string) {
   const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  return Number.isNaN(d.getTime()) ? '' : instituteFormat({ weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(d);
 }
 
 export default function ReviewPage() {

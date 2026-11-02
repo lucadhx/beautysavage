@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { instituteDay, instituteFormat } from '@/lib/instituteTime';
 import { Link, useSearchParams } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
@@ -12,9 +13,13 @@ import { AddAfterDialog } from '@/components/account/AddAfterDialog';
 
 const euro = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' });
 const fmt = (cents: number) => euro.format((cents || 0) / 100);
-const dayFmt = new Intl.DateTimeFormat('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
-const timeFmt = new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit' });
-const monthFmt = new Intl.DateTimeFormat('fr-FR', { month: 'long', year: 'numeric' });
+// À l'heure de l'institut, jamais à celle du téléphone (voir lib/instituteTime).
+const dayFmt = instituteFormat({ weekday: 'long', day: 'numeric', month: 'long' });
+const timeFmt = instituteFormat({ hour: '2-digit', minute: '2-digit' });
+const monthFmt = instituteFormat({ month: 'long', year: 'numeric' });
+const weekdayShortFmt = instituteFormat({ weekday: 'short' });
+const monthShortFmt = instituteFormat({ month: 'short' });
+const orderDateFmt = instituteFormat({ day: '2-digit', month: '2-digit', year: 'numeric' });
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 const TABS = [
@@ -295,9 +300,9 @@ function AppointmentCard({ a, index, onCancel, onAddAfter, chained = false }: { 
     <motion.article initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.05 }}
       className="flex min-w-0 gap-3 rounded-2xl border p-3 sm:gap-4 sm:p-4" style={{ borderColor: 'var(--v-border)', background: 'var(--v-surface)' }} data-testid="appointment" data-soon={a.soon || undefined}>
       <div className="grid h-fit w-14 shrink-0 place-items-center rounded-xl py-2 text-center sm:w-20" style={{ background: 'color-mix(in srgb, var(--v-primary) 8%, transparent)' }}>
-        <span className="text-[11px] font-semibold uppercase" style={{ color: 'var(--v-muted-foreground)' }}>{start.toLocaleDateString('fr-FR', { weekday: 'short' })}</span>
-        <span className="text-2xl font-semibold leading-none">{start.getDate()}</span>
-        <span className="text-[11px]" style={{ color: 'var(--v-muted-foreground)' }}>{start.toLocaleDateString('fr-FR', { month: 'short' })}</span>
+        <span className="text-[11px] font-semibold uppercase" style={{ color: 'var(--v-muted-foreground)' }}>{weekdayShortFmt.format(start)}</span>
+        <span className="text-2xl font-semibold leading-none">{instituteDay(start).day}</span>
+        <span className="text-[11px]" style={{ color: 'var(--v-muted-foreground)' }}>{monthShortFmt.format(start)}</span>
       </div>
       {image && <img src={image} alt="" className="hidden h-20 w-20 shrink-0 rounded-xl object-cover sm:block" loading="lazy" />}
       <div className="min-w-0 flex-1">
@@ -452,7 +457,7 @@ function OrdersTab({ orders }: { orders: CustomerOrder[] | null }) {
             <li key={o.id} className="flex min-w-0 flex-wrap items-center justify-between gap-2 py-3" data-testid="order-row">
               <div className="min-w-0 flex-1 basis-48">
                 <p className="truncate font-semibold">{o.lines?.map((l) => l.productSnapshot?.title).filter(Boolean).join(', ') || o.saleNumber}</p>
-                <p className="break-words text-xs" style={{ color: 'var(--v-muted-foreground)' }}>{o.saleNumber} · {new Date(o.createdAt).toLocaleDateString('fr-FR')} · {ORDER_STATUS[o.paymentStatus]}{o.balanceDueCents > 0 ? ` · ${fmt(o.balanceDueCents)} sur place` : ''}</p>
+                <p className="break-words text-xs" style={{ color: 'var(--v-muted-foreground)' }}>{o.saleNumber} · {orderDateFmt.format(new Date(o.createdAt))} · {ORDER_STATUS[o.paymentStatus]}{o.balanceDueCents > 0 ? ` · ${fmt(o.balanceDueCents)} sur place` : ''}</p>
               </div>
               <div className="flex items-center gap-3">
                 <span className="font-semibold tabular-nums">{fmt(o.totalCents)}</span>

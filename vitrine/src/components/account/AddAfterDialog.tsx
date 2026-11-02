@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { instituteDayKey, instituteTime } from '@/lib/instituteTime';
 import { useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { CalendarCheck, CalendarClock, Loader2, ShoppingBag, X } from 'lucide-react';
@@ -10,7 +11,7 @@ import { itemMinutes, itemPriceCents } from '@/lib/bookingSequence';
 import { publishCartCount } from '@/lib/cartSignal';
 
 const euro = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' });
-const time = (v: string) => new Date(v).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+const time = (v: string) => instituteTime(v);
 
 type Check = { state: 'checking' } | { state: 'right-after'; at: string } | { state: 'later'; at: string } | { state: 'none' };
 
@@ -39,11 +40,12 @@ export function AddAfterDialog({ appointment, onClose }: { appointment: Appointm
     let alive = true;
     setCheck({ state: 'checking' });
     const end = new Date(appointment.endsAt);
-    const endOfDay = new Date(end.getFullYear(), end.getMonth(), end.getDate(), 23, 59);
+    // Fenêtre large : seul le même jour À L'INSTITUT est retenu ci-dessous.
+    const endOfDay = new Date(end.getTime() + 24 * 3600_000);
     commerceApi.availability({ from: end.toISOString(), to: endOfDay.toISOString(), durationMinutes: itemMinutes(product, optionKeys), productId: product.id, optionKeys })
       .then((slots) => {
         if (!alive) return;
-        const first = slots[0];
+        const first = slots.filter((s) => instituteDayKey(s.startsAt) === instituteDayKey(end))[0];
         if (!first) setCheck({ state: 'none' });
         else if (new Date(first.startsAt).getTime() === end.getTime()) setCheck({ state: 'right-after', at: first.startsAt });
         else setCheck({ state: 'later', at: first.startsAt });

@@ -1,10 +1,11 @@
 import * as React from 'react';
+import { instituteFormat } from '@/lib/instituteTime';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Check, ChevronDown, Copy, Download, Gift, Loader2, Plus } from 'lucide-react';
 import { customerApi, type WalletGiftCard } from '@/lib/api';
 import { formatEuro } from '@/components/GiftCardPayment';
 
-const dateFmt = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+const dateFmt = instituteFormat({ day: 'numeric', month: 'long', year: 'numeric' });
 
 const STATUS: Record<WalletGiftCard['status'], string> = {
   ACTIVE: 'Utilisable',

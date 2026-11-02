@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { instituteFormat } from '@/lib/instituteTime';
 import { Link } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
@@ -26,8 +27,9 @@ const KIND: Record<string, { label: string; Icon: typeof Sparkles }> = {
   PRODUCT: { label: 'Produit', Icon: ShoppingBag },
 };
 
-const dayFmt = new Intl.DateTimeFormat('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
-const timeFmt = new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit' });
+// À l'heure de l'institut, jamais à celle du téléphone (voir lib/instituteTime).
+const dayFmt = instituteFormat({ weekday: 'long', day: 'numeric', month: 'long' });
+const timeFmt = instituteFormat({ hour: '2-digit', minute: '2-digit' });
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 /** La ligne « quand » d'un article : créneau d'une prestation, jours d'une session. */

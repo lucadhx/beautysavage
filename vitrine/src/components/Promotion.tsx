@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { instituteFormat } from '@/lib/instituteTime';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Timer } from 'lucide-react';
 import type { CommerceProduct } from '@/lib/api';
@@ -99,7 +100,7 @@ export function PromotionCountdown({ product, onEnded }: { product: CommerceProd
   }, [endsAt, onEnded]);
 
   if (!endsAt || !left || left.ms <= 0) return null;
-  const end = new Intl.DateTimeFormat('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }).format(new Date(endsAt));
+  const end = instituteFormat({ weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }).format(new Date(endsAt));
   return (
     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="mt-5 overflow-hidden rounded-2xl p-4"
       style={{ background: 'linear-gradient(135deg, color-mix(in srgb, var(--v-accent) 22%, var(--v-surface)), color-mix(in srgb, var(--v-accent) 6%, var(--v-surface)))', border: '1px solid color-mix(in srgb, var(--v-accent) 35%, transparent)' }}
