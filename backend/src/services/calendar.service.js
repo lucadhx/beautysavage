@@ -268,7 +268,14 @@ async function availabilityProduct(query) {
  * l'heure même de sa pédicure pour l'option de cette pédicure.
  */
 async function cartBusy(customerId, cartLineId, cartGroupId) {
-  if (!customerId || (!cartLineId && !cartGroupId)) return [];
+  /*
+    TOUJOURS, dès que la cliente est connue — pas seulement quand elle déplace
+    une ligne du panier. Sans quoi la fiche lui proposait l'heure qu'occupait
+    déjà son panier ; l'ajout était refusé (« déjà dans votre panier ») et la
+    renvoyait au calendrier, en boucle (incident du 5/11 : neuf refus d'affilée
+    sur un enchaînement qui attendait d'être payé dans son panier).
+  */
+  if (!customerId) return [];
   const cart = await Cart.findOne({ customerId }).select('lines._id lines.bookingSnapshot').lean();
   // La ligne (ou l'enchaînement) dont on choisit l'heure ne se bloque pas elle-même.
   const self = (line) => String(line._id) === String(cartLineId || '')

@@ -668,6 +668,8 @@ function BookingDialog({
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState('');
   const [info, setInfo] = React.useState('');
+  /** Refus « déjà dans votre panier » : on propose d'aller payer le panier. */
+  const [cartConflict, setCartConflict] = React.useState(false);
   /**
    * COORDONNÉES — une cliente inscrite avant que prénom, nom et téléphone
    * soient obligatoires les complète ici, une fois : ils sont enregistrés sur
@@ -713,6 +715,8 @@ function BookingDialog({
     setRefreshKey((n) => n + 1);
     setStep('choose');
     setError(err instanceof Error ? err.message : 'Cet horaire n’est plus disponible.');
+    // L'heure est déjà prise PAR SON PANIER : le chemin, c'est de payer le panier, pas de recommencer.
+    setCartConflict(code === 'CART_OVERLAP');
     return true;
   };
 
@@ -1048,6 +1052,11 @@ function BookingDialog({
             </>
           )}
           {error && <p className="text-sm" style={{ color: '#b91c1c' }}>{error}</p>}
+          {error && cartConflict && (
+            <Link to="/panier" className="inline-flex items-center justify-center gap-2 justify-self-start rounded-md px-4 py-2.5 text-sm font-semibold" style={{ background: 'var(--v-primary)', color: 'var(--v-primary-foreground)' }} data-testid="booking-go-cart">
+              <ShoppingBag className="h-4 w-4" /> Voir mon panier et payer
+            </Link>
+          )}
           {info && <p className="text-sm" style={{ color: 'var(--v-muted-foreground)' }}>{info} <Link to="/panier" className="font-semibold underline">Voir le panier</Link></p>}
         </div>
 
