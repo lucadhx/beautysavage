@@ -708,7 +708,7 @@ function BookingDialog({
    */
   const slotRefused = (err: unknown) => {
     const code = (err as ApiFailure)?.code || '';
-    if (!['SLOT_TAKEN', 'SLOT_PENDING_PAYMENT', 'CART_OVERLAP'].includes(code)) return false;
+    if (!['SLOT_TAKEN', 'SLOT_PENDING_PAYMENT', 'CART_OVERLAP', 'BOOKING_TOO_LATE'].includes(code)) return false;
     setSlot(null);
     setRefreshKey((n) => n + 1);
     setStep('choose');

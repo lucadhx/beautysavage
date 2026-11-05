@@ -23,7 +23,7 @@ export const publicCommerceRoutes = Router();
 publicCommerceRoutes.get('/catalog', asyncHandler(async (_req, res) => ok(res, await commerce.listCatalog())));
 // Collections de prestations (rayons de la page « Prestations »), dans l'ordre choisi.
 publicCommerceRoutes.get('/collections', asyncHandler(async (_req, res) => ok(res, await collections.listPublicCollections())));
-publicCommerceRoutes.get('/availability', requireSiteOpenForPurchase, identifyCustomer, asyncHandler(async (req, res) => ok(res, await calendar.listAvailability(req.query, { customerId: req.customer?._id }))));
+publicCommerceRoutes.get('/availability', requireSiteOpenForPurchase, identifyCustomer, asyncHandler(async (req, res) => ok(res, await calendar.listAvailability(req.query, { customerId: req.customer?._id, enforceNotice: true }))));
 publicCommerceRoutes.get('/videos/streamable/:shortcode/playback-url', asyncHandler(async (req, res) => {
   res.set('Cache-Control', 'no-store');
   ok(res, await commerce.getStreamableTemporaryPlayback(req.params.shortcode));

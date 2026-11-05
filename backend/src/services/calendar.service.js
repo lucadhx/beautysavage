@@ -8,6 +8,7 @@ import { ApiError } from '../utils/ApiError.js';
 import { emitAndDispatch } from './events/domainEvent.service.js';
 import { emitAppointmentBooked, ensureCustomerForBooking } from './commerceCustomer.service.js';
 import { bookingDurationMinutes } from './bookingDuration.js';
+import { bookableFrom, sequenceBookableFrom } from './bookingNotice.js';
 import { loadSequence, sequenceMinutes, sequenceSegments } from './bookingSequence.js';
 import { withCalendarLock } from './calendarLock.js';
 
@@ -254,13 +255,10 @@ export function zonedWallTime(year, month, day, minutes, timeZone) {
  * paiement (`bookingDuration.js`). Le nombre de minutes envoyé par le
  * navigateur n'est qu'un repli pour les appels qui ne nomment rien.
  */
-async function availabilityDuration(query) {
-  if (query.productId && mongoose.isValidObjectId(query.productId)) {
-    const product = await CommerceProduct.findOne({ _id: query.productId, status: PRODUCT_STATUS.PUBLISHED })
-      .select('durationMinutes options').lean();
-    if (product) return bookingDurationMinutes(product, query.optionKeys || query.options || '');
-  }
-  return Math.max(5, Number(query.durationMinutes || 60));
+async function availabilityProduct(query) {
+  if (!query.productId || !mongoose.isValidObjectId(query.productId)) return null;
+  return CommerceProduct.findOne({ _id: query.productId, status: PRODUCT_STATUS.PUBLISHED })
+    .select('title durationMinutes options bookingRules').lean();
 }
 
 /**
@@ -280,13 +278,23 @@ async function cartBusy(customerId, cartLineId, cartGroupId) {
     .map((line) => ({ startsAt: new Date(line.bookingSnapshot.startsAt), endsAt: new Date(line.bookingSnapshot.endsAt) }));
 }
 
-export async function listAvailability(query = {}, { customerId = null } = {}) {
+export async function listAvailability(query = {}, { customerId = null, enforceNotice = false } = {}) {
   const from = asDate(query.from || new Date(), 'Date de debut');
   const to = asDate(query.to || new Date(Date.now() + 14 * 86400_000), 'Date de fin');
   assertRange(from, to);
   // Plusieurs prestations à la suite : la durée cherchée est leur somme.
   const sequence = query.sequence ? await loadSequence(query.sequence) : null;
-  const durationMinutes = sequence ? sequenceMinutes(sequence) : await availabilityDuration(query);
+  const product = sequence ? null : await availabilityProduct(query);
+  const durationMinutes = sequence
+    ? sequenceMinutes(sequence)
+    : product ? bookingDurationMinutes(product, query.optionKeys || query.options || '') : Math.max(5, Number(query.durationMinutes || 60));
+  /*
+    LE DÉLAI MINIMUM — sur la route publique seulement : la cliente ne se voit
+    pas proposer un horaire qu'on lui refuserait (voir bookingNotice.js). Le
+    planning de l'institut garde les créneaux de dernière minute.
+  */
+  const now = new Date();
+  const earliest = !enforceNotice ? null : sequence ? sequenceBookableFrom(sequence, now) : product ? bookableFrom(product, now) : now;
   const bufferAfterMinutes = Math.max(0, Number(query.bufferAfterMinutes || 0));
   const schedule = await getSchedule();
   const timeZone = schedule.timezone || 'Europe/Paris';
@@ -342,7 +350,7 @@ export async function listAvailability(query = {}, { customerId = null } = {}) {
       for (const minute of candidates) {
         const startsAt = zonedWallTime(year, month, day, minute, timeZone);
         const endsAt = new Date(startsAt.getTime() + (durationMinutes + bufferAfterMinutes) * 60_000);
-        if (startsAt < from || endsAt > to) continue;
+        if (startsAt < from || endsAt > to || (earliest && startsAt < earliest)) continue;
         const overlap = busy.some((event) => startsAt < event.endsAt && endsAt > event.startsAt);
         if (!overlap) {
           slots.push({

@@ -121,7 +121,7 @@ export default function CartPage() {
       // Une heure refusée (chevauchement, prise entre-temps) : on rouvre directement le choix de l'heure de la ligne en cause.
       const failure = err as ApiFailure;
       const lineId = String(failure?.details?.lineId || '');
-      const refused = ['CART_OVERLAP', 'SLOT_TAKEN', 'SLOT_PENDING_PAYMENT'].includes(failure?.code || '') ? lines.find((l) => l.id === lineId) : null;
+      const refused = ['CART_OVERLAP', 'SLOT_TAKEN', 'SLOT_PENDING_PAYMENT', 'BOOKING_TOO_LATE'].includes(failure?.code || '') ? lines.find((l) => l.id === lineId) : null;
       if (refused) setScheduling(refused);
     }
   }

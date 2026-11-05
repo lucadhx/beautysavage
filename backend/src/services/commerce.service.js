@@ -32,6 +32,7 @@ import { configuredSiteUrl } from '../utils/siteOrigin.js';
 import { view as commissionView } from './commissionPayment.service.js';
 import { emitAppointmentsBooked, isPendingInstituteAccount, rotatePasswordResetToken, sendCustomerAccessLink } from './commerceCustomer.service.js';
 import { assertCustomerIdentity, missingIdentityFields } from './customerIdentity.js';
+import { assertBookingNotice } from './bookingNotice.js';
 import { emitAndDispatch } from './events/domainEvent.service.js';
 import { normalizeReviewRequestConfig } from './reviewRequestConfig.js';
 import { normalizeAppointmentReminderConfig } from './appointmentReminderConfig.js';
@@ -1331,6 +1332,8 @@ async function serviceBookingSnapshot(product, payload = {}, { customerId = null
   if (Number.isNaN(startsAt.getTime()) || Number.isNaN(endsAt.getTime()) || endsAt <= startsAt) {
     throw ApiError.badRequest('Choisissez un créneau disponible pour cette prestation');
   }
+  // Le délai minimum de la fiche (voir bookingNotice.js) : tous les parcours clients passent ici.
+  assertBookingNotice(product, startsAt);
   const sibling = bookingOverlap(startsAt, endsAt, await titledLines(otherLines));
   if (sibling) throw cartOverlapError(sibling);
   try {
@@ -1497,6 +1500,8 @@ async function checkoutHydratedLines(customerId, hydrated, payload = {}, { check
   }
   // Deux lignes à la même heure : refus AVANT d'ouvrir quoi que ce soit (panier d'avant ce contrôle).
   const dated = hydrated.lines.filter((line) => line.product?.kind === 'SERVICE' && line.bookingSnapshot?.startsAt && line.bookingSnapshot?.endsAt);
+  // Un créneau mis au panier hier peut être trop proche aujourd'hui : le délai se revérifie au paiement.
+  for (const line of dated) assertBookingNotice(line.product, line.bookingSnapshot.startsAt, new Date(), { lineId: line.id });
   for (let i = 1; i < dated.length; i += 1) {
     const b = dated[i].bookingSnapshot;
     const sibling = bookingOverlap(new Date(b.startsAt), new Date(b.endsAt), dated.slice(0, i));
