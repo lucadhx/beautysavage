@@ -23,7 +23,7 @@ export type FeaturedGroup = 'TRAINING' | 'SERVICE';
 
 const GROUP = {
   TRAINING: {
-    kinds: ['DISTANCE_TRAINING', 'IN_PERSON_TRAINING'],
+    kinds: ['TRAINING_PACK', 'DISTANCE_TRAINING', 'IN_PERSON_TRAINING'],
     plural: 'formations',
     listPath: '/commerce/formations',
     back: 'Retour aux formations',

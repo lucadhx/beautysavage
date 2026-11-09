@@ -1,5 +1,6 @@
 import * as React from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
+import { Package } from 'lucide-react';
 import { CommerceProductCard, buildReviewSummaries, type ProductReviewSummary } from '@/components/CommerceProductCard';
 import { type CommerceProduct } from '@/lib/api';
 import { CatalogSearchInput, matchesQuery } from '@/components/CatalogSearch';
@@ -7,13 +8,22 @@ import { useCatalog, useCollections, useReviews } from '@/lib/catalogCache';
 import { CollectionGrid, CollectionGridSkeleton, buildServiceGroups } from '@/components/ServiceCollections';
 
 function visible(kind: string | undefined, product: CommerceProduct) {
-  if (kind === 'training') return product.kind === 'DISTANCE_TRAINING' || product.kind === 'IN_PERSON_TRAINING';
+  if (kind === 'training') return product.kind === 'DISTANCE_TRAINING' || product.kind === 'IN_PERSON_TRAINING' || product.kind === 'TRAINING_PACK';
+  if (kind === 'pack') return product.kind === 'TRAINING_PACK';
   if (kind === 'service') return product.kind === 'SERVICE';
   if (kind === 'gift') return product.kind === 'GIFT_CARD';
   return true;
 }
 
-function pageIntro(kind: 'all' | 'training' | 'service' | 'gift') {
+type CatalogKind = 'all' | 'training' | 'service' | 'gift' | 'pack';
+
+function pageIntro(kind: CatalogKind) {
+  if (kind === 'pack') {
+    return {
+      title: 'Packs de formations',
+      text: 'Plusieurs formations en ligne réunies à un prix avantageux : un seul achat, l’accès à toutes, depuis votre espace formation.',
+    };
+  }
   if (kind === 'training') {
     return {
       title: 'Formations',
@@ -38,7 +48,7 @@ function pageIntro(kind: 'all' | 'training' | 'service' | 'gift') {
   };
 }
 
-export default function CatalogPage({ kind = 'all' }: { kind?: 'all' | 'training' | 'service' | 'gift' }) {
+export default function CatalogPage({ kind = 'all' }: { kind?: CatalogKind }) {
   // Même cache que l'accueil : le catalogue est déjà là quand on arrive ici.
   const items = useCatalog();
   const reviewItems = useReviews();
@@ -54,12 +64,13 @@ export default function CatalogPage({ kind = 'all' }: { kind?: 'all' | 'training
     setParams(next, { replace: true });
   };
 
-  const inKind = items.filter((item) => visible(kind, item));
+  // Les packs d'abord : c'est l'offre la plus avantageuse de la page formations.
+  const inKind = items.filter((item) => visible(kind, item)).sort((a, b) => Number(b.kind === 'TRAINING_PACK') - Number(a.kind === 'TRAINING_PACK'));
   const filtered = inKind.filter((item) => matchesQuery(item, query));
   const intro = pageIntro(kind);
   // Prestations rangées en collections : la page montre d'abord les collections.
   const groups = kind === 'service' && collections ? buildServiceGroups(inKind, collections) : [];
-  const searchLabel = kind === 'training' ? 'Rechercher une formation' : kind === 'service' ? 'Rechercher une prestation' : kind === 'gift' ? 'Rechercher une carte cadeau' : 'Rechercher dans la boutique';
+  const searchLabel = kind === 'training' || kind === 'pack' ? 'Rechercher une formation' : kind === 'service' ? 'Rechercher une prestation' : kind === 'gift' ? 'Rechercher une carte cadeau' : 'Rechercher dans la boutique';
 
   return (
     <section className="mx-auto min-h-screen max-w-6xl px-4 pb-16 pt-20 sm:px-5 sm:pb-24 sm:pt-32 md:px-8">
@@ -69,6 +80,16 @@ export default function CatalogPage({ kind = 'all' }: { kind?: 'all' | 'training
         <p className="mt-2 text-sm leading-6 sm:mt-5 sm:text-lg sm:leading-8" style={{ color: 'var(--v-muted-foreground)' }}>
           {intro.text}
         </p>
+        {kind === 'training' && items.some((item) => item.kind === 'TRAINING_PACK') && (
+          <Link to="/formations/packs" className="mt-4 inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold" style={{ borderColor: 'var(--v-accent)', color: 'var(--v-accent)' }} data-testid="catalog-packs-link">
+            <Package className="h-4 w-4" aria-hidden="true" /> Voir les packs de formations
+          </Link>
+        )}
+        {kind === 'pack' && (
+          <Link to="/formations" className="mt-4 inline-flex items-center gap-2 text-sm font-semibold underline-offset-4 hover:underline" style={{ color: 'var(--v-muted-foreground)' }}>
+            Toutes les formations
+          </Link>
+        )}
       </div>
       {error && <p className="mt-8 rounded-md border px-4 py-3" style={{ borderColor: 'var(--v-border)' }}>{error}</p>}
       {inKind.length > 0 && (

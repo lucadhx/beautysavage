@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { ReviewPhotos } from '@/components/ReviewPhotoPicker';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, BadgeCheck, CheckCircle2, GraduationCap, PawPrint } from 'lucide-react';
 import { useSiteData } from '@/context/SiteDataContext';
@@ -33,7 +34,7 @@ export default function HomePage() {
 
   const company = data?.company;
   const name = company?.name || 'BeautySavage';
-  const trainings = featured(byKind(catalog, ['DISTANCE_TRAINING', 'IN_PERSON_TRAINING']));
+  const trainings = featured(byKind(catalog, ['TRAINING_PACK', 'DISTANCE_TRAINING', 'IN_PERSON_TRAINING']));
   const services = featured(byKind(catalog, ['SERVICE']));
   const heroImage = resolvePreviewMediaUrl(company?.heroImage || services[0]?.coverUrl || trainings[0]?.coverUrl || '');
 
@@ -175,7 +176,7 @@ function AboutSection({ about, withPage }: { about?: Company['about']; withPage:
 function ReviewsCarousel({ reviews }: { reviews: any[] }) {
   const track = React.useRef<HTMLDivElement | null>(null);
   const visible = reviews
-    .filter((review) => Number(review.rating || 0) > 0 && String(review.comment || '').trim())
+    .filter((review) => Number(review.rating || 0) > 0 && (String(review.comment || '').trim() || (review.photos || []).length))
     .slice(0, 12);
   if (visible.length === 0) return null;
   const filet = 'color-mix(in srgb, var(--v-menu-foreground) 18%, transparent)';
@@ -219,9 +220,12 @@ function ReviewsCarousel({ reviews }: { reviews: any[] }) {
                       <PawPrint key={pawIndex} className="h-3.5 w-3.5" fill={pawIndex < rating ? 'currentColor' : 'none'} style={{ color: 'var(--v-accent)' }} />
                     ))}
                   </div>
-                  <blockquote className="mt-4 line-clamp-6 text-[14px] leading-6" style={{ color: 'color-mix(in srgb, var(--v-menu-foreground) 86%, var(--v-menu-background))' }}>
-                    « {String(review.comment).trim()} »
-                  </blockquote>
+                  {String(review.comment || '').trim() && (
+                    <blockquote className="mt-4 line-clamp-6 text-[14px] leading-6" style={{ color: 'color-mix(in srgb, var(--v-menu-foreground) 86%, var(--v-menu-background))' }}>
+                      « {String(review.comment).trim()} »
+                    </blockquote>
+                  )}
+                  <ReviewPhotos photos={review.photos} className="mt-4" />
                   <figcaption className="mt-4 text-[13px] font-medium">
                     {review.displayName || 'Cliente BeautySavage'}
                     {productTitle && <span className="mt-0.5 block text-[11px] font-normal" style={{ color: muet }}>{productTitle}</span>}

@@ -23,6 +23,20 @@ async function customerVariables(customerId) {
   };
 }
 
+
+/**
+ * UNE LIGNE DE COMMANDE DANS L'E-MAIL — un pack liste les formations auxquelles
+ * il donne accès (lues dans l'instantané de la vente, telles que payées).
+ */
+function saleLineHtml(line) {
+  const title = escapeHtml(line.productSnapshot?.title || 'Article');
+  if (line.productSnapshot?.kind === 'TRAINING_PACK') {
+    const items = (line.productSnapshot?.pack?.items || []).map((item) => `<li>${escapeHtml(item.title)}</li>`).join('');
+    return `<li>${title}${items ? `<br><span style="color:#71717a;">Accès aux formations :</span><ul>${items}</ul>` : ''}</li>`;
+  }
+  return `<li>${title} x ${line.quantity || 1}</li>`;
+}
+
 export async function resolveCustomerEmailVerification({ event }) {
   return {
     ...(await customerVariables(event?.entityId || event?.payloadSafe?.customerId)),
@@ -47,7 +61,7 @@ export async function resolveSaleConfirmationClient({ event }) {
     throw new EmailVariableResolverError(D.UNKNOWN_RESOLVER, 'Vente introuvable pour la confirmation client.');
   }
   const itemsHtml = (sale.lines || [])
-    .map((line) => `<li>${escapeHtml(line.productSnapshot?.title || 'Article')} x ${line.quantity || 1}</li>`)
+    .map(saleLineHtml)
     .join('');
   return {
     ...(await customerVariables(sale.customerId)),
@@ -182,7 +196,7 @@ export async function resolveSaleAdminNotification({ event }) {
     throw new EmailVariableResolverError(D.UNKNOWN_RESOLVER, 'Vente introuvable pour la notification institut.');
   }
   const itemsHtml = (sale.lines || [])
-    .map((line) => `<li>${escapeHtml(line.productSnapshot?.title || 'Article')} x ${line.quantity || 1}</li>`)
+    .map(saleLineHtml)
     .join('');
   return {
     ...(await customerIdentity(sale.customerId)),

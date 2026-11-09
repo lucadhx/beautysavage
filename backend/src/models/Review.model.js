@@ -18,6 +18,8 @@ const reviewSchema = new mongoose.Schema(
     moderatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     manual: { type: Boolean, default: false },
     sourceLabel: { type: String, default: '', trim: true },
+    /** Jusqu'à 3 photos (voir services/reviewPhotos.js) : adresses /uploads/review-photos/… */
+    photos: { type: [{ url: { type: String, required: true }, _id: false }], default: [] },
   },
   { timestamps: true }
 );

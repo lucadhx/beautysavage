@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { ReviewPhotos } from '@/components/ReviewPhotoPicker';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, CalendarDays, Check, CheckCircle2, Clock, CreditCard, ChevronDown, Gift, ImageIcon, ListChecks, Loader2, PawPrint, Play, Plus, ShoppingBag, Trash2, X } from 'lucide-react';
@@ -19,6 +20,7 @@ import { MAX_SEQUENCE_ITEMS, itemMinutes, itemPriceCents, sequenceParam } from '
 import { ServicePicker } from '@/components/ServicePicker';
 import { instituteFormat, instituteTime } from '@/lib/instituteTime';
 import { BookingNotices } from '@/components/BookingNotices';
+import { PackContents } from '@/components/PackContents';
 import { IdentityFields, identityComplete, identityOf, phoneOk, type Identity } from '@/components/account/IdentityFields';
 
 const formatter = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' });
@@ -213,7 +215,8 @@ export default function ProductPage() {
                   <PawPrint key={index} className="h-4 w-4" fill={index < review.rating ? 'currentColor' : 'none'} style={{ color: 'var(--v-accent)' }} />
                 ))}
               </p>
-              <p className="mt-3 text-sm leading-6">{review.comment}</p>
+              {review.comment && <p className="mt-3 text-sm leading-6">{review.comment}</p>}
+              <ReviewPhotos photos={review.photos} className="mt-3" />
               <p className="mt-3 text-xs font-semibold" style={{ color: 'var(--v-muted-foreground)' }}>{review.displayName || 'Cliente BeautySavage'}</p>
             </article>
           ))}
@@ -224,7 +227,7 @@ export default function ProductPage() {
   return (
     <section className="mx-auto min-h-screen max-w-6xl px-4 pb-16 pt-20 sm:px-5 sm:pb-24 sm:pt-32 md:px-8">
       <div className="grid gap-5 sm:gap-10 lg:grid-cols-[minmax(0,1.05fr)_minmax(360px,0.95fr)] lg:items-start">
-        <div>
+        <div className="min-w-0">
           <div className="relative mb-4 overflow-hidden rounded-lg border sm:mb-7" style={{ borderColor: 'var(--v-border)', background: 'var(--v-surface)' }}>
             <PromoBadge product={product} large />
             {coverUrl ? (
@@ -235,6 +238,7 @@ export default function ProductPage() {
               </div>
             )}
           </div>
+          {product.kind === 'TRAINING_PACK' && <PackContents product={product} />}
           {trailerCode && (
             <button
               type="button"
@@ -259,6 +263,7 @@ export default function ProductPage() {
           <div className="mt-6 grid gap-3">
             {product.requiresLegalWaiver && <Line text="Accès confirmé après acceptation des conditions de formation." />}
             {product.kind === 'DISTANCE_TRAINING' && <Line text="Accès aux modules depuis votre espace client après achat." />}
+            {product.kind === 'TRAINING_PACK' && <Line text={`${product.pack?.items?.length || product.pack?.productIds?.length || 0} formations en ligne, accessibles dès l’achat depuis votre espace client.`} />}
             {product.kind === 'IN_PERSON_TRAINING' && product.training?.durationDays ? <Line text={`Durée : ${product.training.durationDays} jour${product.training.durationDays > 1 ? 's' : ''} en institut.`} /> : null}
             {product.kind === 'IN_PERSON_TRAINING' && <Line text={`Places limitées, ${product.sessions.length} session(s) à venir.`} />}
             {product.kind === 'SERVICE' && product.durationMinutes ? <Line text={`Durée : ${durationText(product.durationMinutes)}`} /> : null}
@@ -1165,6 +1170,7 @@ function kindLabel(kind: CommerceProduct['kind']) {
   if (kind === 'SERVICE') return 'Prestation institut';
   if (kind === 'DISTANCE_TRAINING') return 'Formation en ligne';
   if (kind === 'IN_PERSON_TRAINING') return 'Formation présentielle';
+  if (kind === 'TRAINING_PACK') return 'Pack de formations en ligne';
   if (kind === 'GIFT_CARD') return 'Carte cadeau';
   return 'Boutique';
 }

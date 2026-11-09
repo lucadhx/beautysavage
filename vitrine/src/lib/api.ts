@@ -111,7 +111,9 @@ export interface CommerceProduct {
   title: string;
   subtitle: string;
   description: string;
-  kind: 'DISTANCE_TRAINING' | 'IN_PERSON_TRAINING' | 'SERVICE' | 'GIFT_CARD' | 'PRODUCT';
+  kind: 'DISTANCE_TRAINING' | 'IN_PERSON_TRAINING' | 'SERVICE' | 'GIFT_CARD' | 'PRODUCT' | 'TRAINING_PACK';
+  /** Pack : les formations en ligne incluses, et leur valeur additionnée. */
+  pack?: { productIds: string[]; items: { id: string; slug: string; title: string; subtitle: string; coverUrl: string; priceCents: number; moduleCount: number; durationMinutes: number }[]; valueCents: number } | null;
   /** Le prix à payer maintenant — promotion comprise. */
   price: { amountCents: number; currency: string };
   /** Le prix d'origine, à barrer, quand une promotion court. */
@@ -381,8 +383,8 @@ export const customerApi = {
   createTrainingSubmission: (body: { saleId: string; productId: string; answers?: unknown; deliverables?: unknown }) =>
     publicSend<unknown>('/customer/training-submissions', body, customerTokenStore.get()),
   streamablePlaybackUrl: (shortcode: string) =>
-    publicGet<{ playbackUrl: string; shortcode: string }>(`/commerce/videos/streamable/${encodeURIComponent(shortcode)}/playback-url`),
-  createReview: (body: { saleId: string; productId: string; rating: number; comment?: string; displayName?: string }) =>
+    publicGet<{ playbackUrl: string; shortcode: string }>(`/commerce/videos/streamable/${encodeURIComponent(shortcode)}/playback-url`, customerTokenStore.get()),
+  createReview: (body: { saleId: string; productId: string; rating: number; comment?: string; displayName?: string; photos?: string[] }) =>
     publicSend<unknown>('/customer/reviews', body, customerTokenStore.get()),
   /** Avis à donner (une entrée par prestation pas encore notée) ; `demande` = la demande du lien reçu. */
   reviewRequests: async (demande?: string | null) => {
@@ -393,7 +395,10 @@ export const customerApi = {
     if (!res.ok) throw apiError(json);
     return json.data as PendingReviews;
   },
-  submitRequestedReview: (requestId: string, body: { rating: number; comment?: string }) =>
+  /** Une photo d'avis (3 par avis au plus) : rend son adresse, à joindre à l'avis. */
+  uploadReviewPhoto: (file: File) =>
+    publicUploadWithProgress<{ url: string }>('/customer/review-photos', file, customerTokenStore.get(), () => {}),
+  submitRequestedReview: (requestId: string, body: { rating: number; comment?: string; photos?: string[] }) =>
     publicSend<{ id: string; status: string }>(`/customer/review-requests/${encodeURIComponent(requestId)}/review`, body, customerTokenStore.get()),
 };
 

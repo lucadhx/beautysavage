@@ -1,6 +1,7 @@
 import * as React from 'react';
-import { Check, PawPrint, Plus, X } from 'lucide-react';
-import { api } from '@/lib/api';
+import { Camera, Check, Loader2, PawPrint, Plus, Trash2, X } from 'lucide-react';
+import { api, uploadReviewPhoto } from '@/lib/api';
+import { resolvePreviewMediaUrl } from '@/lib/media';
 import { Button, Field, Input, Switch, Textarea } from '@/components/ui/primitives';
 import { CustomSelect } from '@/components/ui/CustomSelect';
 import { Modal } from '@/components/ui/dialog';
@@ -33,8 +34,11 @@ function defaultManualForm() {
     productUnspecified: true,
     createdAt: new Date().toISOString().slice(0, 10),
     status: 'PUBLISHED',
+    photos: [] as string[],
   };
 }
+
+const PHOTO_MAX = 3;
 
 export default function CommerceAvisPage() {
   const [reviews, setReviews] = React.useState<CommerceReview[]>([]);
@@ -44,6 +48,31 @@ export default function CommerceAvisPage() {
   const [manual, setManual] = React.useState(defaultManualForm);
   const [message, setMessage] = React.useState('');
   const [loaded, setLoaded] = React.useState(false);
+  const [photoBusy, setPhotoBusy] = React.useState(false);
+  const photoInput = React.useRef<HTMLInputElement>(null);
+
+  async function addPhotos(files: FileList | null) {
+    const room = PHOTO_MAX - manual.photos.length;
+    const chosen = Array.from(files || []).filter((f) => f.type.startsWith('image/')).slice(0, Math.max(0, room));
+    if (!chosen.length) return;
+    setPhotoBusy(true);
+    try {
+      const added: string[] = [];
+      for (const file of chosen) added.push((await uploadReviewPhoto(file)).url);
+      setManual((current) => ({ ...current, photos: [...current.photos, ...added].slice(0, PHOTO_MAX) }));
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : 'Envoi de la photo impossible');
+    } finally {
+      setPhotoBusy(false);
+      if (photoInput.current) photoInput.current.value = '';
+    }
+  }
+
+  async function removePhoto(review: CommerceReview, url: string) {
+    if (!window.confirm('Retirer cette photo de l’avis ?')) return;
+    await api.removeCommerceReviewPhoto(review._id, url);
+    refresh();
+  }
 
   const refresh = React.useCallback(() => {
     Promise.all([api.commerceReviews(), api.commerceProducts()])
@@ -105,6 +134,18 @@ export default function CommerceAvisPage() {
                 <StatusBadge>{review.status}</StatusBadge>
               </div>
               <p className="mt-3 text-sm">{review.comment || 'Sans commentaire.'}</p>
+              {(review.photos?.length ?? 0) > 0 && (
+                <div className="mt-3 flex flex-wrap gap-2" data-testid="review-photos">
+                  {review.photos!.map((photo) => (
+                    <div key={photo.url} className="relative h-20 w-20 overflow-hidden rounded-md border">
+                      <a href={resolvePreviewMediaUrl(photo.url)} target="_blank" rel="noreferrer"><img src={resolvePreviewMediaUrl(photo.url)} alt="" className="h-full w-full object-cover" /></a>
+                      <button type="button" onClick={() => removePhoto(review, photo.url)} className="absolute right-1 top-1 grid h-6 w-6 place-items-center rounded-full bg-black/70 text-white" aria-label="Retirer cette photo" title="Retirer cette photo">
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
               {review.moderationComment && <p className="mt-2 text-xs text-muted-foreground">Motif : {review.moderationComment}</p>}
               <div className="mt-4 flex flex-wrap gap-2">
                 <Button size="sm" onClick={() => setModeration({ review, status: 'PUBLISHED', comment: review.moderationComment || '' })}><Check className="h-4 w-4" /> Publier</Button>
@@ -187,9 +228,27 @@ export default function CommerceAvisPage() {
           <Field label="Commentaire">
             <Textarea value={manual.comment} onChange={(event) => setManual({ ...manual, comment: event.target.value })} />
           </Field>
+          <Field label={`Photos (${PHOTO_MAX} au plus, facultatif)`}>
+            <div className="flex flex-wrap gap-2" data-testid="manual-review-photos">
+              {manual.photos.map((url) => (
+                <div key={url} className="relative h-20 w-20 overflow-hidden rounded-md border">
+                  <img src={resolvePreviewMediaUrl(url)} alt="" className="h-full w-full object-cover" />
+                  <button type="button" onClick={() => setManual((current) => ({ ...current, photos: current.photos.filter((u) => u !== url) }))} className="absolute right-1 top-1 grid h-6 w-6 place-items-center rounded-full bg-black/70 text-white" aria-label="Retirer cette photo">
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ))}
+              {manual.photos.length < PHOTO_MAX && (
+                <button type="button" onClick={() => photoInput.current?.click()} disabled={photoBusy} className="grid h-20 w-20 place-items-center rounded-md border border-dashed text-xs text-muted-foreground" data-testid="manual-review-photo-add">
+                  {photoBusy ? <Loader2 className="h-5 w-5 animate-spin" /> : <span className="grid justify-items-center gap-1"><Camera className="h-5 w-5" />Ajouter</span>}
+                </button>
+              )}
+            </div>
+            <input ref={photoInput} type="file" accept="image/*" multiple hidden onChange={(event) => addPhotos(event.target.files)} data-testid="manual-review-photo-input" />
+          </Field>
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => setManualOpen(false)}>Annuler</Button>
-            <Button onClick={createManualReview}>Enregistrer l'avis</Button>
+            <Button onClick={createManualReview} disabled={photoBusy}>Enregistrer l'avis</Button>
           </div>
         </div>
       </Modal>

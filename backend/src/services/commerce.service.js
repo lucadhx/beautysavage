@@ -33,6 +33,9 @@ import { view as commissionView } from './commissionPayment.service.js';
 import { emitAppointmentsBooked, isPendingInstituteAccount, rotatePasswordResetToken, sendCustomerAccessLink } from './commerceCustomer.service.js';
 import { assertCustomerIdentity, missingIdentityFields } from './customerIdentity.js';
 import { assertBookingNotice } from './bookingNotice.js';
+import { normalizePack, publicModulesOutline } from './productExtras.js';
+import { customerTrainingGrants } from './trainingAccess.js';
+import { normalizeReviewPhotos } from './reviewPhotos.js';
 import { emitAndDispatch } from './events/domainEvent.service.js';
 import { normalizeReviewRequestConfig } from './reviewRequestConfig.js';
 import { normalizeAppointmentReminderConfig } from './appointmentReminderConfig.js';
@@ -90,7 +93,10 @@ function publicProduct(product) {
     trailer: product.trailer || {},
     whatsappGroup: product.whatsappGroup || {},
     bookingRules: product.bookingRules || {},
-    modules: product.modules || [],
+    // Le PROGRAMME seulement : le contenu des modules ne sort que vers une cliente qui y a accès.
+    modules: publicModulesOutline(product.modules),
+    // Pack : les formations contenues (détail ajouté par enrichPacks au catalogue, à la fiche et au panier).
+    pack: product.kind === 'TRAINING_PACK' ? { productIds: (product.pack?.productIds || []).map(String), items: [], valueCents: 0 } : null,
     faq: publicFaq(product.faq),
     consentRequirements: lineConsentRequirements(product),
     options: (product.options || []).filter((option) => option.active),
@@ -755,7 +761,8 @@ function money(amountCents) {
 
 function lineConsentRequirements(product) {
   const keys = [];
-  if (product.kind === 'DISTANCE_TRAINING' && product.distanceDeliveryMode === 'IMMEDIATE') {
+  // Un pack ouvre ses formations dès le paiement : accès immédiat, comme une formation en ligne immédiate.
+  if (product.kind === 'TRAINING_PACK' || (product.kind === 'DISTANCE_TRAINING' && product.distanceDeliveryMode === 'IMMEDIATE')) {
     keys.push('DIGITAL_IMMEDIATE_START', 'DIGITAL_WITHDRAWAL_WAIVER');
   }
   if (product.kind === 'SERVICE' || product.kind === 'IN_PERSON_TRAINING') {
@@ -804,6 +811,7 @@ const KIND_LABEL_FR = {
   SERVICE: 'Prestation',
   IN_PERSON_TRAINING: 'Formation en présentiel',
   DISTANCE_TRAINING: 'Formation en ligne',
+  TRAINING_PACK: 'Pack de formations',
   GIFT_CARD: 'Carte cadeau',
   PRODUCT: 'Produit',
 };
@@ -915,6 +923,8 @@ async function hydrateLines(rawLines = []) {
       consentRequirements: lineConsentRequirements(product),
     };
   }).filter(Boolean);
+  // Le contenu des packs voyage avec la ligne : l'instantané de la vente le garde (accès, e-mails).
+  await enrichPacks(lines.map((line) => line.product));
   return {
     lines,
     totalCents: lines.reduce((sum, line) => sum + line.totalCents, 0),
@@ -927,13 +937,41 @@ export async function listCatalog() {
   const products = await CommerceProduct.find({ status: PRODUCT_STATUS.PUBLISHED })
     .sort({ boostRank: 1, title: 1 })
     .lean();
-  return products.map(publicProduct);
+  return enrichPacks(products.map(publicProduct));
+}
+
+/**
+ * LE CONTENU D'UN PACK, LISIBLE — titre, image, prix et nombre de modules de
+ * chaque formation, et la valeur additionnée (à comparer au prix du pack).
+ * Seules les formations en ligne publiées sont montrées.
+ */
+async function enrichPacks(views) {
+  const packs = views.filter((view) => view?.kind === 'TRAINING_PACK' && view.pack);
+  const ids = [...new Set(packs.flatMap((view) => view.pack.productIds || []))];
+  if (!ids.length) return views;
+  const items = await CommerceProduct.find({ _id: { $in: ids }, kind: 'DISTANCE_TRAINING', status: PRODUCT_STATUS.PUBLISHED }).lean();
+  const byId = new Map(items.map((item) => [String(item._id), item]));
+  for (const view of packs) {
+    const list = (view.pack.productIds || []).map((value) => byId.get(String(value))).filter(Boolean);
+    view.pack.items = list.map((item) => ({
+      id: String(item._id),
+      slug: item.slug,
+      title: item.title,
+      subtitle: item.subtitle || '',
+      coverUrl: item.coverUrl || '',
+      priceCents: effectivePriceCents(item),
+      moduleCount: Array.isArray(item.modules) ? item.modules.length : 0,
+      durationMinutes: item.durationMinutes || 0,
+    }));
+    view.pack.valueCents = view.pack.items.reduce((sum, item) => sum + item.priceCents, 0);
+  }
+  return views;
 }
 
 export async function getProductBySlug(slug, { customerId = null } = {}) {
   const product = await CommerceProduct.findOne({ slug, status: PRODUCT_STATUS.PUBLISHED }).lean();
   if (!product) throw ApiError.notFound('Produit introuvable');
-  const view = publicProduct(product);
+  const [view] = await enrichPacks([publicProduct(product)]);
   // La cliente qui retient une place (paiement quitté) la voit encore libre.
   if (customerId && view.sessions?.length) {
     for (const session of view.sessions) {
@@ -950,6 +988,23 @@ export async function getProductBySlug(slug, { customerId = null } = {}) {
     }
   }
   return view;
+}
+
+/**
+ * CE QU'UNE CLIENTE VOIT DE SON PROPRE COMPTE — une liste blanche (reprise de
+ * melinails). Les réponses renvoyaient le document entier : échéances des codes,
+ * et l'empreinte du code dans la réponse de vérification.
+ */
+const PUBLIC_CUSTOMER_FIELDS = Object.freeze([
+  '_id', 'email', 'firstName', 'lastName', 'phone', 'billingAddress', 'marketingConsent',
+  'createdByInstitute', 'emailVerified', 'createdAt', 'updatedAt',
+]);
+export function publicCustomer(customer) {
+  if (!customer) return customer;
+  const raw = typeof customer.toObject === 'function' ? customer.toObject() : customer;
+  const out = {};
+  for (const key of PUBLIC_CUSTOMER_FIELDS) if (raw[key] !== undefined) out[key] = raw[key];
+  return out;
 }
 
 export async function registerCustomer(payload) {
@@ -1001,7 +1056,7 @@ export async function registerCustomer(payload) {
   return {
     // Relu sans les champs `select: false` : le document créé porte encore le
     // mot de passe haché et l'empreinte du code (6 chiffres : réversible).
-    customer: await Customer.findById(customer._id).lean(),
+    customer: publicCustomer(await Customer.findById(customer._id).lean()),
     token: signCustomerToken(customer),
     ...(process.env.ENV === 'TEST' ? { verificationCode: code } : {}),
   };
@@ -1016,7 +1071,7 @@ export async function updateCustomerProfile(customerId, payload) {
   const identity = assertCustomerIdentity(payload);
   const customer = await Customer.findByIdAndUpdate(customerId, { $set: identity }, { new: true }).lean();
   if (!customer) throw ApiError.notFound('Compte client introuvable');
-  return customer;
+  return publicCustomer(customer);
 }
 
 export async function loginCustomer(email, password) {
@@ -1025,7 +1080,7 @@ export async function loginCustomer(email, password) {
     throw ApiError.unauthorized('Identifiants client invalides');
   }
   // Relu sans `+password` : l'empreinte du mot de passe ne quitte jamais le serveur.
-  return { customer: await Customer.findById(customer._id).lean(), token: signCustomerToken(customer) };
+  return { customer: publicCustomer(await Customer.findById(customer._id).lean()), token: signCustomerToken(customer) };
 }
 
 /** Délai minimal entre deux envois de code : un double-clic n'envoie plus trois e-mails. */
@@ -1092,7 +1147,7 @@ export async function verifyCustomerEmail(code) {
     },
     idempotencyKey: `customer-email-verified:${customer._id}:${customer.emailVerification.verifiedAt.getTime()}`,
   });
-  return { customer, token: signCustomerToken(customer), message: 'Adresse e-mail vérifiée.' };
+  return { customer: publicCustomer(customer), token: signCustomerToken(customer), message: 'Adresse e-mail vérifiée.' };
 }
 
 
@@ -1185,7 +1240,7 @@ export async function resetCustomerPassword(payload = {}) {
   return {
     message: 'Mot de passe enregistré. Bienvenue dans votre espace client.',
     token: signCustomerToken(customer),
-    customer: await Customer.findById(customer._id).lean(),
+    customer: publicCustomer(await Customer.findById(customer._id).lean()),
   };
 }
 
@@ -1219,6 +1274,12 @@ export async function addCartItem(customerId, payload) {
 async function buildOrderLine(payload = {}, { allowUnscheduled = false, customerId = null, otherLines = [] } = {}) {
   const product = await CommerceProduct.findOne({ _id: payload.productId, status: PRODUCT_STATUS.PUBLISHED });
   if (!product) throw ApiError.notFound('Article indisponible');
+  // Un pack ne se vend que complet : au moins deux formations, toutes encore en ligne.
+  if (product.kind === 'TRAINING_PACK') {
+    const ids = (product.pack?.productIds || []).map(String);
+    const live = ids.length ? await CommerceProduct.countDocuments({ _id: { $in: ids }, kind: 'DISTANCE_TRAINING', status: PRODUCT_STATUS.PUBLISHED }) : 0;
+    if (ids.length < 2 || live !== ids.length) throw ApiError.conflict('Ce pack n’est plus disponible pour le moment.', { code: 'PACK_UNAVAILABLE' });
+  }
   let bookingSnapshot = null;
   if (product.kind === 'IN_PERSON_TRAINING' && !payload.sessionId) {
     throw ApiError.badRequest('Une session est requise pour cette formation présentielle');
@@ -1246,7 +1307,9 @@ async function buildOrderLine(payload = {}, { allowUnscheduled = false, customer
   }
   return {
     productId: product._id,
-    quantity: Math.max(1, Number(payload.quantity || 1)),
+    // Toujours 1 (repris de melinails) : la quantité envoyée par le navigateur n'était pas bornée,
+    // et les places d'une session n'étaient contrôlées qu'à l'unité.
+    quantity: 1,
     sessionId: payload.sessionId || null,
     bookingSnapshot,
     optionKeys: Array.isArray(payload.optionKeys) ? payload.optionKeys : [],
@@ -1683,7 +1746,7 @@ async function checkoutHydratedLines(customerId, hydrated, payload = {}, { check
   };
 }
 
-async function reserveGiftCardAllocations(rawCodes, maxAmountCents) {
+export async function reserveGiftCardAllocations(rawCodes, maxAmountCents) {
   const codes = Array.isArray(rawCodes)
     ? rawCodes.map((entry) => typeof entry === 'string' ? { code: entry } : entry).filter(Boolean)
     : [];
@@ -1708,8 +1771,17 @@ async function reserveGiftCardAllocations(rawCodes, maxAmountCents) {
     }
     const requested = Number(entry.amountCents || entry.amount || 0);
     const amountCents = Math.min(remaining, available, requested > 0 ? requested : available);
-    card.reservedCents = (card.reservedCents || 0) + amountCents;
-    await card.save();
+    // Atomique : la réservation n'aboutit que si le solde LIBRE couvre encore le montant à cet instant
+    // (deux paiements simultanés pouvaient réserver plus que le solde).
+    const reserved = await GiftCard.findOneAndUpdate(
+      { _id: card._id, status: 'ACTIVE', $expr: { $gte: [{ $subtract: ['$balanceCents', { $ifNull: ['$reservedCents', 0] }] }, amountCents] } },
+      { $inc: { reservedCents: amountCents } },
+      { new: true },
+    );
+    if (!reserved) {
+      await releaseGiftCardReservations(allocations);
+      throw ApiError.conflict(GIFT_RESERVED_MESSAGE, { code: 'GIFT_CARD_RESERVED' });
+    }
     allocations.push({
       giftCardId: card._id,
       codeMasked: card.codeMasked,
@@ -2758,6 +2830,10 @@ export async function upsertProduct(payload) {
     reviewRequest: payload.reviewRequest !== undefined ? normalizeReviewRequestConfig(payload.reviewRequest) : (previous?.reviewRequest ?? null),
     // Rappels avant rendez-vous / session : même règle que la demande d'avis.
     appointmentReminder: payload.appointmentReminder !== undefined ? normalizeAppointmentReminderConfig(payload.appointmentReminder) : (previous?.appointmentReminder ?? null),
+    // Pack : les formations en ligne contenues, vérifiées (types, publication).
+    pack: payload.kind === 'TRAINING_PACK'
+      ? await normalizePack(payload.pack ?? previous?.pack, { status: payload.status || PRODUCT_STATUS.DRAFT, Product: CommerceProduct })
+      : { productIds: [] },
     seo: {
       metaTitle: String(payload.seo?.metaTitle ?? previous?.seo?.metaTitle ?? '').trim().slice(0, 120),
       metaDescription: String(payload.seo?.metaDescription ?? previous?.seo?.metaDescription ?? '').trim().slice(0, 320),
@@ -3076,6 +3152,7 @@ export async function createReview(customerId, payload) {
         rating,
         comment: String(payload.comment || '').trim(),
         displayName: String(payload.displayName || '').trim(),
+        photos: normalizeReviewPhotos(payload.photos, { customerId }),
         status: 'PENDING',
       },
     },
@@ -3105,6 +3182,7 @@ export async function createManualReview(payload = {}, userId = null) {
     rating,
     comment: String(payload.comment || '').trim(),
     displayName: String(payload.displayName || 'Cliente BeautySavage').trim(),
+    photos: normalizeReviewPhotos(payload.photos, { manager: true }),
     status,
     moderationComment: String(payload.moderationComment || '').trim(),
     moderatedAt: status === 'PUBLISHED' || status === 'REJECTED' ? new Date() : null,
@@ -3114,6 +3192,14 @@ export async function createManualReview(payload = {}, userId = null) {
     createdAt,
     updatedAt: new Date(),
   });
+  return review.populate('productId', 'title kind slug');
+}
+
+/** L'institut retire une photo d'un avis (déplacée, floue…) sans toucher au reste de l'avis. */
+export async function removeReviewPhoto(id, url) {
+  if (!mongoose.isValidObjectId(id)) throw ApiError.notFound('Avis introuvable');
+  const review = await Review.findByIdAndUpdate(id, { $pull: { photos: { url: String(url || '') } } }, { new: true });
+  if (!review) throw ApiError.notFound('Avis introuvable');
   return review.populate('productId', 'title kind slug');
 }
 
@@ -3473,15 +3559,21 @@ export async function uploadTrainingResourceFile(file) {
 }
 
 export async function listCustomerFormations(customerId) {
-  const sales = await CommerceSale.find({ customerId, paymentStatus: 'PAID' }).sort({ createdAt: -1 }).lean();
-  const lines = [];
-  for (const sale of sales) {
-    for (const line of sale.lines || []) {
-      if (!['DISTANCE_TRAINING', 'IN_PERSON_TRAINING'].includes(line.productSnapshot?.kind)) continue;
-      lines.push({ sale, line });
-    }
+  /*
+    UNE ENTRÉE PAR FORMATION — achetée seule ou contenue dans un pack (voir
+    trainingAccess.js). Deux accès à la même formation (achat puis pack) n'en
+    font qu'un ; l'achat direct l'emporte sur le pack. Une formation en
+    présentiel achetée pour deux sessions garde ses deux entrées.
+  */
+  const grants = await customerTrainingGrants(customerId);
+  const kept = new Map();
+  for (const grant of grants) {
+    const key = grant.line.sessionId ? `${grant.productId}:${grant.line.sessionId}` : grant.productId;
+    const current = kept.get(key);
+    if (!current || (current.viaPack && !grant.viaPack)) kept.set(key, grant);
   }
-  const productIds = [...new Set(lines.map(({ line }) => String(line.productId)).filter(Boolean))];
+  const lines = [...kept.values()].map((grant) => ({ sale: grant.sale, line: grant.line, productId: grant.productId, viaPack: grant.viaPack }));
+  const productIds = [...new Set(lines.map(({ productId }) => productId).filter(Boolean))];
   const [products, submissions] = await Promise.all([
     CommerceProduct.find({ _id: { $in: productIds } }).lean(),
     TrainingSubmission.find({ customerId, productId: { $in: productIds } }).sort({ createdAt: -1 }).lean(),
@@ -3494,9 +3586,9 @@ export async function listCustomerFormations(customerId) {
     current.push(submission);
     submissionsByProduct.set(key, current);
   }
-  return lines.map(({ sale, line }) => {
-    const product = productById.get(String(line.productId));
-    const productSubmissions = submissionsByProduct.get(String(line.productId)) || [];
+  return lines.map(({ sale, line, productId: grantedId, viaPack }) => {
+    const product = productById.get(grantedId);
+    const productSubmissions = submissionsByProduct.get(grantedId) || [];
     const latestSubmission = productSubmissions[0] || null;
     const modules = Array.isArray(product?.modules) ? product.modules : [];
     const completedModules = Number(latestSubmission?.progressSnapshot?.completedModules || 0);
@@ -3505,11 +3597,13 @@ export async function listCustomerFormations(customerId) {
     return {
       saleId: String(sale._id),
       saleNumber: sale.saleNumber,
-      lineId: String(line._id || line.productId),
+      lineId: viaPack ? `${String(line._id)}:${grantedId}` : String(line._id || line.productId),
       purchasedAt: sale.finalizedAt || sale.createdAt,
-      productId: String(line.productId),
-      productSnapshot: line.productSnapshot,
+      productId: grantedId,
+      // Accès par un pack : la vignette et le titre sont ceux de la formation, pas du pack.
+      productSnapshot: viaPack ? (product ? publicProduct(product) : { title: 'Formation', kind: 'DISTANCE_TRAINING' }) : line.productSnapshot,
       product: product ? publicProduct(product) : null,
+      viaPack,
       modules,
       evaluation: product?.evaluation || {},
       progress: { percent: progressPercent, completedModules, totalModules },
@@ -3520,12 +3614,12 @@ export async function listCustomerFormations(customerId) {
 }
 
 export async function createTrainingSubmission(customerId, payload = {}) {
-  const sale = await CommerceSale.findOne({ _id: payload.saleId, customerId }).lean();
-  if (!sale) throw ApiError.notFound('Achat introuvable');
-  const line = sale.lines.find((item) => String(item.productId) === String(payload.productId));
-  if (!line || !['DISTANCE_TRAINING', 'IN_PERSON_TRAINING'].includes(line.productSnapshot.kind)) {
-    throw ApiError.badRequest('Formation non admissible');
-  }
+  // L'accès peut venir d'un pack : on cherche l'achat qui ouvre CETTE formation.
+  const grants = await customerTrainingGrants(customerId);
+  const grant = grants.find((g) => g.productId === String(payload.productId) && String(g.sale._id) === String(payload.saleId))
+    || grants.find((g) => g.productId === String(payload.productId));
+  if (!grant) throw ApiError.badRequest('Formation non admissible');
+  const sale = grant.sale;
   const product = await CommerceProduct.findById(payload.productId).lean();
   const evaluation = product?.evaluation || {};
   if (evaluation.enabled === false) throw ApiError.badRequest('Évaluation finale inactive pour cette formation');
@@ -3550,7 +3644,7 @@ export async function createTrainingSubmission(customerId, payload = {}) {
     payloadSafe: {
       submissionId: String(submission._id),
       customerId: String(customerId),
-      trainingTitle: String(product?.title || line.productSnapshot?.title || 'Formation').slice(0, 180),
+      trainingTitle: String(product?.title || grant.line.productSnapshot?.title || 'Formation').slice(0, 180),
       attempt: submission.attempt,
       ...(scoreSnapshot.percent === null ? {} : { scorePercent: scoreSnapshot.percent }),
       submittedAt: submission.createdAt.toISOString(),
@@ -3695,7 +3789,7 @@ export async function decideTrainingSubmission(id, payload = {}, userId = null) 
 }
 
 const HOME_GROUPS = Object.freeze({
-  TRAINING: ['DISTANCE_TRAINING', 'IN_PERSON_TRAINING'],
+  TRAINING: ['TRAINING_PACK', 'DISTANCE_TRAINING', 'IN_PERSON_TRAINING'],
   SERVICE: ['SERVICE'],
 });
 

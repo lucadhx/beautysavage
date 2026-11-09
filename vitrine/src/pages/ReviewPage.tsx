@@ -6,6 +6,7 @@ import { CalendarDays, Check, ChevronLeft, ChevronRight, Loader2, LogOut, PawPri
 import { customerApi, type ApiFailure, type PendingReviewItem } from '@/lib/api';
 import { useCustomer } from '@/context/CustomerContext';
 import { resolvePreviewMediaUrl } from '@/lib/media';
+import { ReviewPhotoPicker } from '@/components/ReviewPhotoPicker';
 
 /**
  * PAGE D'AVIS — ouverte par le lien de l'e-mail « Laisser mon avis ».
@@ -218,17 +219,19 @@ function ReviewCard({ item, direction, onReviewed }: { item: PendingReviewItem; 
   const [rating, setRating] = React.useState(0);
   const [hover, setHover] = React.useState(0);
   const [comment, setComment] = React.useState('');
+  const [photos, setPhotos] = React.useState<string[]>([]);
+  const [photoBusy, setPhotoBusy] = React.useState(false);
   const [sending, setSending] = React.useState(false);
   const [error, setError] = React.useState('');
   const shown = hover || rating;
   const cover = item.coverUrl ? resolvePreviewMediaUrl(item.coverUrl) : '';
 
   async function send() {
-    if (!rating || sending) return;
+    if (!rating || sending || photoBusy) return;
     setSending(true);
     setError('');
     try {
-      await customerApi.submitRequestedReview(item.id, { rating, comment: comment.trim() });
+      await customerApi.submitRequestedReview(item.id, { rating, comment: comment.trim(), photos });
       onReviewed(item.id);
     } catch (err) {
       const failure = err as ApiFailure;
@@ -312,12 +315,14 @@ function ReviewCard({ item, direction, onReviewed }: { item: PendingReviewItem; 
         />
         <p className="mt-1 text-right text-xs tabular-nums" style={{ color: comment.length >= COMMENT_MAX ? '#b91c1c' : 'var(--v-muted-foreground)' }}>{comment.length} / {COMMENT_MAX}</p>
 
+        <ReviewPhotoPicker value={photos} onChange={setPhotos} onBusy={setPhotoBusy} />
+
         {error && <p className="mt-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">{error}</p>}
 
         <button
           type="button"
           onClick={send}
-          disabled={!rating || sending}
+          disabled={!rating || sending || photoBusy}
           className="mt-5 inline-flex h-12 w-full items-center justify-center gap-2 rounded-full text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-40"
           style={{ background: 'var(--v-primary)', color: 'var(--v-primary-foreground)' }}
           data-testid="review-submit"

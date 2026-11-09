@@ -118,7 +118,8 @@ export async function activeCommissionRule() {
 export function computeSaleCommission(sale, rule) {
   const lines = (sale.lines || []).map((line) => {
     const kind = line.productSnapshot?.kind || '';
-    const subject = Boolean(rule.enabled) && rule.productKinds.includes(kind);
+    // Un pack est une vente de formations en ligne : il suit leur règle.
+    const subject = Boolean(rule.enabled) && rule.productKinds.includes(kind === 'TRAINING_PACK' ? 'DISTANCE_TRAINING' : kind);
     const ttc = Number(line.totalCents || 0);
     const basisCents = subject ? (rule.basis === 'HT' ? Math.round(ttc / (1 + rule.salesVatRate / 100)) : ttc) : 0;
     return { lineId: String(line._id || ''), kind, title: line.productSnapshot?.title || '', subject, basisCents };

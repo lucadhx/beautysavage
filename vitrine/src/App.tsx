@@ -164,6 +164,7 @@ function PagesEnFondu() {
             <Route path="/contact" element={<ContactPage />} />
             <Route path="/a-propos" element={<AboutPage />} />
             <Route path="/formations" element={<CatalogPage kind="training" />} />
+            <Route path="/formations/packs" element={<CatalogPage kind="pack" />} />
             <Route path="/prestations" element={<CatalogPage kind="service" />} />
             <Route path="/prestations/:slug" element={<ServiceCollectionPage />} />
             <Route path="/boutique" element={<CatalogPage kind="all" />} />

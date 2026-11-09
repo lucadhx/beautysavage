@@ -44,6 +44,8 @@ const SeoPage = lazyPage(() => import('@/pages/SeoPage'));
 const CommerceCollectionsPage = lazyPage(() => import('@/pages/commerce/CommerceCollectionsPage'));
 const CommerceCollectionEditPage = lazyPage(() => import('@/pages/commerce/CommerceCollectionEditPage'));
 const CommerceFormationEditPage = lazyPage(() => import('@/pages/commerce/CommerceFormationEditPage'));
+const CommercePacksPage = lazyPage(() => import('@/pages/commerce/CommercePacksPage'));
+const CommercePackEditPage = lazyPage(() => import('@/pages/commerce/CommercePacksPage').then((m) => ({ default: m.CommercePackEditPage })));
 const CommercePrestationsPage = lazyPage(() => import('@/pages/commerce/CommercePrestationsPage'));
 const CommercePrestationEditPage = lazyPage(() => import('@/pages/commerce/CommercePrestationEditPage'));
 const CommerceCalendarPage = lazyPage(() => import('@/pages/commerce/CommerceCalendarPage'));
@@ -156,6 +158,8 @@ export function App() {
             <Route path="commerce/formations/mise-en-avant" element={<FeaturedTrainingsPage />} />
             <Route path="commerce/prestations/mise-en-avant" element={<FeaturedServicesPage />} />
             <Route path="commerce/formations/:id" element={<CommerceFormationEditPage />} />
+            <Route path="commerce/packs" element={<CommercePacksPage />} />
+            <Route path="commerce/packs/:id" element={<CommercePackEditPage />} />
             <Route path="commerce/prestations" element={<CommercePrestationsPage />} />
             <Route path="commerce/prestations/:id" element={<CommercePrestationEditPage />} />
             <Route path="commerce/collections" element={<CommerceCollectionsPage />} />

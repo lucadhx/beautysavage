@@ -10,6 +10,7 @@ import { sessionBlocks } from './calendar.service.js';
 import { emitAndDispatch } from './events/domainEvent.service.js';
 import { effectiveReviewRequestConfig, stepMs } from './reviewRequestConfig.js';
 import { ApiError } from '../utils/ApiError.js';
+import { normalizeReviewPhotos } from './reviewPhotos.js';
 import { logger } from '../utils/logger.js';
 
 /**
@@ -306,6 +307,7 @@ export async function submitRequestedReview(customerId, requestId, payload = {})
   if (!Number.isInteger(rating) || rating < 1 || rating > 5) throw ApiError.badRequest('Choisissez une note de 1 à 5.', { code: 'REVIEW_RATING_REQUIRED' });
   const comment = String(payload.comment || '').trim();
   if (comment.length > COMMENT_MAX) throw ApiError.badRequest(`Votre commentaire dépasse ${COMMENT_MAX} caractères.`, { code: 'REVIEW_COMMENT_TOO_LONG' });
+  const photos = normalizeReviewPhotos(payload.photos, { customerId });
 
   const existing = await Review.findOne({ customerId, productId: request.productId }).select('_id').lean();
   if (existing) {
@@ -325,6 +327,7 @@ export async function submitRequestedReview(customerId, requestId, payload = {})
       rating,
       comment,
       displayName,
+      photos,
       status: 'PENDING',
       sourceLabel: 'Demande d’avis',
     });
@@ -337,7 +340,7 @@ export async function submitRequestedReview(customerId, requestId, payload = {})
     { customerId, productId: request.productId, status: { $in: ['ACTIVE', 'COMPLETED'] } },
     { $set: { status: 'REVIEWED', nextSendAt: null, reviewId: review._id } },
   );
-  return { id: String(review._id), status: review.status, rating, comment };
+  return { id: String(review._id), status: review.status, rating, comment, photos };
 }
 
 /* ─────────────────────────────── Campagne ─────────────────────────────── */

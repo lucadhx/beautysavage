@@ -23,6 +23,7 @@ const KIND: Record<string, { label: string; Icon: typeof Sparkles }> = {
   SERVICE: { label: 'Prestation', Icon: Sparkles },
   IN_PERSON_TRAINING: { label: 'Formation en présentiel', Icon: GraduationCap },
   DISTANCE_TRAINING: { label: 'Formation en ligne', Icon: MonitorPlay },
+  TRAINING_PACK: { label: 'Pack de formations', Icon: MonitorPlay },
   GIFT_CARD: { label: 'Carte cadeau', Icon: Gift },
   PRODUCT: { label: 'Produit', Icon: ShoppingBag },
 };

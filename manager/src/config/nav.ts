@@ -38,6 +38,7 @@ import {
   type LucideIcon,
   ClipboardList,
   UserRound,
+  Package,
 } from 'lucide-react';
 
 export interface NavItem {
@@ -65,6 +66,7 @@ export const NAV_ITEMS: NavItem[] = [
   { to: '/', label: 'Tableau de bord', icon: LayoutDashboard, section: 'manager', group: 'Activité' },
   { to: '/demandes-contact', label: 'Demandes de contact', icon: Inbox, section: 'manager', group: 'Activité', badge: 'contactUnread' },
   { to: '/commerce/formations', label: 'Formations', icon: GraduationCap, section: 'manager', group: 'Commerce' },
+  { to: '/commerce/packs', label: 'Packs de formations', icon: Package, section: 'manager', group: 'Commerce' },
   { to: '/commerce/prestations', label: 'Prestations', icon: Sparkles, section: 'manager', group: 'Commerce' },
   { to: '/commerce/collections', label: 'Collections', icon: Layers, section: 'manager', group: 'Commerce' },
   { to: '/commerce/calendrier', label: 'Calendrier', icon: CalendarDays, section: 'manager', group: 'Commerce' },

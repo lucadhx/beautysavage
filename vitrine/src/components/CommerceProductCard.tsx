@@ -34,6 +34,7 @@ function kindLabel(kind: CommerceProduct['kind']) {
   if (kind === 'SERVICE') return 'Prestation';
   if (kind === 'DISTANCE_TRAINING') return 'Formation en ligne';
   if (kind === 'IN_PERSON_TRAINING') return 'Formation présentielle';
+  if (kind === 'TRAINING_PACK') return 'Pack de formations';
   if (kind === 'GIFT_CARD') return 'Carte cadeau';
   return 'Produit';
 }
@@ -114,7 +115,7 @@ export function CommerceProductCard({
   review?: ProductReviewSummary;
   showKind?: boolean;
 }) {
-  const training = item.kind === 'DISTANCE_TRAINING' || item.kind === 'IN_PERSON_TRAINING';
+  const training = item.kind === 'DISTANCE_TRAINING' || item.kind === 'IN_PERSON_TRAINING' || item.kind === 'TRAINING_PACK';
   return training
     ? <TrainingCard item={item} review={review} />
     : <ServiceCard item={item} review={review} showKind={showKind} />;
@@ -168,9 +169,16 @@ function ServiceCard({ item, review, showKind }: { item: CommerceProduct; review
 }
 
 function TrainingCard({ item, review }: { item: CommerceProduct; review?: ProductReviewSummary }) {
-  const online = item.kind === 'DISTANCE_TRAINING';
+  const pack = item.kind === 'TRAINING_PACK';
+  const online = item.kind === 'DISTANCE_TRAINING' || pack;
   const days = Number(item.training?.durationDays || 0);
-  const detail = online ? 'Modules en ligne' : days ? `${days} jour${days > 1 ? 's' : ''} en institut` : 'En institut';
+  // Pack : combien de formations, et l'économie sur leur prix à l'unité.
+  const packCount = item.pack?.items?.length || item.pack?.productIds?.length || 0;
+  const packValue = item.pack?.valueCents || 0;
+  const packSaving = packValue > item.price.amountCents ? Math.round((1 - item.price.amountCents / packValue) * 100) : 0;
+  const detail = pack
+    ? `${packCount} formations en ligne${packSaving > 0 ? ` · −${packSaving} %` : ''}`
+    : online ? 'Modules en ligne' : days ? `${days} jour${days > 1 ? 's' : ''} en institut` : 'En institut';
   return (
     <Link
       to={`/catalogue/${item.slug}`}
@@ -187,7 +195,7 @@ function TrainingCard({ item, review }: { item: CommerceProduct; review?: Produc
           style={{ borderColor: 'color-mix(in srgb, var(--v-accent) 70%, transparent)', color: 'var(--v-accent)', background: 'color-mix(in srgb, var(--v-menu-background) 55%, transparent)' }}
         >
           {online ? <MonitorPlay className="h-3 w-3" aria-hidden /> : <GraduationCap className="h-3 w-3" aria-hidden />}
-          {online ? 'En ligne' : 'Présentiel'}
+          {pack ? 'Pack' : online ? 'En ligne' : 'Présentiel'}
         </span>
       </div>
       <div className="flex flex-1 flex-col px-3 pb-3 sm:px-5 sm:pb-5">

@@ -6,7 +6,7 @@ import { api } from '@/lib/api';
 import { Dropdown } from '@/components/base/dropdown/dropdown';
 import { CustomSelect } from '@/components/ui/CustomSelect';
 
-export type ProductKind = 'DISTANCE_TRAINING' | 'IN_PERSON_TRAINING' | 'SERVICE' | 'GIFT_CARD' | 'PRODUCT';
+export type ProductKind = 'DISTANCE_TRAINING' | 'IN_PERSON_TRAINING' | 'SERVICE' | 'GIFT_CARD' | 'PRODUCT' | 'TRAINING_PACK';
 
 export interface CommerceProduct {
   _id: string;
@@ -38,6 +38,8 @@ export interface CommerceProduct {
   reviewRequest?: { enabled: boolean; delay: { value: number; unit: string }; reminders: { value: number; unit: string }[] } | null;
   /** Rappels avant rendez-vous / session : délais AVANT le début (voir AppointmentReminderEditor). */
   appointmentReminder?: { enabled: boolean; reminders: { value: number; unit: string }[] } | null;
+  /** Pack : les formations en ligne qu'il contient. */
+  pack?: { productIds: string[] };
   seo?: { metaTitle?: string; metaDescription?: string };
 }
 
@@ -131,6 +133,8 @@ export interface CommerceReview {
   customerId?: { _id?: string; email?: string; firstName?: string; lastName?: string } | string | null;
   productId?: { title?: string; kind?: ProductKind; slug?: string } | string | null;
   manual?: boolean;
+  /** Jusqu'à 3 photos jointes par la cliente (ou par l'institut, avis manuel). */
+  photos?: { url: string }[];
 }
 
 export interface RefundRequest {
@@ -181,6 +185,7 @@ export const KIND_LABEL: Record<ProductKind, string> = {
   SERVICE: 'Prestation institut',
   GIFT_CARD: 'Carte cadeau',
   PRODUCT: 'Produit boutique',
+  TRAINING_PACK: 'Pack de formations',
 };
 
 export const euro = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' });

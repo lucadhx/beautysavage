@@ -604,6 +604,19 @@ export async function uploadFile(
   };
 }
 
+/** Une photo d'avis manuel (3 par avis au plus) : rend son adresse. */
+export async function uploadReviewPhoto(file: File): Promise<{ url: string }> {
+  const form = new FormData();
+  form.append('file', file);
+  const headers: Record<string, string> = {};
+  const token = tokenStore.get();
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const res = await fetch(`${API_BASE}/commerce/review-photos`, { method: 'POST', headers, body: form });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new ApiError(res.status, json.message || "Echec de l'import", json.details, json.code);
+  return json.data;
+}
+
 export async function uploadCommerceTrainingFile(file: File): Promise<{
   url: string;
   name: string;
@@ -1115,6 +1128,8 @@ export const api = {
   commerceReviews: () => request<any[]>('/commerce/reviews'),
   createManualCommerceReview: (data: any) =>
     request<any>('/commerce/reviews/manual', { method: 'POST', body: data }),
+  removeCommerceReviewPhoto: (id: string, url: string) =>
+    request<any>(`/commerce/reviews/${id}/photos/remove`, { method: 'POST', body: { url } }),
   moderateCommerceReview: (id: string, data: any) =>
     request<any>(`/commerce/reviews/${id}/moderate`, { method: 'POST', body: data }),
   commerceRefundRequests: () => request<any[]>('/commerce/refund-requests'),

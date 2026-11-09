@@ -61,6 +61,7 @@ const KIND_GROUP = {
   SERVICE: 'service',
   DISTANCE_TRAINING: 'training',
   IN_PERSON_TRAINING: 'training',
+  TRAINING_PACK: 'training',
   GIFT_CARD: 'gift',
   PRODUCT: 'product',
 };
@@ -69,6 +70,7 @@ const KIND_LABEL = {
   SERVICE: 'Prestation',
   DISTANCE_TRAINING: 'Formation en ligne',
   IN_PERSON_TRAINING: 'Formation en présentiel',
+  TRAINING_PACK: 'Pack de formations en ligne',
   GIFT_CARD: 'Carte cadeau',
   PRODUCT: 'Produit',
 };
@@ -99,6 +101,7 @@ const LEGAL_ROUTES = {
 const CATALOGS = {
   '/prestations': { group: 'service', label: 'Prestations' },
   '/formations': { group: 'training', label: 'Formations' },
+  '/formations/packs': { group: 'pack', label: 'Packs de formations' },
   '/cartes-cadeaux': { group: 'gift', label: 'Cartes cadeaux' },
   '/boutique': { group: 'all', label: 'Boutique' },
 };
@@ -318,6 +321,8 @@ function productFacts(data, p) {
     }
     case 'DISTANCE_TRAINING':
       return `Formation en ligne à ${price}, accès à votre espace après l’achat.`;
+    case 'TRAINING_PACK':
+      return `Pack de ${(p.pack?.productIds || []).length} formations en ligne à ${price}, accès à toutes dès l’achat.`;
     case 'IN_PERSON_TRAINING': {
       const next = futureSessions(p)[0];
       const lieu = oneLine(p.training?.location) || c;
@@ -426,7 +431,7 @@ function businessNode(data, { withCatalog = false } = {}) {
         })),
       };
     };
-    const catalogs = [group(['SERVICE'], 'Prestations'), group(['DISTANCE_TRAINING', 'IN_PERSON_TRAINING'], 'Formations'), group(['GIFT_CARD', 'PRODUCT'], 'Cartes cadeaux')].filter(Boolean);
+    const catalogs = [group(['SERVICE'], 'Prestations'), group(['TRAINING_PACK', 'DISTANCE_TRAINING', 'IN_PERSON_TRAINING'], 'Formations'), group(['GIFT_CARD', 'PRODUCT'], 'Cartes cadeaux')].filter(Boolean);
     node.hasOfferCatalog = { '@type': 'OfferCatalog', name: `Offres ${siteName(data)}`, itemListElement: catalogs };
   }
   return node;
@@ -611,7 +616,7 @@ function normalizePath(raw) {
   return p || '/';
 }
 
-const byGroup = (data, group) => data.products.filter((p) => group === 'all' || KIND_GROUP[p.kind] === group);
+const byGroup = (data, group) => data.products.filter((p) => group === 'all' || (group === 'pack' ? p.kind === 'TRAINING_PACK' : KIND_GROUP[p.kind] === group));
 
 function featured(items) {
   const chosen = items.filter((p) => p.homeFeatured).sort((a, b) => (a.homeFeaturedRank ?? Infinity) - (b.homeFeaturedRank ?? Infinity));
@@ -681,6 +686,7 @@ export async function resolveRoute(rawPath, { originFallback = '' } = {}) {
     const headings = {
       '/prestations': `Prestations beauté${c ? ` à ${c}` : ''}`,
       '/formations': 'Formations beauté en ligne et en présentiel',
+      '/formations/packs': 'Packs de formations beauté en ligne',
       '/cartes-cadeaux': 'Cartes cadeaux',
       '/boutique': 'Boutique : prestations, formations et cartes cadeaux',
     };
@@ -690,9 +696,12 @@ export async function resolveRoute(rawPath, { originFallback = '' } = {}) {
       '/prestations': `${count} prestation${count > 1 ? 's' : ''} à réserver en ligne chez ${name}${c ? ` à ${c}` : ''}`,
       '/formations': (() => {
         const online = items.filter((p) => p.kind === 'DISTANCE_TRAINING').length;
-        const onsite = count - online;
-        return `${count} formation${count > 1 ? 's' : ''} ${name} : ${online} en ligne, ${onsite} en présentiel`;
+        const onsite = items.filter((p) => p.kind === 'IN_PERSON_TRAINING').length;
+        const packs = items.filter((p) => p.kind === 'TRAINING_PACK').length;
+        const trainings = online + onsite;
+        return `${trainings} formation${trainings > 1 ? 's' : ''} ${name} : ${online} en ligne, ${onsite} en présentiel${packs ? `, et ${packs} pack${packs > 1 ? 's' : ''}` : ''}`;
       })(),
+      '/formations/packs': `${count} pack${count > 1 ? 's' : ''} de formations en ligne ${name}, à prix avantageux`,
       '/cartes-cadeaux': `Offrez un moment ${name} avec une carte cadeau envoyée par e-mail`,
       '/boutique': `Toutes les offres ${name} dans un panier commun`,
     }[pathname];
@@ -1044,7 +1053,7 @@ export async function sitemapXml() {
   if (data.settings.indexable !== false) {
     const newest = data.products.reduce((max, p) => Math.max(max, new Date(p.updatedAt || 0).getTime()), 0);
     entries.push({ loc: '/', lastmod: newest || null, priority: '1.0', changefreq: 'weekly' });
-    const groups = [['/prestations', 'service'], ['/formations', 'training'], ['/cartes-cadeaux', 'gift']];
+    const groups = [['/prestations', 'service'], ['/formations', 'training'], ['/formations/packs', 'pack'], ['/cartes-cadeaux', 'gift']];
     for (const [loc, group] of groups) {
       if (byGroup(data, group).length) entries.push({ loc, priority: '0.9', changefreq: 'weekly' });
     }
@@ -1139,7 +1148,7 @@ export async function llmsTxt() {
     lines.push('');
   };
   section('Prestations', ['SERVICE']);
-  section('Formations', ['DISTANCE_TRAINING', 'IN_PERSON_TRAINING']);
+  section('Formations', ['TRAINING_PACK', 'DISTANCE_TRAINING', 'IN_PERSON_TRAINING']);
   section('Cartes cadeaux', ['GIFT_CARD', 'PRODUCT']);
   lines.push('## Pages', '', `- [Contact](${b}/contact): coordonnées et horaires`);
   for (const page of data.pages) lines.push(`- [${page.title}](${b}/p/${page.slug})${page.intro ? `: ${clip(page.intro, 140)}` : ''}`);

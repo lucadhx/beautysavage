@@ -69,7 +69,7 @@ function preloadFeaturedCovers(list: CommerceProduct[]) {
     const chosen = group.filter((p) => p.homeFeatured);
     return chosen.length ? chosen : group.slice(0, 3);
   };
-  for (const product of [...pick(['DISTANCE_TRAINING', 'IN_PERSON_TRAINING']), ...pick(['SERVICE'])]) {
+  for (const product of [...pick(['TRAINING_PACK', 'DISTANCE_TRAINING', 'IN_PERSON_TRAINING']), ...pick(['SERVICE'])]) {
     const url = resolvePreviewMediaUrl(product.coverUrl || product.gallery?.[0] || '');
     if (url) { const img = new Image(); img.decoding = 'async'; img.src = url; }
   }

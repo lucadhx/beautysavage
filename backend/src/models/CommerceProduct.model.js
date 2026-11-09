@@ -6,6 +6,8 @@ export const PRODUCT_KIND = Object.freeze({
   SERVICE: 'SERVICE',
   GIFT_CARD: 'GIFT_CARD',
   PRODUCT: 'PRODUCT',
+  /** Pack de formations EN LIGNE vendues ensemble (repris de melinails). */
+  TRAINING_PACK: 'TRAINING_PACK',
 });
 
 export const PRODUCT_STATUS = Object.freeze({
@@ -105,6 +107,10 @@ const commerceProductSchema = new mongoose.Schema(
     reviewRequest: { type: mongoose.Schema.Types.Mixed, default: null },
     /** Rappels avant rendez-vous / session : délais avant le début (voir appointmentReminder.service). */
     appointmentReminder: { type: mongoose.Schema.Types.Mixed, default: null },
+    /** Pack : les formations en ligne qu'il contient. */
+    pack: {
+      productIds: { type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'CommerceProduct' }], default: [] },
+    },
     /**
      * RÉFÉRENCEMENT — facultatif. Vide, le titre et la description de la page
      * sont COMPOSÉS à partir de la fiche (nom, type, prix, lieu, description) :

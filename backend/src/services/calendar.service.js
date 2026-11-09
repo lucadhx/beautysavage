@@ -137,8 +137,9 @@ export async function saveSchedule(payload) {
         slotStepMinutes: Number(payload.slotStepMinutes || 15),
         weeklyHours,
         exceptions,
-        reminders: Array.isArray(payload.reminders) ? payload.reminders : [],
-        noShowPolicy: payload.noShowPolicy || {},
+        // Absents du formulaire des horaires : on garde l'existant (les effacer à chaque enregistrement supprimait ces réglages).
+        ...(Array.isArray(payload.reminders) ? { reminders: payload.reminders } : {}),
+        ...(payload.noShowPolicy && typeof payload.noShowPolicy === 'object' ? { noShowPolicy: payload.noShowPolicy } : {}),
       },
     },
     { new: true, upsert: true, runValidators: true }
@@ -175,7 +176,7 @@ export async function listEvents(query = {}) {
       else if (e.slotGroupId) e.slotGroupId = null;
     }
   }
-  return [...(await withLiveIdentity(stored)).map((e) => publicEvent(e, { productSummary: e.productSummary, ...(e.holdExpiresAt ? { holdExpiresAt: e.holdExpiresAt } : {}) })), ...generated].sort((a, b) => new Date(a.startsAt) - new Date(b.startsAt));
+  return [...(await withLiveIdentity(stored)).map((e) => publicEvent(e, { productSummary: e.productSummary, options: e.options || [], optionsTotalCents: e.optionsTotalCents || 0, ...(e.holdExpiresAt ? { holdExpiresAt: e.holdExpiresAt } : {}) })), ...generated].sort((a, b) => new Date(a.startsAt) - new Date(b.startsAt));
 }
 
 /**
@@ -193,15 +194,19 @@ async function withLiveIdentity(events) {
   const { richTextToPlain } = await import('../utils/richText.js');
   const customerIds = [...new Set(events.map((e) => String(e.customerSnapshot?.customerId || '')).filter((v) => mongoose.isValidObjectId(v)))];
   const productIds = [...new Set(events.map((e) => String(e.productId || '')).filter((v) => mongoose.isValidObjectId(v)))];
-  const [customers, products] = await Promise.all([
+  const saleIds = [...new Set(events.map((e) => String(e.saleId || '')).filter((v) => mongoose.isValidObjectId(v)))];
+  const [customers, products, sales] = await Promise.all([
     customerIds.length ? Customer.find({ _id: { $in: customerIds } }).select('firstName lastName phone email').lean() : [],
-    productIds.length ? CommerceProduct.find({ _id: { $in: productIds } }).select('subtitle description').lean() : [],
+    productIds.length ? CommerceProduct.find({ _id: { $in: productIds } }).select('subtitle description options').lean() : [],
+    saleIds.length ? CommerceSale.find({ _id: { $in: saleIds } }).select('lines._id lines.optionsSnapshot lines.optionsTotalCents').lean() : [],
   ]);
   const byCustomer = new Map(customers.map((c) => [String(c._id), c]));
   const byProduct = new Map(products.map((p) => [String(p._id), p]));
+  const byLine = new Map(sales.flatMap((sale) => (sale.lines || []).map((line) => [`${sale._id}:${line._id}`, line])));
   return events.map((e) => {
     const c = byCustomer.get(String(e.customerSnapshot?.customerId || ''));
     const p = byProduct.get(String(e.productId || ''));
+    const line = byLine.get(`${e.saleId}:${e.lineId}`);
     const name = c ? [c.firstName, c.lastName].map((v) => String(v || '').trim()).filter(Boolean).join(' ') : '';
     return {
       ...e,
@@ -211,8 +216,28 @@ async function withLiveIdentity(events) {
         ...(c?.phone && !e.customerSnapshot?.phone ? { phone: c.phone } : {}),
       },
       productSummary: p ? (String(p.subtitle || '').trim() || richTextToPlain(p.description || '', { maxLength: 220 })) : '',
+      // LES OPTIONS PRISES — lues sur la ligne de vente (prix payé, photographié au paiement) ;
+      // le temps ajouté et la description viennent de la fiche, quand l'option y existe encore.
+      ...optionsOfLine(line, p),
     };
   });
+}
+
+function optionsOfLine(line, product) {
+  const taken = Array.isArray(line?.optionsSnapshot) ? line.optionsSnapshot : [];
+  if (!taken.length) return { options: [], optionsTotalCents: 0 };
+  const byKey = new Map((product?.options || []).map((o) => [String(o.key), o]));
+  const options = taken.map((o) => {
+    const current = byKey.get(String(o.key));
+    return {
+      key: String(o.key || ''),
+      label: String(o.label || current?.label || 'Option'),
+      priceCents: Number(o.priceCents || 0),
+      extraMinutes: Number(current?.extraMinutes || 0),
+      description: String(current?.description || ''),
+    };
+  });
+  return { options, optionsTotalCents: Number(line.optionsTotalCents ?? options.reduce((sum, o) => sum + o.priceCents, 0)) };
 }
 
 export function minutesOf(value) {

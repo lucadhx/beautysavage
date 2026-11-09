@@ -2,7 +2,8 @@ import { Readable } from 'node:stream';
 import { Router } from 'express';
 import { authenticate, authorize } from '../middlewares/auth.middleware.js';
 import { authenticateCustomer, identifyCustomer } from '../middlewares/customerAuth.middleware.js';
-import { uploadTrainingDeliverable, translateUploadErrors } from '../middlewares/upload.middleware.js';
+import { uploadImage, uploadTrainingDeliverable, translateUploadErrors } from '../middlewares/upload.middleware.js';
+import * as reviewPhotos from '../services/reviewPhotos.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { ok, created } from '../utils/apiResponse.js';
 import { ROLES } from '../utils/constants.js';
@@ -15,6 +16,7 @@ import * as customerAgenda from '../services/customerAgenda.service.js';
 import * as commerce from '../services/commerce.service.js';
 import * as reviewRequests from '../services/reviewRequest.service.js';
 import * as slotGroups from '../services/trainingSlotGroup.service.js';
+import { assertVideoAccess } from '../services/trainingAccess.js';
 import * as calendar from '../services/calendar.service.js';
 import * as sessions from '../services/formationSessions.service.js';
 
@@ -24,15 +26,24 @@ publicCommerceRoutes.get('/catalog', asyncHandler(async (_req, res) => ok(res, a
 // Collections de prestations (rayons de la page « Prestations »), dans l'ordre choisi.
 publicCommerceRoutes.get('/collections', asyncHandler(async (_req, res) => ok(res, await collections.listPublicCollections())));
 publicCommerceRoutes.get('/availability', requireSiteOpenForPurchase, identifyCustomer, asyncHandler(async (req, res) => ok(res, await calendar.listAvailability(req.query, { customerId: req.customer?._id, enforceNotice: true }))));
-publicCommerceRoutes.get('/videos/streamable/:shortcode/playback-url', asyncHandler(async (req, res) => {
+/*
+  LES VIDÉOS — une bande-annonce se lit librement ; une vidéo de module, seulement
+  par une cliente qui a accès à la formation (achat direct ou pack). Voir
+  trainingAccess.assertVideoAccess. Le Manager passe par ses routes authentifiées.
+*/
+const videoLimiter = rateLimit({ windowMs: 60_000, max: 60 });
+publicCommerceRoutes.get('/videos/streamable/:shortcode/playback-url', videoLimiter, identifyCustomer, asyncHandler(async (req, res) => {
   res.set('Cache-Control', 'no-store');
+  await assertVideoAccess({ provider: 'STREAMABLE', videoId: req.params.shortcode, customerId: req.customer?._id });
   ok(res, await commerce.getStreamableTemporaryPlayback(req.params.shortcode));
 }));
-publicCommerceRoutes.get('/videos/google-drive/:fileId/playback-url', asyncHandler(async (req, res) => {
+publicCommerceRoutes.get('/videos/google-drive/:fileId/playback-url', videoLimiter, identifyCustomer, asyncHandler(async (req, res) => {
   res.set('Cache-Control', 'no-store');
+  await assertVideoAccess({ provider: 'GOOGLE_DRIVE', videoId: req.params.fileId, customerId: req.customer?._id });
   ok(res, await commerce.getGoogleDriveTemporaryPlayback(req.params.fileId));
 }));
-publicCommerceRoutes.get('/videos/google-drive/:fileId/stream', asyncHandler(async (req, res, next) => {
+publicCommerceRoutes.get('/videos/google-drive/:fileId/stream', videoLimiter, identifyCustomer, asyncHandler(async (req, res, next) => {
+  await assertVideoAccess({ provider: 'GOOGLE_DRIVE', videoId: req.params.fileId, customerId: req.customer?._id });
   const { upstream, contentType } = await commerce.getGoogleDriveVideoUpstream(req.params.fileId, req.headers.range || '');
   const headers = ['content-type', 'content-length', 'content-range', 'accept-ranges', 'etag', 'last-modified'];
   for (const header of headers) {
@@ -66,7 +77,7 @@ customerRoutes.post('/email-verification/confirm', customerOtpLimiter, asyncHand
 customerRoutes.post('/email-verification/request', authenticateCustomer, asyncHandler(async (req, res) => ok(res, await commerce.requestCustomerEmailVerification(req.customer._id))));
 customerRoutes.post('/password-reset/request', customerResetRequestLimiter, asyncHandler(async (req, res) => ok(res, await commerce.requestCustomerPasswordReset(req.body.email, { siteUrl: await siteUrlFor(req) }))));
 customerRoutes.post('/password-reset/confirm', customerResetConfirmLimiter, asyncHandler(async (req, res) => ok(res, await commerce.resetCustomerPassword(req.body))));
-customerRoutes.get('/me', authenticateCustomer, asyncHandler(async (req, res) => ok(res, req.customer)));
+customerRoutes.get('/me', authenticateCustomer, asyncHandler(async (req, res) => ok(res, commerce.publicCustomer(req.customer))));
 customerRoutes.put('/profile', authenticateCustomer, rateLimit({ windowMs: 60_000, max: 20 }), asyncHandler(async (req, res) => ok(res, await commerce.updateCustomerProfile(req.customer._id, req.body))));
 customerRoutes.get('/cart', authenticateCustomer, asyncHandler(async (req, res) => ok(res, await commerce.getCustomerCart(req.customer._id))));
 customerRoutes.post('/cart/items', authenticateCustomer, requireSiteOpenForPurchase, asyncHandler(async (req, res) => ok(res, await commerce.addCartItem(req.customer._id, req.body))));
@@ -98,6 +109,12 @@ customerRoutes.get('/training-submissions', authenticateCustomer, asyncHandler(a
 customerRoutes.post('/training-deliverables', authenticateCustomer, uploadTrainingDeliverable.single('file'), translateUploadErrors, asyncHandler(async (req, res) => created(res, await commerce.uploadCustomerTrainingDeliverable(req.customer._id, req.file))));
 customerRoutes.delete('/training-deliverables', authenticateCustomer, asyncHandler(async (req, res) => ok(res, await commerce.deleteCustomerTrainingDeliverable(req.customer._id, req.body?.url || req.query.url))));
 customerRoutes.post('/training-submissions', authenticateCustomer, asyncHandler(async (req, res) => created(res, await commerce.createTrainingSubmission(req.customer._id, req.body))));
+/*
+  PHOTOS D'AVIS — une cliente connectée dépose ses photos une à une (3 par avis au plus,
+  contrôlé à l'envoi de l'avis) ; l'institut, pour un avis saisi à la main.
+*/
+const reviewPhotoLimiter = rateLimit({ windowMs: 10 * 60_000, max: 15 });
+customerRoutes.post('/review-photos', authenticateCustomer, reviewPhotoLimiter, uploadImage.single('file'), translateUploadErrors, asyncHandler(async (req, res) => created(res, await reviewPhotos.storeReviewPhoto(req.file, { customerId: req.customer._id }))));
 customerRoutes.post('/reviews', authenticateCustomer, asyncHandler(async (req, res) => created(res, await commerce.createReview(req.customer._id, req.body))));
 // Demandes d'avis : réservées à la cliente visée (le lien de l'e-mail ne suffit pas, il faut sa session).
 customerRoutes.get('/review-requests', authenticateCustomer, asyncHandler(async (req, res) => ok(res, await reviewRequests.listPendingReviews(req.customer._id, { focus: req.query.demande || null }))));
@@ -149,6 +166,8 @@ managerCommerceRoutes.post('/commissions/:id/sync', authorize(ROLES.ADMIN, ROLES
   ok(res, await commissionPayment.syncCommissionPayment(req.params.id));
 }));
 managerCommerceRoutes.get('/reviews', asyncHandler(async (_req, res) => ok(res, await commerce.listManagerReviews())));
+managerCommerceRoutes.post('/review-photos', authorize(ROLES.ADMIN, ROLES.DEV), uploadImage.single('file'), translateUploadErrors, asyncHandler(async (req, res) => created(res, await reviewPhotos.storeReviewPhoto(req.file))));
+managerCommerceRoutes.post('/reviews/:id/photos/remove', authorize(ROLES.ADMIN, ROLES.DEV), asyncHandler(async (req, res) => ok(res, await commerce.removeReviewPhoto(req.params.id, req.body?.url))));
 managerCommerceRoutes.post('/reviews/manual', authorize(ROLES.ADMIN, ROLES.DEV), asyncHandler(async (req, res) => created(res, await commerce.createManualReview(req.body, req.user?._id || null))));
 managerCommerceRoutes.post('/reviews/:id/moderate', authorize(ROLES.ADMIN, ROLES.DEV), asyncHandler(async (req, res) => ok(res, await commerce.moderateReview(req.params.id, req.body, req.user?._id || null))));
 managerCommerceRoutes.get('/refund-requests', asyncHandler(async (_req, res) => ok(res, await commerce.listManagerRefundRequests())));

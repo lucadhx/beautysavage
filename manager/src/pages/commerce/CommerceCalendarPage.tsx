@@ -26,6 +26,9 @@ interface CalendarEvent {
   customerSnapshot?: { name?: string; email?: string; phone?: string };
   /** Description courte de la prestation (sous-titre, sinon début de la description). */
   productSummary?: string;
+  /** Les options prises par la cliente (ligne de vente), avec le temps qu'elles ajoutent. */
+  options?: { key: string; label: string; priceCents: number; extraMinutes?: number; description?: string }[];
+  optionsTotalCents?: number;
   paymentSnapshot?: { totalCents?: number; paidCents?: number; depositCents?: number; balanceDueCents?: number; balancePaidCents?: number; balancePaymentMethod?: string };
   notes?: string;
   cancellation?: { reason?: string; refundedCents?: number };
@@ -959,6 +962,29 @@ function EventPanel({
           <AmountCard label="Montant paye" value={cents(paidCents)} />
           <AmountCard label="Restant a payer" value={cents(remainingCents)} />
         </div>
+
+        {(selected.options?.length ?? 0) > 0 && (
+          <div className="rounded-md border p-3" data-testid="event-options">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Options prises ({selected.options!.length})
+            </p>
+            <ul className="mt-2 grid gap-2">
+              {selected.options!.map((option) => (
+                <li key={option.key || option.label} className="flex items-start justify-between gap-3 text-sm" data-testid="event-option">
+                  <div className="min-w-0">
+                    <p className="font-medium">{option.label}</p>
+                    {option.description && <p className="line-clamp-2 text-xs text-muted-foreground">{option.description}</p>}
+                    {Number(option.extraMinutes || 0) > 0 && <p className="text-xs text-muted-foreground">+ {option.extraMinutes} min au rendez-vous</p>}
+                  </div>
+                  <span className="shrink-0 font-semibold tabular-nums">{option.priceCents > 0 ? `+ ${cents(option.priceCents)}` : 'Incluse'}</span>
+                </li>
+              ))}
+            </ul>
+            {Number(selected.optionsTotalCents || 0) > 0 && (
+              <p className="mt-2 flex justify-between border-t pt-2 text-sm"><span className="text-muted-foreground">Total des options</span><span className="font-semibold tabular-nums">{cents(selected.optionsTotalCents)}</span></p>
+            )}
+          </div>
+        )}
 
         {generated && (
           <p className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">
