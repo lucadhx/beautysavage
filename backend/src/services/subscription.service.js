@@ -169,8 +169,16 @@ export function projectSubscription(contract, stripeSub, { observedAt = null, id
 
   const cancelAtPeriodEnd = Boolean(stripeSub.cancel_at_period_end);
   s.status = mapSubscriptionStatus(stripeSub.status, { cancelAtPeriodEnd });
-  s.currentPeriodStart = toDate(stripeSub.current_period_start) || s.currentPeriodStart;
-  s.currentPeriodEnd = toDate(stripeSub.current_period_end) || s.currentPeriodEnd;
+  /*
+    LA PÉRIODE EN COURS — à la racine dans les anciennes versions de l'API
+    Stripe, sur chaque LIGNE d'abonnement depuis 2025 (« basil », « dahlia »…).
+    Ne lire que la racine gardait l'ancienne fin de période après chaque
+    renouvellement (BeautySavage PROD : « fin le 6 novembre » après le
+    renouvellement du 6 novembre, au lieu du 6 décembre).
+  */
+  const item = Array.isArray(stripeSub.items?.data) ? stripeSub.items.data[0] : null;
+  s.currentPeriodStart = toDate(stripeSub.current_period_start ?? item?.current_period_start) || s.currentPeriodStart;
+  s.currentPeriodEnd = toDate(stripeSub.current_period_end ?? item?.current_period_end) || s.currentPeriodEnd;
   s.cancelAtPeriodEnd = cancelAtPeriodEnd;
   if (observedAt) s.statusObservedAt = new Date(observedAt);
   return { applied: true };
