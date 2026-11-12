@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import { CommerceSale } from '../models/CommerceSale.model.js';
 import { CommerceProduct, PRODUCT_STATUS } from '../models/CommerceProduct.model.js';
+import { TrainingAccessGrant } from '../models/TrainingAccessGrant.model.js';
 import { ApiError } from '../utils/ApiError.js';
 
 /**
@@ -52,9 +53,22 @@ export async function customerTrainingGrants(customerId) {
           line,
           productId,
           viaPack: kind === PACK_KIND ? { id: id(line.productId), title: String(line.productSnapshot?.title || 'Pack de formations') } : null,
+          viaManual: false,
         });
       }
     }
+  }
+  /*
+    LES ACCÈS OFFERTS PAR L'INSTITUT (TrainingAccessGrant) — après les achats :
+    une formation achetée ET offerte reste présentée comme achetée. La « vente »
+    et la « ligne » sont reconstituées pour que l'espace formation, le dossier
+    final et les vidéos les lisent comme un achat.
+  */
+  const manual = await TrainingAccessGrant.find({ customerId: meId, active: true }).sort({ grantedAt: -1 }).lean();
+  for (const grant of manual) {
+    const sale = { _id: grant._id, saleNumber: '', finalizedAt: grant.grantedAt, createdAt: grant.grantedAt, manualGrant: true };
+    const line = { _id: grant._id, productId: grant.productId, sessionId: null, productSnapshot: { kind: 'DISTANCE_TRAINING', title: grant.productTitle || 'Formation' } };
+    grants.push({ sale, line, productId: id(grant.productId), viaPack: null, viaManual: true });
   }
   return grants;
 }

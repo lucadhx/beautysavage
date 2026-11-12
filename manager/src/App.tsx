@@ -39,6 +39,7 @@ const CompanyPage = lazyPage(() => import('@/pages/CompanyPage'));
 const HomeContentPage = lazyPage(() => import('@/pages/HomeContentPage'));
 const CommerceFormationsPage = lazyPage(() => import('@/pages/commerce/CommerceFormationsPage'));
 const FeaturedTrainingsPage = lazyPage(() => import('@/pages/commerce/FeaturedTrainingsPage'));
+const TrainingMembersPage = lazyPage(() => import('@/pages/commerce/TrainingMembersPage'));
 const FeaturedServicesPage = lazyPage(() => import('@/pages/commerce/FeaturedServicesPage'));
 const SeoPage = lazyPage(() => import('@/pages/SeoPage'));
 const CommerceCollectionsPage = lazyPage(() => import('@/pages/commerce/CommerceCollectionsPage'));
@@ -156,6 +157,7 @@ export function App() {
             <Route path="commerce" element={<Navigate to="/commerce/formations" replace />} />
             <Route path="commerce/formations" element={<CommerceFormationsPage />} />
             <Route path="commerce/formations/mise-en-avant" element={<FeaturedTrainingsPage />} />
+            <Route path="commerce/membres-formations" element={<TrainingMembersPage />} />
             <Route path="commerce/prestations/mise-en-avant" element={<FeaturedServicesPage />} />
             <Route path="commerce/formations/:id" element={<CommerceFormationEditPage />} />
             <Route path="commerce/packs" element={<CommercePacksPage />} />

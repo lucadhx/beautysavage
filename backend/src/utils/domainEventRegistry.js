@@ -289,8 +289,25 @@ export const DOMAIN_EVENT_REGISTRY = Object.freeze({
       customerEmailMasked: z.string().max(254),
       actionUrl: z.string().max(500),
       expiresAt: z.string().max(40),
-      origin: z.enum(['MANUAL_BOOKING', 'SELF_REQUEST', 'MANAGER_RESEND', 'RESEND']), // création, ou renvoi du lien d'accès
+      origin: z.enum(['MANUAL_BOOKING', 'MANUAL_TRAINING', 'SELF_REQUEST', 'MANAGER_RESEND', 'RESEND']), // création (réservation ou formation offerte), ou renvoi du lien d'accès
       createdAt: z.string().max(40),
+    }).strict(),
+  },
+
+  'training.access.granted': {
+    type: 'training.access.granted',
+    description: "L'institut a donne a une cliente l'acces a une formation en ligne, sans achat sur le site.",
+    entityTypes: [ENTITY_TYPE.CUSTOMER],
+    retentionClass: RETENTION_CLASS.OPERATIONAL,
+    payloadSchema: z.object({
+      grantId: z.string().max(64),
+      customerId: z.string().max(64),
+      customerEmailMasked: z.string().max(254),
+      productId: z.string().max(64),
+      trainingTitle: z.string().max(180),
+      // Compte ouvert par l'institut et pas encore active : l'e-mail renvoie d'abord au lien « mot de passe ».
+      accountPending: z.boolean(),
+      grantedAt: z.string().max(40),
     }).strict(),
   },
 

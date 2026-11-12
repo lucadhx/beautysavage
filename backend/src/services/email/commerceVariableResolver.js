@@ -183,10 +183,38 @@ export async function resolveAppointmentConfirmedClient({ event }) {
 }
 
 export async function resolveCustomerAccountCreated({ event }) {
+  const training = event?.payloadSafe?.origin === 'MANUAL_TRAINING';
   return {
     ...(await customerVariables(event?.entityId || event?.payloadSafe?.customerId)),
+    accountIntro: training
+      ? 'Nous avons créé votre espace client pour vous donner accès à votre formation en ligne. Vous y retrouverez aussi vos rendez-vous, vos achats et vos factures.'
+      : 'Nous avons créé votre espace client lors de votre réservation. Vous y retrouverez vos rendez-vous, vos achats et vos factures.',
     actionUrl: event.payloadSafe.actionUrl,
     expiresAt: event.payloadSafe.expiresAt,
+  };
+}
+
+/**
+ * FORMATION OFFERTE PAR L'INSTITUT — « Félicitations, vous avez accès à… ».
+ * Compte pas encore activé : la cliente est renvoyée d'abord vers l'e-mail
+ * « Votre espace client est prêt » (lien pour choisir son mot de passe).
+ */
+export async function resolveTrainingAccessGrantedClient({ event }) {
+  const p = event.payloadSafe;
+  const { CommerceProduct } = await import('../../models/CommerceProduct.model.js');
+  const product = await CommerceProduct.findById(p.productId).select('title modules').lean();
+  const { Company } = await import('../../models/Company.model.js');
+  const company = await Company.findOne().select('name').lean().catch(() => null);
+  const modules = Array.isArray(product?.modules) ? product.modules.length : 0;
+  return {
+    ...(await customerVariables(p.customerId)),
+    trainingTitle: product?.title || p.trainingTitle,
+    instituteName: String(company?.name || '').trim() || 'l’institut',
+    moduleCount: modules ? `${modules} module${modules > 1 ? 's' : ''}` : '',
+    accountPendingText: p.accountPending
+      ? 'Première connexion : choisissez d’abord votre mot de passe grâce au lien de l’e-mail « Votre espace client est prêt », envoyé en même temps que celui-ci.'
+      : '',
+    trainingUrl: await customerAccountUrl('/espace-client/formations'),
   };
 }
 
@@ -338,6 +366,7 @@ export default {
   resolveAppointmentCancelledClient,
   resolveAppointmentConfirmedClient,
   resolveCustomerAccountCreated,
+  resolveTrainingAccessGrantedClient,
   resolveSaleAdminNotification,
   resolveTrainingSubmissionAdmin,
   resolveTrainingDecisionClient,

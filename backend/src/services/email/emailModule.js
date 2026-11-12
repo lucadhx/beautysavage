@@ -4,6 +4,7 @@ import { resolveCommissionPaymentDue } from './commissionVariableResolver.js';
 import { registerRelevanceGuard } from '../events/actionRelevance.js';
 import { appointmentReminderStillRelevant } from '../appointmentReminder.service.js';
 import { reviewRequestStillRelevant } from '../reviewRequest.service.js';
+import { trainingAccessGrantStillActive } from '../trainingMembers.service.js';
 import { registerEmailActionHandlers } from './sendEmailHandler.js';
 import { registerReportIncidentHandler } from '../events/reportIncidentHandler.js';
 import { refreshContracts } from './emailTemplateContract.service.js';
@@ -20,6 +21,7 @@ import {
   resolveAppointmentCancelledClient,
   resolveAppointmentConfirmedClient,
   resolveCustomerAccountCreated,
+  resolveTrainingAccessGrantedClient,
   resolveSaleAdminNotification,
   resolveTrainingDecisionClient,
   resolveTrainingSubmissionAdmin,
@@ -77,6 +79,9 @@ export async function initEmailModule({ skipBootstrap = false } = {}) {
   registerVariableResolver('APPOINTMENT_CANCELLED_CLIENT', resolveAppointmentCancelledClient);
   registerVariableResolver('APPOINTMENT_CONFIRMED_CLIENT', resolveAppointmentConfirmedClient);
   registerVariableResolver('CUSTOMER_ACCOUNT_CREATED', resolveCustomerAccountCreated);
+  registerVariableResolver('TRAINING_ACCESS_GRANTED_CLIENT', resolveTrainingAccessGrantedClient);
+  // Un accès retiré entre l'ajout et l'envoi annule l'e-mail « vous avez accès ».
+  registerRelevanceGuard('training.access.granted', trainingAccessGrantStillActive);
   registerVariableResolver('COMMERCE_SALE_ADMIN_NOTIFICATION', resolveSaleAdminNotification);
   registerVariableResolver('TRAINING_SUBMISSION_ADMIN_NOTIFICATION', resolveTrainingSubmissionAdmin);
   registerVariableResolver('TRAINING_VALIDATED_CLIENT', resolveTrainingDecisionClient);

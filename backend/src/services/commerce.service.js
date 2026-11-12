@@ -3572,7 +3572,7 @@ export async function listCustomerFormations(customerId) {
     const current = kept.get(key);
     if (!current || (current.viaPack && !grant.viaPack)) kept.set(key, grant);
   }
-  const lines = [...kept.values()].map((grant) => ({ sale: grant.sale, line: grant.line, productId: grant.productId, viaPack: grant.viaPack }));
+  const lines = [...kept.values()].map((grant) => ({ sale: grant.sale, line: grant.line, productId: grant.productId, viaPack: grant.viaPack, viaManual: Boolean(grant.viaManual) }));
   const productIds = [...new Set(lines.map(({ productId }) => productId).filter(Boolean))];
   const [products, submissions] = await Promise.all([
     CommerceProduct.find({ _id: { $in: productIds } }).lean(),
@@ -3586,7 +3586,7 @@ export async function listCustomerFormations(customerId) {
     current.push(submission);
     submissionsByProduct.set(key, current);
   }
-  return lines.map(({ sale, line, productId: grantedId, viaPack }) => {
+  return lines.map(({ sale, line, productId: grantedId, viaPack, viaManual }) => {
     const product = productById.get(grantedId);
     const productSubmissions = submissionsByProduct.get(grantedId) || [];
     const latestSubmission = productSubmissions[0] || null;
@@ -3604,6 +3604,8 @@ export async function listCustomerFormations(customerId) {
       productSnapshot: viaPack ? (product ? publicProduct(product) : { title: 'Formation', kind: 'DISTANCE_TRAINING' }) : line.productSnapshot,
       product: product ? publicProduct(product) : null,
       viaPack,
+      // Accès offert par l'institut (sans achat sur le site).
+      manualAccess: viaManual,
       modules,
       evaluation: product?.evaluation || {},
       progress: { percent: progressPercent, completedModules, totalModules },

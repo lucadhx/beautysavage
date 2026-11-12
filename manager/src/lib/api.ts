@@ -1106,6 +1106,14 @@ export const api = {
   refundCommerceSale: (id: string, data: { amountCents?: number; reason?: string }) =>
     request<any>(`/commerce/sales/${id}/refund`, { method: 'POST', body: data }),
   commerceCustomers: () => request<any[]>('/commerce/customers'),
+  /** Formations en ligne et nombre de membres (achat, pack, accès offert). */
+  trainingMembersOverview: () => request<any[]>('/commerce/training-members'),
+  trainingMembers: (productId: string) => request<any>(`/commerce/training-members/${productId}`),
+  /** Accès offert, sans paiement : cliente existante (`customerId`) ou compte à créer (`newCustomer`). */
+  grantTrainingAccess: (productId: string, body: { customerId?: string; newCustomer?: { firstName: string; lastName: string; email: string; phone: string } }) =>
+    request<any>(`/commerce/training-members/${productId}`, { method: 'POST', body }),
+  revokeTrainingAccess: (productId: string, grantId: string) =>
+    request<any>(`/commerce/training-members/${productId}/grants/${grantId}`, { method: 'DELETE' }),
   resendCustomerAccessLink: (id: string) => request<{ sent: boolean; expiresAt: string }>(`/commerce/customers/${id}/access-link`, { method: 'POST', body: {} }),
   commerceCommissions: () => request<any[]>('/commerce/commissions'),
   recalculateCommerceCommissions: () =>

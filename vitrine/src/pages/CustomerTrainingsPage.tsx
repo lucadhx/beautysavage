@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, CheckCircle2, ChevronLeft, ChevronRight, FileText, Loader2, MessageCircle, Package, Play, Trash2, UploadCloud, XCircle } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CheckCircle2, ChevronLeft, ChevronRight, FileText, Gift, Loader2, MessageCircle, Package, Play, Trash2, UploadCloud, XCircle } from 'lucide-react';
 import { customerApi } from '@/lib/api';
 import { useCustomer } from '@/context/CustomerContext';
 import { resolvePreviewMediaUrl } from '@/lib/media';
@@ -72,6 +72,11 @@ function TrainingList({ items, onOpen }: { items: Record<string, any>[]; onOpen:
                     <h2 className="min-w-0 break-words text-base font-semibold leading-snug sm:text-xl">{title}</h2>
                     <StatusPill item={item} />
                   </div>
+                  {item.manualAccess && (
+                    <p className="mt-1 inline-flex items-center gap-1.5 text-[11px] font-medium" style={{ color: 'var(--v-muted-foreground)' }} data-testid="manual-access">
+                      <Gift className="h-3.5 w-3.5" aria-hidden="true" /> Accès offert par l’institut
+                    </p>
+                  )}
                   {item.viaPack && (
                     <p className="mt-1 inline-flex items-center gap-1.5 text-[11px] font-medium" style={{ color: 'var(--v-muted-foreground)' }} data-testid="via-pack">
                       <Package className="h-3.5 w-3.5" aria-hidden="true" /> Incluse dans « {item.viaPack.title} »

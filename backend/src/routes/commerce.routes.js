@@ -4,6 +4,7 @@ import { authenticate, authorize } from '../middlewares/auth.middleware.js';
 import { authenticateCustomer, identifyCustomer } from '../middlewares/customerAuth.middleware.js';
 import { uploadImage, uploadTrainingDeliverable, translateUploadErrors } from '../middlewares/upload.middleware.js';
 import * as reviewPhotos from '../services/reviewPhotos.js';
+import * as trainingMembers from '../services/trainingMembers.service.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { ok, created } from '../utils/apiResponse.js';
 import { ROLES } from '../utils/constants.js';
@@ -155,6 +156,17 @@ managerCommerceRoutes.get('/sales', asyncHandler(async (_req, res) => ok(res, aw
 managerCommerceRoutes.get('/sales/:id/payment', asyncHandler(async (req, res) => ok(res, await commerce.getSalePaymentDetails(req.params.id))));
 managerCommerceRoutes.post('/sales/:id/refund', authorize(ROLES.ADMIN, ROLES.DEV), asyncHandler(async (req, res) => ok(res, await commerce.refundSale(req.params.id, req.body, req.user?._id || null))));
 managerCommerceRoutes.get('/customers', asyncHandler(async (_req, res) => ok(res, await commerce.listManagerCustomers())));
+/*
+  MEMBRES DES FORMATIONS EN LIGNE — qui y a accès (achat, pack, offert), et
+  l'ajout manuel par l'institut, sans paiement (voir trainingMembers.service).
+*/
+managerCommerceRoutes.get('/training-members', asyncHandler(async (_req, res) => ok(res, await trainingMembers.listTrainingsWithMembers())));
+managerCommerceRoutes.get('/training-members/:productId', asyncHandler(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  ok(res, await trainingMembers.listTrainingMembers(req.params.productId));
+}));
+managerCommerceRoutes.post('/training-members/:productId', authorize(ROLES.ADMIN, ROLES.DEV), asyncHandler(async (req, res) => created(res, await trainingMembers.grantTrainingAccess(req.params.productId, req.body, req.user?._id))));
+managerCommerceRoutes.delete('/training-members/:productId/grants/:grantId', authorize(ROLES.ADMIN, ROLES.DEV), asyncHandler(async (req, res) => ok(res, await trainingMembers.revokeTrainingAccess(req.params.productId, req.params.grantId, req.user?._id))));
 managerCommerceRoutes.post('/customers/:id/access-link', asyncHandler(async (req, res) => ok(res, await commerce.resendCustomerAccessLink(req.params.id))));
 managerCommerceRoutes.get('/commissions', asyncHandler(async (_req, res) => ok(res, await commerce.listCommissions())));
 managerCommerceRoutes.post('/commissions/recalculate', authorize(ROLES.ADMIN, ROLES.DEV), asyncHandler(async (_req, res) => ok(res, await commerce.recalculateMonthlyCommissions({ reprice: true }))));

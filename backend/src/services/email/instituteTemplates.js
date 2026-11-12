@@ -36,10 +36,25 @@ export const INSTITUTE_TEMPLATES = Object.freeze({
     subject: 'Votre espace client est prêt',
     preheader: 'Choisissez votre mot de passe pour y accéder.',
     title: 'Bienvenue !',
-    paragraphs: ['Bonjour {{clientFirstName}},', 'Nous avons créé votre espace client lors de votre réservation. Vous y retrouverez vos rendez-vous, vos achats et vos factures.', 'Choisissez votre mot de passe pour y accéder :'],
+    paragraphs: ['Bonjour {{clientFirstName}},', '{{accountIntro}}', 'Choisissez votre mot de passe pour y accéder :'],
     rows: [['Identifiant', '{{clientEmail}}']],
     cta: { label: 'Choisir mon mot de passe', url: '{{actionUrl}}' },
     note: 'Ce lien expire le {{expiresAt}}.',
+  },
+  /** Formation en ligne ouverte à la main par l'institut (sans achat sur le site). */
+  TRAINING_ACCESS_GRANTED_CLIENT: {
+    subject: 'Félicitations, vous avez accès à {{trainingTitle}}',
+    preheader: 'Votre formation en ligne vous attend dans votre espace client.',
+    title: 'Félicitations !',
+    paragraphs: [
+      'Bonjour {{clientFirstName}},',
+      'Bonne nouvelle : {{instituteName}} vous a ouvert l’accès à la formation en ligne « {{trainingTitle}} ».',
+      'Vous y retrouverez tous les modules, à suivre à votre rythme depuis votre espace client, sur ordinateur comme sur téléphone.',
+      '{{accountPendingText}}',
+    ],
+    rows: [['Formation', '{{trainingTitle}}'], ['Modules', '{{moduleCount}}'], ['Identifiant', '{{clientEmail}}']],
+    cta: { label: 'Accéder à ma formation', url: '{{trainingUrl}}' },
+    note: 'Une question sur la formation ? Répondez simplement à cet e-mail.',
   },
   COMMERCE_SALE_CONFIRMATION_CLIENT: {
     subject: 'Confirmation de votre commande {{saleNumber}}',

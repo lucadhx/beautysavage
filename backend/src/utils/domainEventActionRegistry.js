@@ -118,6 +118,16 @@ export const DOMAIN_EVENT_ACTION_REGISTRY = Object.freeze({
       description: "Remet au client dont l'institut a cree le compte le lien pour choisir son mot de passe.",
     },
   ],
+  'training.access.granted': [
+    {
+      actionId: 'send-customer-training-access-granted',
+      actionType: ACTION_TYPE.SEND_EMAIL,
+      enabled: true,
+      templateId: 'TRAINING_ACCESS_GRANTED_CLIENT',
+      recipientResolver: 'CUSTOMER_EMAIL',
+      description: "Annonce a la cliente que l'institut lui a ouvert l'acces a une formation en ligne.",
+    },
+  ],
   'training.submission.created': [
     {
       actionId: 'notify-admins-training-submission',

@@ -39,6 +39,7 @@ import {
   ClipboardList,
   UserRound,
   Package,
+  UserPlus,
 } from 'lucide-react';
 
 export interface NavItem {
@@ -67,6 +68,7 @@ export const NAV_ITEMS: NavItem[] = [
   { to: '/demandes-contact', label: 'Demandes de contact', icon: Inbox, section: 'manager', group: 'Activité', badge: 'contactUnread' },
   { to: '/commerce/formations', label: 'Formations', icon: GraduationCap, section: 'manager', group: 'Commerce' },
   { to: '/commerce/packs', label: 'Packs de formations', icon: Package, section: 'manager', group: 'Commerce' },
+  { to: '/commerce/membres-formations', label: 'Membres des formations', icon: UserPlus, section: 'manager', group: 'Commerce' },
   { to: '/commerce/prestations', label: 'Prestations', icon: Sparkles, section: 'manager', group: 'Commerce' },
   { to: '/commerce/collections', label: 'Collections', icon: Layers, section: 'manager', group: 'Commerce' },
   { to: '/commerce/calendrier', label: 'Calendrier', icon: CalendarDays, section: 'manager', group: 'Commerce' },
