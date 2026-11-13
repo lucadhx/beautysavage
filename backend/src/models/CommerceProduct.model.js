@@ -107,6 +107,8 @@ const commerceProductSchema = new mongoose.Schema(
     reviewRequest: { type: mongoose.Schema.Types.Mixed, default: null },
     /** Rappels avant rendez-vous / session : délais avant le début (voir appointmentReminder.service). */
     appointmentReminder: { type: mongoose.Schema.Types.Mixed, default: null },
+    /** « Bon à savoir » : une information par ligne (à noter, paiement en plusieurs fois…). */
+    additionalInfo: { type: [String], default: [] },
     /** Pack : les formations en ligne qu'il contient. */
     pack: {
       productIds: { type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'CommerceProduct' }], default: [] },

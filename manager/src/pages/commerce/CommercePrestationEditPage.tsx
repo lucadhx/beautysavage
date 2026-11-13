@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { AdditionalInfoEditor } from './AdditionalInfoEditor';
 import { useNavigate, useParams } from 'react-router-dom';
 import { AlignLeft, ArrowLeft, CalendarClock, CalendarDays, CalendarX, Clock, CreditCard, Euro, ImagePlus, Percent, Plus, RotateCcw, Settings2, Sparkles, Tag, Timer, Trash2, Users } from 'lucide-react';
 import { DragHandle, SortableList } from '@/components/ui/Sortable';
@@ -159,11 +160,13 @@ export default function CommercePrestationEditPage() {
           <div className="grid gap-4 md:grid-cols-2">
             <Field label="Nom de la prestation" icon={<Tag />} className="md:col-span-2"><Input value={product.title || ''} onChange={(e) => patch('title', e.target.value)} /></Field>
             <Field label="Durée" unit="minutes" icon={<Clock />}><Input type="number" min="5" step="5" value={product.durationMinutes || 0} onChange={(e) => patch('durationMinutes', Number(e.target.value || 0))} /></Field>
+            <Field label="Tenue" icon={<Sparkles />} hint="Chiffre clé de la fiche. Ex : 6 à 8 semaines. Vide = masqué."><Input value={read(product, 'service.longevity', '')} maxLength={80} placeholder="Ex : 3 à 4 semaines" onChange={(e) => patch('service.longevity', e.target.value)} data-testid="service-longevity" /></Field>
             <Field label="Capacité" unit="clientes en même temps" icon={<Users />}><Input type="number" min="1" value={read(product, 'service.capacity', 1)} onChange={(e) => patch('service.capacity', Number(e.target.value || 1))} /></Field>
             <CoverImageField value={product.coverUrl || ''} onChange={(url) => patch('coverUrl', url)} />
           </div>
           <Field label="Description courte" icon={<AlignLeft />} hint="Une phrase, affichée sur les cartes du catalogue."><Input value={product.subtitle || ''} onChange={(e) => patch('subtitle', e.target.value)} /></Field>
           <RichTextLite label="Description complète" value={product.description || ''} onChange={(value) => patch('description', value)} />
+          <AdditionalInfoEditor value={product.additionalInfo} onChange={(lines) => patch('additionalInfo', lines)} />
           <div className="flex items-center gap-3"><Switch checked={read(product, 'service.validated', false)} onChange={(v) => patch('service.validated', v)} label="Validée" /><span className="text-sm">Prestation validée pour publication</span></div>
         </ToneSection>
       )}

@@ -33,7 +33,7 @@ import { view as commissionView } from './commissionPayment.service.js';
 import { emitAppointmentsBooked, isPendingInstituteAccount, rotatePasswordResetToken, sendCustomerAccessLink } from './commerceCustomer.service.js';
 import { assertCustomerIdentity, missingIdentityFields } from './customerIdentity.js';
 import { assertBookingNotice } from './bookingNotice.js';
-import { normalizePack, publicModulesOutline } from './productExtras.js';
+import { normalizeAdditionalInfo, normalizePack, normalizeService, normalizeTraining, publicModulesOutline } from './productExtras.js';
 import { customerTrainingGrants } from './trainingAccess.js';
 import { normalizeReviewPhotos } from './reviewPhotos.js';
 import { emitAndDispatch } from './events/domainEvent.service.js';
@@ -98,6 +98,9 @@ function publicProduct(product) {
     // Pack : les formations contenues (détail ajouté par enrichPacks au catalogue, à la fiche et au panier).
     pack: product.kind === 'TRAINING_PACK' ? { productIds: (product.pack?.productIds || []).map(String), items: [], valueCents: 0 } : null,
     faq: publicFaq(product.faq),
+    // « Bon à savoir » : séparé de la description (à noter, conditions, paiement en plusieurs fois).
+    additionalInfo: Array.isArray(product.additionalInfo) ? product.additionalInfo.filter(Boolean) : [],
+    service: { longevity: String(product.service?.longevity || '') },
     consentRequirements: lineConsentRequirements(product),
     options: (product.options || []).filter((option) => option.active),
     sessions: (product.sessions || [])
@@ -120,6 +123,16 @@ function publicProduct(product) {
       location: product.training?.location || '',
       durationDays: product.training?.durationDays || null,
       dayHours: Array.isArray(product.training?.dayHours) ? product.training.dayHours : [],
+      // Chiffres clés et contenu structuré de la fiche (voir productExtras.normalizeTraining).
+      format: product.training?.format || '',
+      level: product.training?.level || '',
+      prerequisites: product.training?.prerequisites || '',
+      durationLabel: product.training?.durationLabel || '',
+      program: Array.isArray(product.training?.program) ? product.training.program : [],
+      includes: Array.isArray(product.training?.includes) ? product.training.includes : [],
+      // Infos pratiques : affichées sur la fiche (elles n'apparaissaient nulle part sur la vitrine).
+      formalities: product.training?.formalities || '',
+      cancellationPolicy: product.training?.cancellationPolicy || '',
     },
   };
 }
@@ -2819,11 +2832,13 @@ export async function upsertProduct(payload) {
     trailer: payload.trailer || {},
     whatsappGroup: payload.whatsappGroup || {},
     faq: Array.isArray(payload.faq) ? payload.faq : [],
-    training: payload.training || {},
+    training: normalizeTraining(payload.training),
     modules: Array.isArray(payload.modules) ? payload.modules : [],
     promotion: payload.promotion || {},
     evaluation: payload.evaluation || {},
-    service: payload.service || {},
+    service: normalizeService(payload.service),
+    // « Bon à savoir » : absent de la demande, la fiche garde le sien.
+    additionalInfo: payload.additionalInfo !== undefined ? normalizeAdditionalInfo(payload.additionalInfo) : (previous?.additionalInfo ?? []),
     paymentRules: payload.paymentRules || {},
     bookingRules: payload.bookingRules || {},
     // Demande d'avis : normalisée (unités, bornes) ; absente, la fiche garde la sienne.

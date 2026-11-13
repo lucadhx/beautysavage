@@ -232,3 +232,35 @@ h1, h2, h3, h4 {
 .v-prose a:hover {
   opacity: 0.75;
 }
+
+/*
+  LA DESCRIPTION D'UNE FICHE (2026-11-13) — dans sa carte ornée : texte
+  resserré pour le téléphone, première phrase en accroche dans la police des
+  titres. Prend le pas sur la taille de `.v-prose`.
+*/
+.v-description,
+.v-description.v-prose {
+  font-size: inherit;
+  line-height: inherit;
+  color: color-mix(in srgb, var(--v-foreground) 84%, var(--v-background));
+}
+.v-description p {
+  margin: 0 0 0.65em;
+}
+.v-description > p:first-child,
+.v-description > div:first-child {
+  font-family: var(--font-heading, inherit);
+  font-size: 1.06em;
+  color: var(--v-foreground);
+}
+.v-description ul,
+.v-description ol {
+  margin: 0.3em 0 0.75em;
+  padding-left: 1.1em;
+}
+.v-description li {
+  margin: 0.15em 0;
+}
+.v-description li::marker {
+  color: var(--v-accent);
+}

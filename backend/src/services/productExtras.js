@@ -29,6 +29,85 @@ export function publicModulesOutline(modules) {
   }));
 }
 
+/* ── La fiche structurée (2026-11-13) ─────────────────────────────────────── */
+
+/**
+ * CE QUI ÉTAIT NOYÉ DANS LA DESCRIPTION, RANGÉ EN DONNÉES.
+ *
+ * Les fiches portaient tout dans un seul texte : programme, « ta formation
+ * comprend », durée, niveau, prérequis, paiement en 3 fois, « à noter »… La
+ * vitrine ne pouvait ni les mettre en page, ni les présenter en chiffres clés.
+ * Chaque information a désormais sa place, saisie dans le Manager :
+ *
+ *   · training.format / level / prerequisites / durationLabel — chiffres clés ;
+ *   · training.program  — le programme, en parties (« Cil à cil », « Volume
+ *                         russe ») ou en une seule liste ;
+ *   · training.includes — « Ta formation comprend », chaque élément avec un
+ *                         pictogramme choisi dans une liste fermée ;
+ *   · service.longevity — la tenue d'une prestation (« 6 à 8 semaines ») ;
+ *   · additionalInfo    — « Bon à savoir », pour toute fiche (à noter, paiement
+ *                         en plusieurs fois, conditions d'un remplissage…).
+ */
+
+export const INCLUDE_ICONS = Object.freeze(['livret', 'certificat', 'suivi', 'video', 'acces', 'maj', 'appel', 'kit', 'pause', 'etoile']);
+export const DETAILS_LIMITS = Object.freeze({ sections: 8, itemsPerSection: 20, includes: 12, text: 200, title: 80 });
+
+const clean = (value, max) => String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
+
+/** Le programme : des parties, chacune une liste de points (une partie sans titre = liste simple). */
+export function normalizeProgram(raw) {
+  return (Array.isArray(raw) ? raw : [])
+    .map((section) => ({
+      title: clean(section?.title, DETAILS_LIMITS.title),
+      items: (Array.isArray(section?.items) ? section.items : [])
+        .map((item) => clean(item, DETAILS_LIMITS.text))
+        .filter(Boolean)
+        .slice(0, DETAILS_LIMITS.itemsPerSection),
+    }))
+    .filter((section) => section.items.length)
+    .slice(0, DETAILS_LIMITS.sections);
+}
+
+/** « Ta formation comprend » : un libellé et un pictogramme de la liste fermée. */
+export function normalizeIncludes(raw) {
+  return (Array.isArray(raw) ? raw : [])
+    .map((item) => {
+      const label = clean(typeof item === 'string' ? item : item?.label, DETAILS_LIMITS.text);
+      const icon = INCLUDE_ICONS.includes(item?.icon) ? item.icon : 'etoile';
+      return { icon, label };
+    })
+    .filter((item) => item.label)
+    .slice(0, DETAILS_LIMITS.includes);
+}
+
+/** Le bloc `training` : les champs existants intacts, les nouveaux ramenés à des valeurs sûres. */
+export function normalizeTraining(raw) {
+  const training = raw && typeof raw === 'object' && !Array.isArray(raw) ? { ...raw } : {};
+  training.format = clean(training.format, DETAILS_LIMITS.title);
+  training.level = clean(training.level, DETAILS_LIMITS.title);
+  training.prerequisites = clean(training.prerequisites, DETAILS_LIMITS.text);
+  training.durationLabel = clean(training.durationLabel, DETAILS_LIMITS.title);
+  training.program = normalizeProgram(training.program);
+  training.includes = normalizeIncludes(training.includes);
+  return training;
+}
+
+/** Le bloc `service` : la tenue s'ajoute aux réglages existants. */
+export function normalizeService(raw) {
+  const service = raw && typeof raw === 'object' && !Array.isArray(raw) ? { ...raw } : {};
+  service.longevity = clean(service.longevity, DETAILS_LIMITS.title);
+  return service;
+}
+
+/** « Bon à savoir » : une information par ligne, 12 au plus (même règle que melinails). */
+export function normalizeAdditionalInfo(value) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((line) => String(line ?? '').replace(/\s+/g, ' ').trim().slice(0, 400))
+    .filter(Boolean)
+    .slice(0, 12);
+}
+
 /* ── Les packs de formations en ligne ──────────────────────────────────────── */
 
 export const PACK_LIMITS = Object.freeze({ minTrainings: 2, maxTrainings: 12 });

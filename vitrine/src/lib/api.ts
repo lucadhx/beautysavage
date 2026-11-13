@@ -133,7 +133,23 @@ export interface CommerceProduct {
   consentRequirements?: { key: string; label: string; required: boolean }[];
   homeFeatured?: boolean;
   homeFeaturedRank?: number | null;
-  training?: { location?: string; durationDays?: number | null };
+  training?: {
+    location?: string;
+    durationDays?: number | null;
+    dayHours?: { start: string; end: string }[];
+    /** Chiffres clés et contenu structuré (Manager → Programme & contenu). */
+    format?: string;
+    level?: string;
+    prerequisites?: string;
+    durationLabel?: string;
+    program?: { title: string; items: string[] }[];
+    includes?: { icon: string; label: string }[];
+    formalities?: string;
+    cancellationPolicy?: string;
+  };
+  /** « Bon à savoir » : une information par ligne, séparée de la description. */
+  additionalInfo?: string[];
+  service?: { longevity?: string };
 }
 
 export type OrderLineInput = {

@@ -22,8 +22,10 @@ import { FormationHoursTab, formationDayTemplate } from './FormationHoursTab';
 import { FloatingSaveWidget } from '@/components/ui/FloatingSaveWidget';
 import { useFloatingSave } from '@/hooks/useFloatingSave';
 import { useGuardedNavigate } from '@/components/LeaveGuard';
+import { TrainingDetailsEditor } from './TrainingDetailsEditor';
+import { AdditionalInfoEditor } from './AdditionalInfoEditor';
 
-type TabId = 'infos' | 'horaires' | 'modules' | 'sessions' | 'promotion' | 'options' | 'evaluation' | 'reviews' | 'reminders';
+type TabId = 'infos' | 'programme' | 'horaires' | 'modules' | 'sessions' | 'promotion' | 'options' | 'evaluation' | 'reviews' | 'reminders';
 
 const EMPTY: Partial<CommerceProduct> = {
   title: '',
@@ -154,6 +156,7 @@ export default function CommerceFormationEditPage() {
   const distanciel = kind === 'DISTANCE_TRAINING';
   const tabs = [
     { id: 'infos', label: 'Informations', tone: 'infos' },
+    { id: 'programme', label: 'Programme & contenu', tone: 'modules' },
     ...(distanciel ? [] : [{ id: 'horaires' as const, label: 'Horaires', tone: 'sessions' as const }]),
     distanciel ? { id: 'modules', label: 'Modules pédagogiques', tone: 'modules' } : { id: 'sessions', label: 'Planning des sessions', tone: 'sessions' },
     { id: 'promotion', label: 'Promotion', tone: 'promotion' },
@@ -293,12 +296,21 @@ export default function CommerceFormationEditPage() {
                 <Field label="Politique d'annulation" icon={<CalendarX />}><Textarea value={readPath(product, 'training.cancellationPolicy', '')} onChange={(e) => patch('training.cancellationPolicy', e.target.value)} /></Field>
               </div>
             )}
+            <AdditionalInfoEditor subject="la formation" value={product.additionalInfo} onChange={(lines) => patch('additionalInfo', lines)} />
             <ToneSection tone="faq" level="nested" title="FAQ" description="Affichée sous la fiche, dans « Questions fréquentes ». Faites glisser la poignée pour changer l'ordre.">
               <Repeater title="Questions" rows={array('faq')} onChange={(rows) => setArray('faq', rows)} empty={{ question: '', answer: '' }} fields={[['question', 'Question'], ['answer', 'Réponse']]} multilineKeys={['answer']} />
             </ToneSection>
             <PreviewCard product={product} />
             <ProductSeoSection productId={creation ? null : id} seo={product.seo} onChange={(seo) => patch('seo', seo)} />
         </ToneSection>
+      )}
+
+      {tab === 'programme' && (
+        <TrainingDetailsEditor
+          training={(product.training || {}) as Record<string, unknown>}
+          distanciel={distanciel}
+          onPatch={(key, value) => patch(`training.${key}`, value)}
+        />
       )}
 
       {tab === 'modules' && distanciel && (

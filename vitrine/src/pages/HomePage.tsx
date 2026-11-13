@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { ReviewPhotos } from '@/components/ReviewPhotoPicker';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, BadgeCheck, CheckCircle2, GraduationCap, PawPrint } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CheckCircle2, Gift, PawPrint } from 'lucide-react';
 import { useSiteData } from '@/context/SiteDataContext';
 import type { Company } from '@/types';
 import { ArchPortrait, aboutPageReady } from '@/components/about/AboutContent';
@@ -75,8 +75,9 @@ export default function HomePage() {
                 <Link to="/prestations" className="inline-flex items-center gap-2 rounded-md bg-white px-3 py-2 text-xs font-semibold text-black sm:px-6 sm:py-3 sm:text-sm">
                   Réserver une prestation
                 </Link>
-                <Link to="/cartes-cadeaux" className="inline-flex items-center gap-2 rounded-md border border-white/45 px-3 py-2 text-xs font-semibold text-white sm:px-6 sm:py-3 sm:text-sm">
-                  Offrir une carte cadeau
+                {/* Secondaire : sans bordure, une icône — l'offre reste visible sans concurrencer les deux actions principales. */}
+                <Link to="/cartes-cadeaux" className="inline-flex items-center gap-1.5 px-1.5 py-2 text-xs font-semibold text-white/90 underline-offset-4 transition hover:text-white hover:underline sm:gap-2 sm:px-3 sm:py-3 sm:text-sm" data-testid="hero-gift">
+                  <Gift className="h-4 w-4" style={{ color: 'var(--v-accent)' }} /> Offrir une carte cadeau
                 </Link>
               </div>
               <TrainingDeclarationBadge declaration={company?.trainingDeclaration} />
@@ -363,18 +364,26 @@ function formatNda(raw: string) {
 function TrainingDeclarationBadge({ declaration }: { declaration?: { number: string; region: string } }) {
   const number = declaration?.number?.trim();
   if (!number) return null;
+  /*
+    UNE MENTION, PAS UNE CARTE (2026-11-13) : un sceau fin dessiné au trait,
+    puis deux lignes de texte. Discret et premium — la crédibilité sans
+    l'encart blanc qui alourdissait la bannière.
+  */
   return (
-    <div className="mt-4 max-w-xl sm:mt-8" data-testid="nda-badge">
-      <div className="inline-flex items-center gap-2 rounded-lg border border-white/35 bg-white/95 px-2.5 py-1.5 text-left text-black shadow-lg backdrop-blur sm:gap-3 sm:px-4 sm:py-3">
-        <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full sm:h-11 sm:w-11" style={{ background: 'var(--v-accent)', color: '#111111' }}>
-          <GraduationCap className="h-4 w-4 sm:h-6 sm:w-6" aria-hidden />
+    <div className="mt-4 flex items-center gap-2.5 sm:mt-8 sm:gap-3" data-testid="nda-badge">
+      <svg viewBox="0 0 40 40" className="h-8 w-8 shrink-0 sm:h-10 sm:w-10" aria-hidden="true" style={{ color: 'var(--v-accent)' }}>
+        <circle cx="20" cy="20" r="18.5" fill="none" stroke="currentColor" strokeWidth="0.9" strokeDasharray="1.6 2.4" />
+        <circle cx="20" cy="20" r="14.5" fill="none" stroke="currentColor" strokeWidth="1" />
+        <path d="M13.5 18.2 20 15l6.5 3.2L20 21.4z" fill="currentColor" />
+        <path d="M16.2 19.6v3.3c1.2 1.1 2.4 1.6 3.8 1.6s2.6-.5 3.8-1.6v-3.3" fill="none" stroke="currentColor" strokeWidth="1.1" strokeLinejoin="round" />
+        <path d="M26.5 18.2v4.4" stroke="currentColor" strokeWidth="1" strokeLinecap="round" />
+      </svg>
+      <p className="min-w-0 leading-tight">
+        <span className="block text-[9px] font-semibold uppercase tracking-[0.22em] sm:text-[11px]" style={{ color: 'var(--v-accent)' }}>Organisme de formation déclaré</span>
+        <span className="mt-0.5 block text-[13px] font-medium tracking-[0.04em] text-white/90 sm:text-base" style={{ fontFamily: 'var(--font-heading)' }}>
+          NDA <span className="tabular-nums">{formatNda(number)}</span>
         </span>
-        <span className="min-w-0">
-          <span className="block text-[9px] font-semibold uppercase tracking-[0.14em] text-black/60 sm:text-[11px] sm:tracking-[0.16em]">Organisme de formation déclaré</span>
-          <span className="block text-sm font-semibold tabular-nums sm:text-lg">NDA {formatNda(number)}</span>
-        </span>
-        <BadgeCheck className="h-4 w-4 shrink-0 text-emerald-600 sm:h-5 sm:w-5" aria-hidden />
-      </div>
+      </p>
     </div>
   );
 }

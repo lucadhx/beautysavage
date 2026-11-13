@@ -28,6 +28,8 @@ export interface CommerceProduct {
   trailer?: Record<string, unknown>;
   whatsappGroup?: Record<string, unknown>;
   faq?: Record<string, unknown>[];
+  /** « Bon à savoir » : une information par ligne. */
+  additionalInfo?: string[];
   training?: Record<string, unknown>;
   modules?: Record<string, unknown>[];
   promotion?: Record<string, unknown>;

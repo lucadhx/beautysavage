@@ -6,7 +6,6 @@ import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, CalendarDays, Check, CheckCi
 import { QUICK_BUY_LINE_ID, commerceApi, customerApi, type ApiFailure, type CommerceProduct, type OrderLineInput, type SlotSegment } from '@/lib/api';
 import { useCustomer } from '@/context/CustomerContext';
 import { resolvePreviewMediaUrl } from '@/lib/media';
-import { RichDescription } from '@/components/RichDescription';
 import { durationText } from '@/components/CommerceProductCard';
 import { PromoBadge, PromoPrice, PromotionCountdown } from '@/components/Promotion';
 import { BookingMonthCalendar, type Slot } from '@/components/BookingMonthCalendar';
@@ -21,6 +20,7 @@ import { ServicePicker } from '@/components/ServicePicker';
 import { instituteFormat, instituteTime } from '@/lib/instituteTime';
 import { BookingNotices } from '@/components/BookingNotices';
 import { PackContents } from '@/components/PackContents';
+import { DescriptionCard, GoodToKnow, IncludesSection, KeyFacts, PracticalInfo, ProgramSection } from '@/components/ProductDetails';
 import { IdentityFields, identityComplete, identityOf, phoneOk, type Identity } from '@/components/account/IdentityFields';
 
 const formatter = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' });
@@ -228,7 +228,7 @@ export default function ProductPage() {
     <section className="mx-auto min-h-screen max-w-6xl px-4 pb-16 pt-20 sm:px-5 sm:pb-24 sm:pt-32 md:px-8">
       <div className="grid gap-5 sm:gap-10 lg:grid-cols-[minmax(0,1.05fr)_minmax(360px,0.95fr)] lg:items-start">
         <div className="min-w-0">
-          <div className="relative mb-4 overflow-hidden rounded-lg border sm:mb-7" style={{ borderColor: 'var(--v-border)', background: 'var(--v-surface)' }}>
+          <div className={`relative mb-4 overflow-hidden rounded-lg border sm:mb-7 ${product.kind === 'GIFT_CARD' ? 'hidden lg:block' : ''}`} style={{ borderColor: 'var(--v-border)', background: 'var(--v-surface)' }}>
             <PromoBadge product={product} large />
             {coverUrl ? (
               <img src={coverUrl} alt={product.title} className="aspect-[4/3] w-full object-cover sm:aspect-square" />
@@ -259,16 +259,9 @@ export default function ProductPage() {
         <aside className="rounded-lg border p-4 sm:p-5" style={{ borderColor: 'var(--v-border)', background: 'var(--v-surface)' }}>
           <p className="text-[11px] font-semibold uppercase tracking-[0.16em] sm:text-xs sm:tracking-[0.18em]" style={{ color: 'var(--v-accent)' }}>{kindLabel(product.kind)}</p>
           <h1 className="mt-1.5 text-2xl font-semibold leading-tight tracking-normal sm:mt-4 sm:text-4xl md:text-5xl">{product.title}</h1>
-          <RichDescription value={product.description} className="mt-3 text-sm leading-6 sm:mt-4 sm:text-base sm:leading-7" style={{ color: 'var(--v-muted-foreground)' }} />
-          <div className="mt-6 grid gap-3">
-            {product.requiresLegalWaiver && <Line text="Accès confirmé après acceptation des conditions de formation." />}
-            {product.kind === 'DISTANCE_TRAINING' && <Line text="Accès aux modules depuis votre espace client après achat." />}
-            {product.kind === 'TRAINING_PACK' && <Line text={`${product.pack?.items?.length || product.pack?.productIds?.length || 0} formations en ligne, accessibles dès l’achat depuis votre espace client.`} />}
-            {product.kind === 'IN_PERSON_TRAINING' && product.training?.durationDays ? <Line text={`Durée : ${product.training.durationDays} jour${product.training.durationDays > 1 ? 's' : ''} en institut.`} /> : null}
-            {product.kind === 'IN_PERSON_TRAINING' && <Line text={`Places limitées, ${product.sessions.length} session(s) à venir.`} />}
-            {product.kind === 'SERVICE' && product.durationMinutes ? <Line text={`Durée : ${durationText(product.durationMinutes)}`} /> : null}
-          </div>
-          <div className="mt-6">
+          {/* Chiffres clés : durée, format, niveau, prérequis, tenue — repris du Manager, pas de la description. */}
+          <KeyFacts product={product} />
+          <div className="mt-4 sm:mt-6">
             {product.kind === 'GIFT_CARD' ? <div className="text-3xl font-semibold">{displayPrice}</div> : <PromoPrice product={product} size="page" />}
           </div>
           <PromotionCountdown product={product} onEnded={onPromoEnded} />
@@ -334,6 +327,18 @@ export default function ProductPage() {
             )}
           </AnimatePresence>
           {message && <p className="mt-4 text-sm" style={{ color: 'var(--v-muted-foreground)' }}>{message}</p>}
+          <div className="mt-3 grid gap-1.5">
+            {product.requiresLegalWaiver && <Line text="Accès confirmé après acceptation des conditions de formation." />}
+            {product.kind === 'DISTANCE_TRAINING' && <Line text="Accès aux modules depuis votre espace client après achat." />}
+            {product.kind === 'TRAINING_PACK' && <Line text={`${product.pack?.items?.length || product.pack?.productIds?.length || 0} formations en ligne, accessibles dès l’achat depuis votre espace client.`} />}
+            {product.kind === 'IN_PERSON_TRAINING' && product.sessions.length > 0 && <Line text={`Places limitées, ${product.sessions.length} session${product.sessions.length > 1 ? 's' : ''} à venir.`} />}
+          </div>
+          {/* Le détail APRÈS les boutons : on décide vite, on lit si on veut (téléphone d'abord). */}
+          <DescriptionCard product={product} />
+          <ProgramSection product={product} />
+          <IncludesSection product={product} />
+          <PracticalInfo product={product} />
+          <GoodToKnow product={product} />
         </aside>
       </div>
       {product.kind === 'SERVICE' && gallery.length > 0 && (
@@ -515,6 +520,29 @@ function LazyStreamablePlayer({ shortcode, title, coverUrl }: { shortcode: strin
   );
 }
 
+/**
+ * LA CARTE CADEAU, PARCOURS GUIDÉ (2026-11-13) — trois gestes, une seule vue :
+ * le montant (pastilles + montant libre), les prénoms (côte à côte), un mot
+ * (suggestions en un toucher). L'aperçu au-dessus se remplit en direct :
+ * on voit la carte qu'on offre. Compact sur téléphone : tout tient avant le bouton.
+ */
+const GIFT_PRESETS = [50, 80, 100, 150, 200];
+const GIFT_WORDS = ['Joyeux anniversaire 🤍', 'Prends soin de toi ✨', 'Merci pour tout', 'Un moment rien qu’à toi'];
+
+function GiftStep({ n, title, done, children }: { n: number; title: string; done: boolean; children: React.ReactNode }) {
+  return (
+    <div className="grid gap-2">
+      <p className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em]">
+        <span className="grid h-5 w-5 place-items-center rounded-full text-[10px] tabular-nums transition-colors" style={done ? { background: 'var(--v-accent)', color: '#111' } : { border: '1px solid var(--v-border)' }}>
+          {done ? <Check className="h-3 w-3" /> : n}
+        </span>
+        {title}
+      </p>
+      {children}
+    </div>
+  );
+}
+
 function GiftCardConfigurator({
   value,
   minimumEuros,
@@ -527,31 +555,69 @@ function GiftCardConfigurator({
   const amountEuros = Math.max(minimumEuros, Number(value.amountEuros || 0));
   const amount = formatter.format(amountEuros);
   const change = (patch: Partial<typeof value>) => onChange({ ...value, ...patch });
+  const presets = GIFT_PRESETS.filter((v) => v >= minimumEuros);
+  const [editing, setEditing] = React.useState(() => !presets.includes(Number(value.amountEuros)));
+  const namesDone = Boolean(value.senderName.trim() && value.recipientName.trim());
   return (
-    <div className="mt-6 grid gap-4">
-      <GiftCardPreview sender={value.senderName} recipient={value.recipientName} amount={amount} message={value.message} />
-      <div className="grid gap-3">
-        <label className="grid gap-1 text-sm font-medium">
-          Montant
-          <input className="v-field rounded-md px-3 py-3" type="number" min={minimumEuros || 0} step="1" value={value.amountEuros} onBlur={(e) => change({ amountEuros: String(Math.max(minimumEuros, Number(e.target.value || 0))) })} onChange={(e) => change({ amountEuros: e.target.value })} />
-        </label>
-        <label className="grid gap-1 text-sm font-medium">
-          De la part de
-          <input className="v-field rounded-md px-3 py-3" maxLength={32} value={value.senderName} onChange={(e) => change({ senderName: e.target.value.slice(0, 32) })} />
-        </label>
-        <label className="grid gap-1 text-sm font-medium">
-          Pour
-          <input className="v-field rounded-md px-3 py-3" maxLength={32} value={value.recipientName} onChange={(e) => change({ recipientName: e.target.value.slice(0, 32) })} />
-        </label>
-        <label className="grid gap-1 text-sm font-medium">
-          Message
-          <textarea className="v-field min-h-20 rounded-md px-3 py-3" maxLength={240} value={value.message} onChange={(e) => change({ message: e.target.value.slice(0, 240) })} />
-        </label>
-        <div className="flex items-center gap-2 text-xs" style={{ color: 'var(--v-muted-foreground)' }}>
-          <Gift className="h-4 w-4" />
-          <span>Le PDF final est généré après validation du paiement.</span>
+    <div className="mt-4 grid gap-4" data-testid="gift-configurator">
+      <motion.div initial={{ rotate: -1.5, y: 6, opacity: 0 }} animate={{ rotate: 0, y: 0, opacity: 1 }} transition={{ type: 'spring', stiffness: 200, damping: 20 }} className="rounded-xl shadow-[0_18px_40px_-18px_rgba(0,0,0,0.45)]">
+        <GiftCardPreview sender={value.senderName} recipient={value.recipientName} amount={amount} message={value.message} />
+      </motion.div>
+
+      <GiftStep n={1} title="Le montant" done={amountEuros > 0}>
+        <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Montant de la carte">
+          {presets.map((v) => {
+            const on = !editing && Number(value.amountEuros) === v;
+            return (
+              <button key={v} type="button" role="radio" aria-checked={on} onClick={() => { setEditing(false); change({ amountEuros: String(v) }); }}
+                className="h-10 min-w-[3.6rem] rounded-full border px-3 text-sm font-semibold tabular-nums transition"
+                style={on ? { background: 'var(--v-foreground)', borderColor: 'var(--v-foreground)', color: 'var(--v-background)' } : { borderColor: 'var(--v-border)' }}
+                data-testid="gift-amount-preset">
+                {v} €
+              </button>
+            );
+          })}
+          <button type="button" onClick={() => setEditing(true)} className="h-10 rounded-full border px-3 text-sm font-semibold transition"
+            style={editing ? { background: 'var(--v-foreground)', borderColor: 'var(--v-foreground)', color: 'var(--v-background)' } : { borderColor: 'var(--v-border)' }}
+            data-testid="gift-amount-custom">
+            Autre
+          </button>
         </div>
-      </div>
+        {editing && (
+          <label className="relative block">
+            <input autoFocus className="v-field w-full rounded-full py-2.5 pl-4 pr-10 text-sm tabular-nums" type="number" inputMode="numeric" min={minimumEuros || 1} step="1"
+              value={value.amountEuros} aria-label="Montant libre en euros"
+              onBlur={(e) => change({ amountEuros: String(Math.max(minimumEuros, Number(e.target.value || 0))) })}
+              onChange={(e) => change({ amountEuros: e.target.value })} data-testid="gift-amount-input" />
+            <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-sm" style={{ color: 'var(--v-muted-foreground)' }}>€</span>
+          </label>
+        )}
+        {minimumEuros > 0 && <p className="text-[11px]" style={{ color: 'var(--v-muted-foreground)' }}>À partir de {formatter.format(minimumEuros)}.</p>}
+      </GiftStep>
+
+      <GiftStep n={2} title="De la part de… pour…" done={namesDone}>
+        <div className="grid grid-cols-2 gap-2">
+          <input className="v-field min-w-0 rounded-xl px-3 py-2.5 text-sm" maxLength={32} placeholder="Votre prénom" aria-label="De la part de" value={value.senderName} onChange={(e) => change({ senderName: e.target.value.slice(0, 32) })} data-testid="gift-sender" />
+          <input className="v-field min-w-0 rounded-xl px-3 py-2.5 text-sm" maxLength={32} placeholder="Son prénom" aria-label="Pour" value={value.recipientName} onChange={(e) => change({ recipientName: e.target.value.slice(0, 32) })} data-testid="gift-recipient" />
+        </div>
+      </GiftStep>
+
+      <GiftStep n={3} title="Un petit mot (facultatif)" done={Boolean(value.message.trim())}>
+        <div className="no-scrollbar -mx-1 flex gap-1.5 overflow-x-auto px-1">
+          {GIFT_WORDS.map((w) => (
+            <button key={w} type="button" onClick={() => change({ message: w })} className="shrink-0 rounded-full px-3 py-1.5 text-xs" style={{ background: 'color-mix(in srgb, var(--v-accent) 12%, transparent)' }} data-testid="gift-word">{w}</button>
+          ))}
+        </div>
+        <div className="relative">
+          <textarea className="v-field min-h-[3.75rem] w-full rounded-xl px-3 py-2.5 text-sm" rows={2} maxLength={120} placeholder="Écrivez votre message…" value={value.message} onChange={(e) => change({ message: e.target.value.slice(0, 120) })} data-testid="gift-message" />
+          <span className="pointer-events-none absolute bottom-2 right-3 text-[10px] tabular-nums" style={{ color: 'var(--v-muted-foreground)' }}>{value.message.length}/120</span>
+        </div>
+      </GiftStep>
+
+      <ul className="grid gap-1 rounded-xl px-3 py-2.5 text-[12px]" style={{ background: 'color-mix(in srgb, var(--v-foreground) 4%, transparent)', color: 'var(--v-muted-foreground)' }} data-testid="gift-reassurance">
+        <li className="flex items-center gap-2"><Gift className="h-3.5 w-3.5 shrink-0" style={{ color: 'var(--v-accent)' }} /> Carte PDF envoyée par e-mail dès le paiement validé.</li>
+        <li className="flex items-center gap-2"><CheckCircle2 className="h-3.5 w-3.5 shrink-0" style={{ color: 'var(--v-accent)' }} /> À imprimer ou à transférer, utilisable sur les prestations de l’institut.</li>
+      </ul>
     </div>
   );
 }
@@ -1001,8 +1067,20 @@ function BookingDialog({
                 </div>
               ) : (
               <div className="rounded-md border p-4" style={{ borderColor: 'var(--v-border)' }}>
-                <p className="font-semibold">{product.title}</p>
-                <p className="mt-1 text-sm" style={{ color: 'var(--v-muted-foreground)' }}>{detail}</p>
+                {product.kind === 'GIFT_CARD' ? (
+                  <div className="flex items-center gap-3" data-testid="gift-pay-recap">
+                    <img src={GIFT_CARD_IMAGE} alt="" className="h-12 w-16 shrink-0 rounded object-cover shadow-sm" />
+                    <div className="min-w-0">
+                      <p className="font-semibold">{product.title}</p>
+                      <p className="text-sm" style={{ color: 'var(--v-muted-foreground)' }}>{detail} · PDF envoyé par e-mail après paiement</p>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <p className="font-semibold">{product.title}</p>
+                    <p className="mt-1 text-sm" style={{ color: 'var(--v-muted-foreground)' }}>{detail}</p>
+                  </>
+                )}
                 {needsChoice && (
                   <p className="mt-2 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium" style={{ background: 'color-mix(in srgb, var(--v-accent) 14%, transparent)' }} data-testid="hold-notice">
                     <Clock className="h-3.5 w-3.5" /> {product.kind === 'SERVICE' ? 'Ce créneau vous est réservé 30 minutes, le temps de régler.' : 'Votre place vous est réservée 30 minutes, le temps de régler.'}
@@ -1177,8 +1255,8 @@ function kindLabel(kind: CommerceProduct['kind']) {
 
 function Line({ text }: { text: string }) {
   return (
-    <div className="flex items-center gap-3 text-sm">
-      <CheckCircle2 className="h-4 w-4" style={{ color: 'var(--v-accent)' }} />
+    <div className="flex items-center gap-2 text-xs" style={{ color: 'var(--v-muted-foreground)' }}>
+      <CheckCircle2 className="h-3.5 w-3.5 shrink-0" style={{ color: 'var(--v-accent)' }} />
       <span>{text}</span>
     </div>
   );
