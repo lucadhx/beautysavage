@@ -370,7 +370,8 @@ function TrainingDeclarationBadge({ declaration }: { declaration?: { number: str
     l'encart blanc qui alourdissait la bannière.
   */
   return (
-    <div className="mt-4 flex items-center gap-2.5 sm:mt-8 sm:gap-3" data-testid="nda-badge">
+    // Une ombre portée douce sous le sceau et le texte : lisibles sur n'importe quelle photo de bannière.
+    <div className="mt-4 flex items-center gap-2.5 sm:mt-8 sm:gap-3" style={{ filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.55)) drop-shadow(0 3px 10px rgba(0,0,0,0.45))' }} data-testid="nda-badge">
       <svg viewBox="0 0 40 40" className="h-8 w-8 shrink-0 sm:h-10 sm:w-10" aria-hidden="true" style={{ color: 'var(--v-accent)' }}>
         <circle cx="20" cy="20" r="18.5" fill="none" stroke="currentColor" strokeWidth="0.9" strokeDasharray="1.6 2.4" />
         <circle cx="20" cy="20" r="14.5" fill="none" stroke="currentColor" strokeWidth="1" />
