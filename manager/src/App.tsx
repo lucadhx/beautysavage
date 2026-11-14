@@ -6,13 +6,13 @@ import { RequireAuth, RequireDev } from '@/components/RouteGuards';
 import SignatureReturnPage from '@/pages/SignatureReturnPage';
 import { ContactUnreadProvider } from '@/context/ContactUnreadContext';
 import { Spinner } from '@/components/ui/primitives';
+import { mayReloadForMissingChunk } from '@/lib/versionWatch';
 
 function lazyPage<T extends { default: React.ComponentType<any> }>(loader: () => Promise<T>) {
   return React.lazy(() => loader().catch((err) => {
     const message = String(err?.message || err || '');
     const chunkMissing = /Failed to fetch dynamically imported module|Importing a module script failed|Loading chunk/i.test(message);
-    if (chunkMissing && sessionStorage.getItem('manager.chunk.reload') !== 'done') {
-      sessionStorage.setItem('manager.chunk.reload', 'done');
+    if (chunkMissing && mayReloadForMissingChunk()) {
       window.location.reload();
       return new Promise<T>(() => undefined);
     }

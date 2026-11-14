@@ -7,6 +7,7 @@ import { SuspensionBanner } from './SuspensionBanner';
 import { useCompany } from '@/context/CompanyContext';
 import { resolvePreviewMediaUrl } from '@/lib/media';
 import { useScrollLock } from '@/lib/scrollLock';
+import { useNewVersionAvailable } from '@/lib/versionWatch';
 import { PageSkeleton } from '@/components/ui/Skeleton';
 
 /**
@@ -78,6 +79,19 @@ export function AppLayout() {
   React.useLayoutEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: 'instant' as ScrollBehavior });
   }, [pathname]);
+
+  /*
+    VERSION PÉRIMÉE — voir lib/versionWatch. Une nouvelle version en ligne : un
+    bandeau le dit, et le prochain changement de page se fait par un vrai
+    chargement (la garde de sortie a déjà protégé un formulaire non enregistré),
+    ce qui remet à jour le menu sans que personne n'ait à y penser.
+  */
+  const stale = useNewVersionAvailable();
+  const firstPath = React.useRef(pathname);
+  React.useEffect(() => {
+    if (stale && pathname !== firstPath.current) window.location.assign(window.location.pathname + window.location.search);
+    firstPath.current = pathname;
+  }, [pathname, stale]);
 
   return (
     <div className="flex min-h-[var(--m-viewport-h)] bg-background">
@@ -153,6 +167,14 @@ export function AppLayout() {
         */}
         <header className="sticky top-0 z-30 bg-background">
           <SuspensionBanner />
+          {stale && (
+            <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 border-b border-border bg-primary/10 px-4 py-2 text-center text-sm" role="status" data-testid="new-version-banner">
+              <span>Une nouvelle version du Manager est disponible.</span>
+              <button type="button" onClick={() => window.location.reload()} className="font-semibold underline underline-offset-2">
+                Actualiser
+              </button>
+            </div>
+          )}
           <div className="flex items-center gap-3 border-b border-border px-4 py-3 md:hidden">
             <button
               onClick={() => setMobileOpen(true)}
