@@ -255,7 +255,7 @@ export default function ProductPage() {
                   <span className="absolute h-[72px] w-[72px] rounded-full opacity-40 motion-safe:animate-ping sm:h-24 sm:w-24" style={{ background: 'var(--v-accent)', animationDuration: '2.4s' }} />
                   <span className="absolute h-[88px] w-[88px] rounded-full border sm:h-[116px] sm:w-[116px]" style={{ borderColor: 'rgba(255,255,255,0.55)' }} />
                   <span
-                    className="relative grid h-[72px] w-[72px] place-items-center rounded-full shadow-[0_10px_30px_rgba(0,0,0,0.35)] transition-transform duration-300 group-hover:scale-110 group-focus-visible:scale-110 sm:h-24 sm:w-24"
+                    className="relative grid h-[72px] w-[72px] place-items-center rounded-full border-2 border-white/90 shadow-[0_12px_34px_rgba(0,0,0,0.45)] transition-transform duration-300 group-hover:scale-110 group-focus-visible:scale-110 sm:h-24 sm:w-24"
                     style={{ background: 'var(--v-accent)', color: 'var(--v-accent-foreground)' }}
                   >
                     <Play className="ml-1 h-7 w-7 sm:h-9 sm:w-9" fill="currentColor" strokeWidth={0} />
