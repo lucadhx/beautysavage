@@ -228,27 +228,48 @@ export default function ProductPage() {
     <section className="mx-auto min-h-screen max-w-6xl px-4 pb-16 pt-20 sm:px-5 sm:pb-24 sm:pt-32 md:px-8">
       <div className="grid gap-5 sm:gap-10 lg:grid-cols-[minmax(0,1.05fr)_minmax(360px,0.95fr)] lg:items-start">
         <div className="min-w-0">
-          <div className={`relative mb-4 overflow-hidden rounded-lg border sm:mb-7 ${product.kind === 'GIFT_CARD' ? 'hidden lg:block' : ''}`} style={{ borderColor: 'var(--v-border)', background: 'var(--v-surface)' }}>
+          <div className={`group relative mb-4 overflow-hidden rounded-lg border sm:mb-7 ${product.kind === 'GIFT_CARD' ? 'hidden lg:block' : ''}`} style={{ borderColor: 'var(--v-border)', background: 'var(--v-surface)' }}>
             <PromoBadge product={product} large />
             {coverUrl ? (
-              <img src={coverUrl} alt={product.title} className="aspect-[4/3] w-full object-cover sm:aspect-square" />
+              <img src={coverUrl} alt={product.title} className={`aspect-[4/3] w-full object-cover sm:aspect-square ${trailerCode ? 'transition-transform duration-700 group-hover:scale-[1.03]' : ''}`} />
             ) : (
               <div className="grid aspect-square place-items-center" style={{ color: 'var(--v-muted-foreground)' }}>
                 <ImageIcon className="h-12 w-12" />
               </div>
             )}
+            {/*
+              BANDE-ANNONCE — la couverture devient le lecteur : un disque de lecture
+              à la couleur d'accent du thème, un halo qui respire, et une légende posée
+              sur un dégradé. Impossible à manquer, sans bouton gris en plus.
+            */}
+            {trailerCode && (
+              <button
+                type="button"
+                onClick={() => setTrailerOpen(true)}
+                className="absolute inset-0 flex flex-col items-center justify-end text-left focus-visible:outline-none"
+                aria-label="Voir la bande-annonce de la formation"
+                data-testid="trailer-cta"
+              >
+                <span aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-2/5" style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.62), rgba(0,0,0,0.18) 60%, transparent)' }} />
+                <span aria-hidden className="absolute left-1/2 top-1/2 grid -translate-x-1/2 -translate-y-1/2 place-items-center">
+                  <span className="absolute h-[72px] w-[72px] rounded-full opacity-40 motion-safe:animate-ping sm:h-24 sm:w-24" style={{ background: 'var(--v-accent)', animationDuration: '2.4s' }} />
+                  <span className="absolute h-[88px] w-[88px] rounded-full border sm:h-[116px] sm:w-[116px]" style={{ borderColor: 'rgba(255,255,255,0.55)' }} />
+                  <span
+                    className="relative grid h-[72px] w-[72px] place-items-center rounded-full shadow-[0_10px_30px_rgba(0,0,0,0.35)] transition-transform duration-300 group-hover:scale-110 group-focus-visible:scale-110 sm:h-24 sm:w-24"
+                    style={{ background: 'var(--v-accent)', color: 'var(--v-accent-foreground)' }}
+                  >
+                    <Play className="ml-1 h-7 w-7 sm:h-9 sm:w-9" fill="currentColor" strokeWidth={0} />
+                  </span>
+                </span>
+                <span className="relative z-[1] mb-4 flex items-center gap-3 rounded-full border px-4 py-2 backdrop-blur-md sm:mb-6 sm:px-5 sm:py-2.5" style={{ borderColor: 'rgba(255,255,255,0.35)', background: 'rgba(255,255,255,0.14)', color: '#fff' }}>
+                  <span className="text-[10.5px] font-semibold uppercase tracking-[0.22em] sm:text-[11px]">Bande-annonce</span>
+                  <span aria-hidden className="h-3 w-px" style={{ background: 'rgba(255,255,255,0.5)' }} />
+                  <span className="text-[13px] font-medium sm:text-sm">Découvrir en vidéo</span>
+                </span>
+              </button>
+            )}
           </div>
           {product.kind === 'TRAINING_PACK' && <PackContents product={product} />}
-          {trailerCode && (
-            <button
-              type="button"
-              onClick={() => setTrailerOpen(true)}
-              className="mb-7 inline-flex w-full items-center justify-center gap-2 rounded-md border px-5 py-3 text-sm font-semibold"
-              style={{ borderColor: 'var(--v-border)', background: 'var(--v-surface)' }}
-            >
-              <Play className="h-4 w-4" /> Voir la bande annonce
-            </button>
-          )}
           {sideBlocks && (
             <div className="hidden lg:block">
               {faqBlock(true)}
