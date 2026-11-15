@@ -1093,8 +1093,8 @@ export const api = {
     ),
   streamablePlaybackUrl: (shortcode: string) =>
     request<{ shortcode: string; sourceUrl: string; playbackUrl: string; contentType: string; mimeType: string; contentLength: number; strategy: string; resolvedAt: string }>(
-      `/public/commerce/videos/streamable/${encodeURIComponent(shortcode)}/playback-url`,
-      { auth: false },
+      // Route du Manager (connecté) : la route publique est réservée aux clientes qui ont acheté.
+      `/commerce/videos/streamable/${encodeURIComponent(shortcode)}/playback-url`,
     ),
   googleDrivePlaybackUrl: (fileId: string) =>
     request<{ fileId: string; playbackUrl: string; expiresAt: string | null; expiresInSeconds: number; contentType: string; mimeType: string; qualityLabel: string; width: number; height: number; bitrate: number; durationMs: number; resolvedAt: string }>(

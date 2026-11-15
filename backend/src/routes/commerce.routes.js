@@ -6,6 +6,7 @@ import { uploadImage, uploadTrainingDeliverable, translateUploadErrors } from '.
 import * as reviewPhotos from '../services/reviewPhotos.js';
 import * as trainingMembers from '../services/trainingMembers.service.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
+import { ApiError } from '../utils/ApiError.js';
 import { ok, created } from '../utils/apiResponse.js';
 import { ROLES } from '../utils/constants.js';
 import { rateLimit } from '../middlewares/rateLimit.js';
@@ -150,6 +151,17 @@ managerCommerceRoutes.post('/products/:id/sessions/:sessionId/cancel', authorize
 managerCommerceRoutes.post('/slot-groups/:id/reopen', authorize(ROLES.ADMIN, ROLES.DEV), asyncHandler(async (req, res) => ok(res, await slotGroups.reopenSlotGroup(req.params.id))));
 managerCommerceRoutes.delete('/products/:id/sessions/:sessionId', authorize(ROLES.ADMIN, ROLES.DEV), asyncHandler(async (req, res) => ok(res, await sessions.deleteSession(req.params.id, req.params.sessionId))));
 managerCommerceRoutes.post('/videos/resolve-streamable', authorize(ROLES.ADMIN, ROLES.DEV), asyncHandler(async (req, res) => ok(res, await commerce.resolveStreamableVideo(req.body))));
+/*
+  APERÇU DANS LE MANAGER — l'institut regarde une vidéo qu'il vient de coller,
+  une vidéo de module, ou celle envoyée par une élève à valider. La route
+  publique exige d'être une cliente qui a acheté la formation (assertVideoAccess) :
+  le Manager y prenait un 401 depuis le 2026-11-11. Ici, être connecté au Manager suffit.
+*/
+managerCommerceRoutes.get('/videos/streamable/:shortcode/playback-url', asyncHandler(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  if (!/^[A-Za-z0-9_-]{4,200}$/.test(String(req.params.shortcode || ''))) throw ApiError.badRequest('Vidéo inconnue', { code: 'VIDEO_ID_INVALID' });
+  ok(res, await commerce.getStreamableTemporaryPlayback(req.params.shortcode));
+}));
 managerCommerceRoutes.post('/videos/resolve-drive', authorize(ROLES.ADMIN, ROLES.DEV), asyncHandler(async (req, res) => ok(res, await commerce.resolveGoogleDriveVideo(req.body))));
 managerCommerceRoutes.post('/training-files', authorize(ROLES.ADMIN, ROLES.DEV), uploadTrainingDeliverable.single('file'), translateUploadErrors, asyncHandler(async (req, res) => created(res, await commerce.uploadTrainingResourceFile(req.file))));
 managerCommerceRoutes.get('/sales', asyncHandler(async (_req, res) => ok(res, await commerce.listManagerSales())));
