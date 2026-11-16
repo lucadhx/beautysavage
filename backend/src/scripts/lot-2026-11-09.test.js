@@ -198,6 +198,16 @@ check('consentement d’accès immédiat exigé', (packView.consentRequirements 
 const packCart = await commerce.addCartItem(bea._id, { productId: pack._id, quantity: 3 });
 const packLine = packCart.lines.find((l) => l.product.kind === 'TRAINING_PACK');
 check('panier : quantité 1, contenu du pack dans la ligne', packLine?.quantity === 1 && packLine.product.pack.items.length === 2);
+
+// Pack en promotion (2026-11-16) : le Manager n'avait pas d'onglet Promotion pour les packs.
+const promoPack = await commerce.upsertProduct({ ...packBase, slug: 'pack-promo', status: 'PUBLISHED', pack: { productIds: [String(trainingA._id), String(trainingB._id)] }, promotion: { enabled: true, type: 'PERCENT', value: 20, startsAt: '', endsAt: '' } });
+check('pack : la promotion est enregistrée', promoPack.promotion?.enabled === true && promoPack.promotion?.value === 20, JSON.stringify(promoPack.promotion));
+const promoView = await commerce.getProductBySlug('pack-promo');
+check('fiche du pack : prix remisé (240 €) et prix barré (300 €)', promoView.price.amountCents === 24000 && promoView.compareAtPrice?.amountCents === 30000 && promoView.promotion?.percentOff === 20, JSON.stringify([promoView.price, promoView.compareAtPrice]));
+const promoCart = await commerce.addCartItem(alice._id, { productId: promoPack._id, quantity: 1 });
+const promoLine = promoCart.lines.find((l) => String(l.product.id || l.product._id) === String(promoPack._id));
+check('panier : le pack se paie au prix remisé', promoLine?.unitPriceCents === 24000, String(promoLine?.unitPriceCents));
+await commerce.removeCartItem?.(alice._id, promoLine?.id || promoLine?._id).catch(() => {});
 check('avant paiement : aucun accès', codeOf(await refusal(assertVideoAccess({ provider: 'STREAMABLE', videoId: 'bbb456uvw', customerId: bea._id }))) === 'TRAINING_NOT_OWNED');
 const packSale = await paidSale(bea._id, [{ productId: pack._id, productSnapshot: packLine.product, totalCents: 30000 }]);
 check('payé : la vidéo de B se lit par le pack', (await refusal(assertVideoAccess({ provider: 'STREAMABLE', videoId: 'bbb456uvw', customerId: bea._id }))) === null);

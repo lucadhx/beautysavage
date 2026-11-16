@@ -1110,7 +1110,8 @@ function TrailerResourceCard({
   );
 }
 
-function PromotionTab({ product, patch }: { product: Partial<CommerceProduct>; patch: (path: string, value: unknown) => void }) {
+/** Partagé avec l'éditeur de pack (CommercePacksPage). */
+export function PromotionTab({ product, patch }: { product: Partial<CommerceProduct>; patch: (path: string, value: unknown) => void }) {
   const enabled = readPath(product, 'promotion.enabled', false);
   const type = readPath(product, 'promotion.type', 'PERCENT');
   const value = Number(readPath(product, 'promotion.value', 0));

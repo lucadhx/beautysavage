@@ -12,8 +12,9 @@ import { resolvePreviewMediaUrl } from '@/lib/media';
 import { CommercePageFrame, Metric, Panel, ProductTable, cents, type CommerceProduct } from './CommerceShared';
 import { ToneSection, toneTabClass, type EditorTone } from './editorTones';
 import { SearchInput, matchesSearch } from './HomeFeaturedPanel';
+import { PromotionTab } from './CommerceFormationEditPage';
 
-type PackTab = 'infos' | 'selection';
+type PackTab = 'infos' | 'selection' | 'promotion';
 
 /**
  * LES PACKS DE FORMATIONS EN LIGNE — plusieurs formations vendues ensemble.
@@ -61,6 +62,7 @@ export default function CommercePacksPage() {
 const EMPTY: Partial<CommerceProduct> = {
   title: '', slug: '', subtitle: '', description: '', kind: 'TRAINING_PACK', status: 'DRAFT',
   price: { amountCents: 0, currency: 'EUR' }, coverUrl: '', gallery: [], options: [], pack: { productIds: [] },
+  promotion: { enabled: false, type: 'PERCENT', value: 0, startsAt: '', endsAt: '' },
 };
 
 export function CommercePackEditPage() {
@@ -140,6 +142,7 @@ export function CommercePackEditPage() {
   const tabs = [
     ['infos', 'Informations', 'infos'],
     ['selection', `Sélection (${chosen.length})`, 'modules'],
+    ['promotion', 'Promotion', 'promotion'],
   ] as const satisfies readonly (readonly [PackTab, string, EditorTone])[];
 
   return (
@@ -184,6 +187,17 @@ export function CommercePackEditPage() {
           </div>
         </div>
       </ToneSection>
+      )}
+
+      {/* Promotion : même onglet que les formations — le serveur l'applique au prix du pack (fiche, panier, Stripe). */}
+      {tab === 'promotion' && (
+        <PromotionTab
+          product={pack}
+          patch={(path, value) => {
+            const key = path.replace(/^promotion\./, '');
+            setPack((p) => ({ ...p, promotion: { ...((p.promotion as Record<string, unknown>) || {}), [key]: value } }));
+          }}
+        />
       )}
 
       {tab === 'selection' && (
