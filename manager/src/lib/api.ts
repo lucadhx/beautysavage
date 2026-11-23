@@ -1155,6 +1155,11 @@ export const api = {
   calendarSchedule: () => request<any>('/calendar/schedule'),
   saveCalendarSchedule: (data: any) =>
     request<any>('/calendar/schedule', { method: 'PUT', body: data }),
+  /** Une journée précise ouverte ou fermée à la réservation en ligne (DELETE : retour aux horaires classiques). */
+  saveCalendarDay: (date: string, data: { closed: boolean; ranges?: { start: string; end: string }[]; reason?: string }) =>
+    request<any>(`/calendar/schedule/days/${encodeURIComponent(date)}`, { method: 'PUT', body: data }),
+  clearCalendarDay: (date: string) =>
+    request<any>(`/calendar/schedule/days/${encodeURIComponent(date)}`, { method: 'DELETE' }),
   calendarEvents: (params: { from: string; to: string }) =>
     request<any[]>(`/calendar/events?from=${encodeURIComponent(params.from)}&to=${encodeURIComponent(params.to)}`),
   calendarAvailability: (params: { from: string; to: string; durationMinutes?: number; bufferAfterMinutes?: number }) => {

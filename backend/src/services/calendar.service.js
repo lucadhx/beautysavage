@@ -11,6 +11,7 @@ import { bookingDurationMinutes } from './bookingDuration.js';
 import { bookableFrom, sequenceBookableFrom } from './bookingNotice.js';
 import { loadSequence, sequenceMinutes, sequenceSegments } from './bookingSequence.js';
 import { withCalendarLock } from './calendarLock.js';
+import { normaliserException, regleEffective } from './dayOverrides.js';
 
 const DEFAULT_WEEKLY = [
   { weekday: 1, enabled: true, ranges: [{ start: '09:00', end: '12:00' }, { start: '14:00', end: '18:00' }] },
@@ -128,7 +129,6 @@ export async function getSchedule() {
 
 export async function saveSchedule(payload) {
   const weeklyHours = Array.isArray(payload.weeklyHours) ? payload.weeklyHours : DEFAULT_WEEKLY;
-  const exceptions = Array.isArray(payload.exceptions) ? payload.exceptions : [];
   return BookingSchedule.findOneAndUpdate(
     { singleton: 'global' },
     {
@@ -136,13 +136,40 @@ export async function saveSchedule(payload) {
         timezone: payload.timezone || 'Europe/Paris',
         slotStepMinutes: Number(payload.slotStepMinutes || 15),
         weeklyHours,
-        exceptions,
+        // Les journées exceptionnelles ne passent PAS par ici : elles ont leurs
+        // routes (`setDayException`). Les réécrire avec la copie que la fenêtre
+        // des horaires a chargée effacerait une journée ouverte entre-temps.
         // Absents du formulaire des horaires : on garde l'existant (les effacer à chaque enregistrement supprimait ces réglages).
         ...(Array.isArray(payload.reminders) ? { reminders: payload.reminders } : {}),
         ...(payload.noShowPolicy && typeof payload.noShowPolicy === 'object' ? { noShowPolicy: payload.noShowPolicy } : {}),
       },
     },
     { new: true, upsert: true, runValidators: true }
+  ).lean();
+}
+
+/**
+ * OUVRIR OU FERMER UNE JOURNÉE PRÉCISE — sans toucher aux horaires classiques.
+ * Une seule exception par date : la nouvelle remplace l'ancienne.
+ */
+export async function setDayException(date, payload = {}) {
+  const exception = normaliserException(date, payload);
+  await getSchedule();
+  await BookingSchedule.updateOne({ singleton: 'global' }, { $pull: { exceptions: { date: exception.date } } });
+  return BookingSchedule.findOneAndUpdate(
+    { singleton: 'global' },
+    { $push: { exceptions: { $each: [exception], $sort: { date: 1 } } } },
+    { new: true, runValidators: true },
+  ).lean();
+}
+
+/** La journée revient à ses horaires classiques. */
+export async function clearDayException(date) {
+  await getSchedule();
+  return BookingSchedule.findOneAndUpdate(
+    { singleton: 'global' },
+    { $pull: { exceptions: { date: String(date || '').trim() } } },
+    { new: true },
   ).lean();
 }
 
@@ -369,7 +396,8 @@ export async function listAvailability(query = {}, { customerId = null, enforceN
     const calendarDay = new Date(Date.UTC(first.year, first.month - 1, first.day + offset));
     const [year, month, day] = [calendarDay.getUTCFullYear(), calendarDay.getUTCMonth() + 1, calendarDay.getUTCDate()];
     const weekday = calendarDay.getUTCDay() || 7;
-    const dayRule = (schedule.weeklyHours || []).find((rule) => rule.weekday === weekday);
+    // Une journée ouverte ou fermée à la main remplace la semaine type, ce jour-là seulement.
+    const dayRule = regleEffective(schedule, year, month, day, (schedule.weeklyHours || []).find((rule) => rule.weekday === weekday));
     if (!dayRule?.enabled) continue;
     const dayEnds = endsByDay.get(`${year}-${month}-${day}`) || [];
     for (const range of dayRule.ranges || []) {
@@ -412,13 +440,16 @@ export function activeHoldFilter(now = new Date()) {
   return { $or: [{ status: { $ne: 'HELD' } }, { holdExpiresAt: { $gt: now } }] };
 }
 
-export async function assertNoOverlap({ startsAt, endsAt, ignoreId = null, ignoreProductId = null, ignoreSaleId = null, ignoreHoldsOf = null }) {
+export async function assertNoOverlap({ startsAt, endsAt, ignoreId = null, ignoreProductId = null, ignoreSaleId = null, ignoreHoldsOf = null, ignoreBlocks = false }) {
   const query = {
     status: { $ne: 'CANCELLED' },
     startsAt: { $lt: endsAt },
     endsAt: { $gt: startsAt },
     ...activeHoldFilter(),
   };
+  // Rendez-vous saisi À LA MAIN sur une journée bloquée : l'institut passe outre
+  // ses propres blocages, jamais un autre rendez-vous ni une session.
+  if (ignoreBlocks) query.type = { $ne: 'MANUAL_BLOCK' };
   // Les retenues de CETTE cliente ne la bloquent pas : elle reprend un
   // paiement qu'elle avait quitté (la nouvelle commande remplacera la retenue).
   if (ignoreHoldsOf) query.$nor = [{ status: 'HELD', 'customerSnapshot.customerId': String(ignoreHoldsOf) }];
@@ -468,8 +499,8 @@ async function createEventLocked(payload) {
   }
   const endsAt = asDate(payload.endsAt, 'Fin');
   assertRange(startsAt, endsAt);
-  await assertNoOverlap({ startsAt, endsAt });
   const type = payload.type || 'MANUAL_BLOCK';
+  await assertNoOverlap({ startsAt, endsAt, ignoreBlocks: type === 'SERVICE_BOOKING' && payload.overBlocks === true });
   const totalCents = Number(payload.paymentSnapshot?.totalCents || 0);
   const paidCents = Number(payload.paymentSnapshot?.paidCents || payload.paymentSnapshot?.depositCents || 0);
 
@@ -604,7 +635,7 @@ async function updateEventLocked(id, payload) {
   const startsAt = payload.startsAt ? asDate(payload.startsAt, 'Debut') : event.startsAt;
   const endsAt = payload.endsAt ? asDate(payload.endsAt, 'Fin') : event.endsAt;
   assertRange(startsAt, endsAt);
-  if (event.status !== 'CANCELLED') await assertNoOverlap({ startsAt, endsAt, ignoreId: id });
+  if (event.status !== 'CANCELLED') await assertNoOverlap({ startsAt, endsAt, ignoreId: id, ignoreBlocks: event.type === 'SERVICE_BOOKING' && payload.overBlocks === true });
   event.title = payload.title ?? event.title;
   event.startsAt = startsAt;
   event.endsAt = endsAt;

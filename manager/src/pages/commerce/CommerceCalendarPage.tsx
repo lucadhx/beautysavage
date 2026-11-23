@@ -12,6 +12,7 @@ import { ClientPicker, clientName } from './ClientPicker';
 import { DayTimeline, DAY_CLOSE, MonthCalendar, RangeEditor, STEP as QUARTER, TimeSelect, atMinutes, busyOfDay, durationLabel, hm, longDay, overlaps, sameDate, type Busy } from '@/components/ui/TimeRange';
 import { CardsSkeleton, Skeleton, TableSkeleton } from '@/components/ui/Skeleton';
 import { CommercePageFrame, StatusBadge, cents } from './CommerceShared';
+import { DayOverrideModal, DayStateChip, dayState, type ScheduleLike } from './DayOverride';
 import { SlotGroupPanel, StackCard, StackCarousel, type SlotGroupInfo } from './SlotGroupStack';
 
 interface CalendarEvent {
@@ -85,6 +86,8 @@ interface EventForm {
   totalEuros: string;
   paidEuros: string;
   notes: string;
+  /** Poser le rendez-vous par-dessus un blocage de l'institut (journée bloquée). */
+  overBlocks?: boolean;
 }
 
 const DAY_LABELS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
@@ -191,12 +194,14 @@ export default function CommerceCalendarPage() {
   const [anchor, setAnchor] = React.useState(() => startOfWeek());
   const [view, setView] = React.useState<'week' | 'day'>('week');
   const [events, setEvents] = React.useState<CalendarEvent[]>([]);
-  const [schedule, setSchedule] = React.useState<{ weeklyHours: ScheduleDay[]; slotStepMinutes: number; timezone: string } | null>(null);
+  const [schedule, setSchedule] = React.useState<{ weeklyHours: ScheduleDay[]; slotStepMinutes: number; timezone: string; exceptions?: { date: string; closed: boolean; ranges: { start: string; end: string }[]; reason?: string }[] } | null>(null);
   const [selected, setSelected] = React.useState<CalendarEvent | null>(null);
   const [form, setForm] = React.useState(() => defaultForm(new Date()));
   const [message, setMessage] = React.useState('');
   const [saving, setSaving] = React.useState(false);
   const [showSchedule, setShowSchedule] = React.useState(false);
+  /** Journée ouverte dans la fenêtre « ouvrir / fermer ce jour ». */
+  const [dayEdit, setDayEdit] = React.useState<Date | null>(null);
   const [showCancelled, setShowCancelled] = React.useState(false);
   const [createOpen, setCreateOpen] = React.useState(false);
   /** Rendez-vous en cours de modification (même fenêtre que la création). */
@@ -305,6 +310,7 @@ export default function CommerceCalendarPage() {
           paidCents: Math.round(Number(form.paidEuros || 0) * 100),
         },
         notes: form.notes,
+        overBlocks: form.type === 'SERVICE_BOOKING' && Boolean(form.overBlocks),
       });
       const moved = new Date(form.startsAt).getTime() !== new Date(editing.startsAt).getTime() || new Date(form.endsAt).getTime() !== new Date(editing.endsAt).getTime();
       setMessage(moved
@@ -338,6 +344,7 @@ export default function CommerceCalendarPage() {
           depositCents: Math.round(Number(form.paidEuros || 0) * 100),
         },
         notes: form.notes,
+        overBlocks: form.type === 'SERVICE_BOOKING' && Boolean(form.overBlocks),
       });
       const email = created?.customerSnapshot?.email;
       setMessage(
@@ -446,10 +453,14 @@ export default function CommerceCalendarPage() {
                 <div className="grid border-b bg-muted/40" style={{ gridTemplateColumns: `72px repeat(${days.length}, minmax(130px, 1fr))` }}>
                   <div className="p-3 text-xs font-medium text-muted-foreground">Heure</div>
                   {days.map((day, index) => (
-                    <button key={day.toISOString()} type="button" onClick={() => setAnchor(day)} className="border-l p-3 text-left hover:bg-muted">
-                      <div className="text-xs font-semibold uppercase text-muted-foreground">{DAY_LABELS[(day.getDay() || 7) - 1] ?? DAY_LABELS[index]}</div>
-                      <div className="text-sm font-semibold">{day.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })}</div>
-                    </button>
+                    <div key={day.toISOString()} className="min-w-0 border-l p-2">
+                      <button type="button" onClick={() => setAnchor(day)} className="block w-full rounded px-1 text-left hover:bg-muted">
+                        <div className="text-xs font-semibold uppercase text-muted-foreground">{DAY_LABELS[(day.getDay() || 7) - 1] ?? DAY_LABELS[index]}</div>
+                        <div className="text-sm font-semibold">{day.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })}</div>
+                      </button>
+                      {/* Ouvrir un jour fermé (ou l'inverse) à la réservation en ligne, ce jour seulement. */}
+                      {schedule && <DayStateChip state={dayState(schedule as ScheduleLike, day)} onClick={() => setDayEdit(day)} />}
+                    </div>
                   ))}
                 </div>
                 <div className="grid" style={{ gridTemplateColumns: `72px repeat(${days.length}, minmax(130px, 1fr))`, height: GRID_HEIGHT }}>
@@ -465,7 +476,13 @@ export default function CommerceCalendarPage() {
                     // (réaffichable avec la case « Afficher les annulés »).
                     const dayEvents = events.filter((event) => sameDay(new Date(event.startsAt), day) && (showCancelled || event.status !== 'CANCELLED'));
                     return (
-                      <div key={day.toISOString()} className="relative border-r last:border-r-0" onClick={(event) => chooseSlot(day, event)}>
+                      <div
+                        key={day.toISOString()}
+                        // Jour fermé en ligne : hachuré, mais toujours cliquable — un rendez-vous manuel s'y pose.
+                        className={`relative border-r last:border-r-0 ${schedule && !dayState(schedule as ScheduleLike, day).open ? 'bg-[repeating-linear-gradient(135deg,transparent_0_10px,rgba(120,120,120,0.08)_10px_20px)]' : ''}`}
+                        data-closed={schedule && !dayState(schedule as ScheduleLike, day).open ? 'true' : undefined}
+                        onClick={(event) => chooseSlot(day, event)}
+                      >
                         {hours.map((hour) => (
                           <div key={hour} className="absolute left-0 right-0 border-t" style={{ top: `${(((hour * 60) - DAY_START) / (DAY_END - DAY_START)) * 100}%` }} />
                         ))}
@@ -505,7 +522,7 @@ export default function CommerceCalendarPage() {
                                 click.stopPropagation();
                                 selectEvent(event);
                               }}
-                              className={`absolute left-1 right-1 z-10 overflow-hidden rounded-md border px-2 py-1 text-left text-xs shadow-sm transition hover:shadow-md ${event.status === 'HELD' ? 'border-dashed border-amber-400 bg-amber-50/80 text-amber-950' : eventClasses(event.type)} ${event.status === 'CANCELLED' ? 'opacity-55 line-through' : ''}`}
+                              className={`absolute left-1 right-1 ${event.type === 'MANUAL_BLOCK' ? 'z-[5] opacity-90' : 'z-10'} overflow-hidden rounded-md border px-2 py-1 text-left text-xs shadow-sm transition hover:shadow-md ${event.status === 'HELD' ? 'border-dashed border-amber-400 bg-amber-50/80 text-amber-950' : eventClasses(event.type)} ${event.status === 'CANCELLED' ? 'opacity-55 line-through' : ''}`}
                               data-status={event.status}
                               style={position}
                             >
@@ -548,6 +565,7 @@ export default function CommerceCalendarPage() {
           form={form}
           setForm={setForm}
           services={services}
+          schedule={schedule as ScheduleLike | null}
           error={createError}
           saving={saving}
           editingId={editing?.id || null}
@@ -580,6 +598,16 @@ export default function CommerceCalendarPage() {
           <EventPanel
             selected={selected}
             onEdit={() => openEdit(selected)}
+            onBookOver={() => {
+              // Une journée bloquée de bout en bout n'a plus de case libre où cliquer :
+              // la réservation s'ouvre depuis le blocage, la case « poser dessus » déjà cochée.
+              const start = new Date(selected.startsAt);
+              setEditing(null);
+              setForm({ ...formWithSlot(start, start.getHours() * 60 + start.getMinutes(), 60), overBlocks: true });
+              setCreateError('');
+              setSelectedOpen(false);
+              setCreateOpen(true);
+            }}
             onBalance={() => {
               setBalanceEuros(String(((selected.paymentSnapshot?.balanceDueCents || 0) / 100) || ''));
               setBalanceOpen(true);
@@ -592,6 +620,12 @@ export default function CommerceCalendarPage() {
           />
         )}
       </Modal>
+      <DayOverrideModal
+        date={dayEdit}
+        schedule={schedule as ScheduleLike | null}
+        onClose={() => setDayEdit(null)}
+        onSaved={(saved, text) => { setSchedule(saved as typeof schedule); setMessage(text); }}
+      />
       <Modal
         open={showSchedule && Boolean(schedule)}
         onClose={closeSchedule}
@@ -675,6 +709,7 @@ function CreatePanel({
   saving,
   onCreate,
   editingId = null,
+  schedule = null,
 }: {
   form: EventForm;
   setForm: (form: EventForm) => void;
@@ -684,6 +719,8 @@ function CreatePanel({
   onCreate: () => void;
   /** Modification d'un rendez-vous : il ne se compte pas comme conflit, son type ne change pas. */
   editingId?: string | null;
+  /** Les horaires : un jour fermé se signale, sans empêcher la saisie. */
+  schedule?: ScheduleLike | null;
 }) {
   const start = partsOf(form.startsAt) || new Date();
   const end = partsOf(form.endsAt) || new Date(start.getTime() + 60 * 60_000);
@@ -718,6 +755,9 @@ function CreatePanel({
   }, [dayKey, editingId]);
   const busy = busyOfDay(busyList || [], day);
   const clashes = overlaps(busy, fromMin, toMin);
+  const closedDay = schedule ? !dayState(schedule, day).open : false;
+  // Un rendez-vous peut passer outre un BLOCAGE de l'institut (journée bloquée), jamais un autre rendez-vous.
+  const blockOnly = form.type === 'SERVICE_BOOKING' && clashes.length > 0 && clashes.every((c) => c.type === 'MANUAL_BLOCK');
 
   const setRange = (d: Date, from: number, to: number) => setForm({ ...form, startsAt: toInputValue(atMinutes(d, from)), endsAt: toInputValue(atMinutes(d, to)) });
 
@@ -860,6 +900,20 @@ function CreatePanel({
             <DayTimeline busy={busy} from={fromMin} to={toMin} testId="summary-timeline" onMove={(m) => setRange(day, m, m + length)} />
             {busyList === null ? (
               <p className="text-xs text-muted-foreground">Vérification du planning…</p>
+            ) : blockOnly ? (
+              <label className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950" data-testid="range-over-block">
+                <input
+                  type="checkbox"
+                  className="mt-1"
+                  checked={Boolean(form.overBlocks)}
+                  onChange={(e) => setForm({ ...form, overBlocks: e.target.checked })}
+                  data-testid="over-blocks"
+                />
+                <span>
+                  Journée bloquée : {clashes.map((c) => `${c.title} (${hm(c.from)}–${hm(c.to)})`).join(', ')}.{' '}
+                  <strong>Poser quand même le rendez-vous sur ce blocage.</strong> Le blocage reste en place pour la réservation en ligne.
+                </span>
+              </label>
             ) : clashes.length > 0 ? (
               <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800" role="alert" data-testid="range-conflict">
                 Chevauche : {clashes.map((c) => `${c.title} (${hm(c.from)}–${hm(c.to)})`).join(', ')}
@@ -871,6 +925,11 @@ function CreatePanel({
         )}
       </section>
 
+      {closedDay && form.type === 'SERVICE_BOOKING' && (
+        <p className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-900" data-testid="closed-day-notice">
+          Jour fermé à la réservation en ligne : le rendez-vous est quand même enregistré au planning.
+        </p>
+      )}
       <Field label="Titre"><Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></Field>
       {form.type !== 'MANUAL_BLOCK' && (
         <div className="grid grid-cols-[minmax(0,1fr)] gap-4 sm:grid-cols-2">
@@ -933,11 +992,14 @@ function EventPanel({
   onBalance,
   onEdit,
   onCancel,
+  onBookOver,
 }: {
   selected: CalendarEvent;
   onBalance: () => void;
   onEdit: () => void;
   onCancel: () => void;
+  /** Blocage : ouvrir une réservation manuelle posée par-dessus. */
+  onBookOver?: () => void;
 }) {
   const generated = selected.source?.generatedFrom === 'commerceProduct.sessions';
   const totalCents = Number(selected.paymentSnapshot?.totalCents || 0);
@@ -1009,6 +1071,9 @@ function EventPanel({
             </p>
           ) : (
             <>
+              {selected.type === 'MANUAL_BLOCK' && selected.status !== 'CANCELLED' && onBookOver && (
+                <Button variant="outline" onClick={onBookOver} data-testid="event-book-over"><Plus className="h-4 w-4" /> Ajouter un rendez-vous sur ce blocage</Button>
+              )}
               {selected.status !== 'CANCELLED' && <Button onClick={onEdit} data-testid="event-edit"><Pencil className="h-4 w-4" /> Modifier</Button>}
               <Button variant="outline" onClick={onBalance}><CreditCard className="h-4 w-4" /> Encaisser solde</Button>
               <Button variant="destructive" onClick={onCancel}><Ban className="h-4 w-4" /> Annuler / rembourser</Button>

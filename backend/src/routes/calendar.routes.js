@@ -10,6 +10,9 @@ router.use(authenticate);
 
 router.get('/schedule', asyncHandler(async (_req, res) => ok(res, await calendar.getSchedule())));
 router.put('/schedule', authorize(ROLES.ADMIN, ROLES.DEV), asyncHandler(async (req, res) => ok(res, await calendar.saveSchedule(req.body))));
+// Une journée précise ouverte ou fermée à la main ; DELETE la rend à ses horaires classiques.
+router.put('/schedule/days/:date', authorize(ROLES.ADMIN, ROLES.DEV), asyncHandler(async (req, res) => ok(res, await calendar.setDayException(req.params.date, req.body))));
+router.delete('/schedule/days/:date', authorize(ROLES.ADMIN, ROLES.DEV), asyncHandler(async (req, res) => ok(res, await calendar.clearDayException(req.params.date))));
 router.get('/availability', asyncHandler(async (req, res) => ok(res, await calendar.listAvailability(req.query))));
 
 router.get('/events', asyncHandler(async (req, res) => ok(res, await calendar.listEvents(req.query))));

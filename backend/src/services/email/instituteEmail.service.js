@@ -319,7 +319,12 @@ export async function provisionInstituteBrevoWebhook({ fetchImpl = fetch } = {})
   const headers = { 'api-key': apiKey, accept: 'application/json', 'content-type': 'application/json' };
   const listRes = await fetchImpl(`${BREVO_API}/webhooks?type=transactional`, { headers });
   const list = await listRes.json().catch(() => ({}));
-  if (!listRes.ok) throw new Error(list.message || 'Brevo refuse la lecture des webhooks.');
+  // Un compte SANS AUCUN webhook ne renvoie pas une liste vide : Brevo répond
+  // 400 « Webhook record does not exist ». C'est le cas de tout compte neuf ; le
+  // prendre pour un refus empêchait la création du premier webhook (PROD
+  // meli-nails.fr, 23/11/2026). Les autres refus (clé, droits) restent des erreurs.
+  const noWebhookYet = !listRes.ok && [400, 404].includes(listRes.status) && /does not exist/i.test(String(list.message || ''));
+  if (!listRes.ok && !noWebhookYet) throw new Error(list.message || 'Brevo refuse la lecture des webhooks.');
   const existing = (list.webhooks || []).find((w) => String(w.url || '').startsWith(urlPrefix));
 
   let id = existing?.id;
