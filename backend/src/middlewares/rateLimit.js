@@ -15,7 +15,7 @@ export function rateLimit({ windowMs, max, message = 'Trop de requêtes, réessa
   const hits = new Map();
 
   return function rateLimiter(req, res, next) {
-    if (config.isTest) return next(); // pas de limitation pendant les tests/dev
+    if (config.testShortcuts) return next(); // poste de travail seulement (TEST_SHORTCUTS)
 
     const now = Date.now();
     const key = req.ip || req.socket?.remoteAddress || 'unknown';

@@ -28,6 +28,12 @@ const userSchema = new mongoose.Schema(
      * un faux hash inatteignable — une absence, que `comparePassword` traite
      * comme un refus et que la validation Mongoose autorise explicitement.
      */
+    /**
+     * SESSIONS RÉVOQUÉES — tout jeton émis AVANT cette date est refusé. Posée à
+     * chaque changement de mot de passe (hook ci-dessous) : un jeton volé ne
+     * survit plus à la réinitialisation qui devait justement le couper.
+     */
+    sessionsRevokedAt: { type: Date, default: null },
     password: {
       type: String,
       required: [
@@ -97,7 +103,11 @@ const userSchema = new mongoose.Schema(
 // Hash password whenever it is set/changed.
 userSchema.pre('save', async function hashPassword(next) {
   if (!this.isModified('password')) return next();
-  const salt = await bcrypt.genSalt(10);
+  // À la seconde près (le `iat` d'un jeton est en secondes) : le jeton émis
+  // juste après ce changement reste valable, ceux d'avant ne le sont plus.
+  if (!this.isNew) this.sessionsRevokedAt = new Date(Math.floor(Date.now() / 1000) * 1000);
+  // Coût 12 : un compte d'équipe ouvre tout le Manager, son empreinte doit coûter cher.
+  const salt = await bcrypt.genSalt(12);
   this.password = await bcrypt.hash(this.password, salt);
   next();
 });

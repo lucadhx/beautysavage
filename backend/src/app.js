@@ -56,6 +56,17 @@ export function createApp() {
     return serveSiteIcon(req, res, next);
   });
 
+  /*
+    L'IMAGE DES LIENS PARTAGÉS (`/og/<empreinte>.jpg`) : un JPEG 1200 × 630
+    dérivé de l'image choisie au Manager. Voir services/seo/shareImage.service.js.
+  */
+  app.use(async (req, res, next) => {
+    if (!req.path.startsWith('/og/') || (req.method !== 'GET' && req.method !== 'HEAD')) return next();
+    const { serveShareImage } = await import('./services/seo/shareImage.service.js');
+    const { announceShareImages } = await import('./services/seo/seo.service.js');
+    return serveShareImage(req, res, { reannoncer: announceShareImages });
+  });
+
   app.use(async (req, res, next) => {
     if (req.get('x-seo-render') !== '1' || (req.method !== 'GET' && req.method !== 'HEAD')) return next();
     // Un « fichier » que nginx n'a pas trouvé : un 404 franc, pas une page HTML.
@@ -64,6 +75,10 @@ export function createApp() {
       const { renderVitrinePage } = await import('./services/seo/seo.service.js');
       const page = await renderVitrinePage(req.originalUrl, { originFallback: `${req.protocol}://${req.get('host')}` });
       if (!page) return res.status(502).type('text/plain').send('Coquille de la vitrine introuvable');
+      if (page.location) {
+        res.set('Cache-Control', 'public, max-age=86400');
+        return res.redirect(page.status || 301, page.location);
+      }
       res.status(page.status);
       res.set('Content-Type', 'text/html; charset=utf-8');
       res.set('Cache-Control', 'no-cache');
@@ -200,6 +215,14 @@ export function createApp() {
       dotfiles: 'deny',
       index: false,
       setHeaders(res, filePath) {
+        /*
+          UN FICHIER DÉPOSÉ NE S'EXÉCUTE JAMAIS. Ouvert directement, un média
+          piégé (HTML, SVG) resterait sinon une page du domaine du site, avec
+          accès à ses jetons. `sandbox` lui retire scripts et origine ; le PDF
+          en est exempté (la visionneuse de Chrome refuse de s'ouvrir sous
+          sandbox) — ses octets sont vérifiés au dépôt.
+        */
+        if (!/\.pdf$/i.test(filePath)) res.set('Content-Security-Policy', "sandbox; default-src 'none'; img-src 'self' data:; media-src 'self'; style-src 'unsafe-inline'");
         const porteLEmpreinte = /-[0-9a-f]{12}\.[a-z0-9]+$/i.test(filePath);
         res.set('Cache-Control', porteLEmpreinte
           ? 'public, max-age=31536000, immutable'

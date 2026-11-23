@@ -17,7 +17,7 @@ import { FloatingSaveWidget } from '@/components/ui/FloatingSaveWidget';
 const passwordSchema = z
   .object({
     currentPassword: z.string().min(1, 'Mot de passe actuel requis'),
-    newPassword: z.string().min(6, 'Au moins 6 caractères'),
+    newPassword: z.string().min(10, 'Au moins 10 caractères'),
     confirmPassword: z.string().min(1, 'Confirmation requise'),
   })
   .refine((d) => d.newPassword === d.confirmPassword, {

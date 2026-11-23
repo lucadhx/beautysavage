@@ -33,8 +33,8 @@ export class RecordingTransport extends Transport {
     return res;
   }
 
-  async writeFile(remotePath, content) {
-    const r = await this._inner.writeFile(remotePath, content);
+  async writeFile(remotePath, content, options) {
+    const r = await this._inner.writeFile(remotePath, content, options);
     this._recorder.recordFileWrite(remotePath);
     return r;
   }

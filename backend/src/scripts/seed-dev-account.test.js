@@ -528,9 +528,10 @@ await (await import("./helpers/serviceReady.helper.js")).markTestServiceReady();
       service.indexOf('export async function updateProfile'),
     );
     check('la connexion rapide est refusée hors TEST',
-      /if\s*\(!config\.isTest\)\s*throw/.test(corpsDevLogin));
+      // `testShortcuts` = recette ET poste de travail (jamais un serveur, voir config/env.js).
+      /if\s*\(!config\.testShortcuts\)\s*throw/.test(corpsDevLogin));
     check('…et la garde est la PREMIÈRE instruction',
-      corpsDevLogin.indexOf('config.isTest') < corpsDevLogin.indexOf('User.findOne'));
+      corpsDevLogin.indexOf('config.testShortcuts') < corpsDevLogin.indexOf('User.findOne'));
     check('…elle refuse aussi un compte en attente d’activation',
       /isPendingActivation\(\)/.test(corpsDevLogin));
   }

@@ -18,7 +18,7 @@ export default function EmailVerificationPage() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const retour = params.get('retour') || '';
-  const target = /^\/(?!\/)[^\s]*$/.test(retour) && !retour.startsWith('/verification-email') ? retour : '/espace-client';
+  const target = /^\/(?![/\\])[^\s\\]*$/.test(retour) && !retour.startsWith('/verification-email') ? retour : '/espace-client';
   const [digits, setDigits] = React.useState<string[]>(Array(LENGTH).fill(''));
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState('');
@@ -33,6 +33,8 @@ export default function EmailVerificationPage() {
    * pas de session : on le valide tout de suite, et la réponse la connecte.
    */
   const linkCode = /^\d{6}$/.test(params.get('code') || '') ? String(params.get('code')) : '';
+  // L'adresse à laquelle le code est lié (posée par le lien de l'e-mail).
+  const linkEmail = (params.get('email') || '').trim();
   const linkTried = React.useRef(false);
   /** Secondes avant de pouvoir redemander un code (un double-clic n'envoie plus trois e-mails). */
   const [cooldown, setCooldown] = React.useState(0);
@@ -48,7 +50,7 @@ export default function EmailVerificationPage() {
     if (value.length !== LENGTH) { setError('Saisissez les 6 chiffres reçus par e-mail.'); return; }
     setBusy(true); setError(''); setInfo('');
     try {
-      const result = await customerApi.verifyEmail(value);
+      const result = await customerApi.verifyEmail(value, linkEmail || undefined);
       customerTokenStore.set(result.token);
       setDone(true);
       await refresh();

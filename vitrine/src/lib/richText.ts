@@ -16,7 +16,7 @@
  */
 
 const BLOCKS = new Set(['P', 'DIV', 'UL', 'OL', 'LI', 'BLOCKQUOTE', 'H2', 'H3', 'H4']);
-const INLINE = new Set(['STRONG', 'B', 'EM', 'I', 'U', 'S', 'BR', 'A', 'SPAN', 'FONT']);
+const INLINE = new Set(['STRONG', 'B', 'EM', 'I', 'U', 'S', 'MARK', 'BR', 'A', 'SPAN', 'FONT']);
 const DROP_WITH_CONTENT = new Set(['SCRIPT', 'STYLE', 'IFRAME', 'OBJECT', 'EMBED', 'TEMPLATE', 'NOSCRIPT', 'TITLE', 'META', 'LINK', 'svg', 'SVG']);
 const RENAME: Record<string, string> = { B: 'strong', I: 'em', H1: 'h2', H5: 'h4', H6: 'h4' };
 

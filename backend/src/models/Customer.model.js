@@ -4,6 +4,12 @@ import bcrypt from 'bcryptjs';
 const customerSchema = new mongoose.Schema(
   {
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
+    /**
+     * SESSIONS RÉVOQUÉES — tout jeton émis AVANT cette date est refusé. Posée à
+     * chaque changement de mot de passe (hook ci-dessous) : un jeton volé ne
+     * survit plus à la réinitialisation qui devait justement le couper.
+     */
+    sessionsRevokedAt: { type: Date, default: null },
     password: { type: String, required: true, select: false },
     firstName: { type: String, default: '', trim: true },
     lastName: { type: String, default: '', trim: true },
@@ -62,6 +68,9 @@ const customerSchema = new mongoose.Schema(
 
 customerSchema.pre('save', async function hashPassword(next) {
   if (!this.isModified('password')) return next();
+  // À la seconde près (le `iat` d'un jeton est en secondes) : le jeton émis
+  // juste après ce changement reste valable, ceux d'avant ne le sont plus.
+  if (!this.isNew) this.sessionsRevokedAt = new Date(Math.floor(Date.now() / 1000) * 1000);
   this.password = await bcrypt.hash(this.password, await bcrypt.genSalt(10));
   next();
 });

@@ -15,13 +15,14 @@ import { GiftCard, hashGiftSecret, maskGiftCode, encryptGiftCode, decryptGiftCod
 import { TrainingSubmission } from '../models/TrainingSubmission.model.js';
 import { ApiError } from '../utils/ApiError.js';
 import { config } from '../config/env.js';
+import { burnPasswordCheck } from '../utils/constantTimeLogin.js';
 import { logger } from '../utils/logger.js';
 import { maskEmail } from '../utils/eventPayloadSafety.js';
 import { EVENT_ACTOR_TYPE } from '../utils/domainEventConstants.js';
 import { decryptSecret, encryptSecret, lastFourOf, maskFromLastFour } from '../utils/integratedApiCrypto.js';
 import { provisionInstituteBrevoWebhook } from './email/instituteEmail.service.js';
 import { signCustomerToken } from '../middlewares/customerAuth.middleware.js';
-import { assertNoOverlap, cancelEvent, sessionBlocks } from './calendar.service.js';
+import { assertNoOverlap, assertWithinOpeningHours, cancelEvent, sessionBlocks } from './calendar.service.js';
 import { bookingDurationMinutes } from './bookingDuration.js';
 import { loadSequence, sequenceSegments } from './bookingSequence.js';
 import { withCalendarLock } from './calendarLock.js';
@@ -820,6 +821,9 @@ function lineTotals(product, line) {
   return { optionKeys: [...optionKeys], optionsTotalCents, unitPriceCents, totalCents: split.payNowCents, fullTotalCents, balanceDueCents: split.balanceDueCents, paymentRule: split.rule };
 }
 
+/** Plafond d'une carte achetée en ligne : au-delà, c'est une commande à traiter à l'institut. */
+const GIFT_CARD_MAX_CENTS = 100000;
+
 const KIND_LABEL_FR = {
   SERVICE: 'Prestation',
   IN_PERSON_TRAINING: 'Formation en présentiel',
@@ -1071,7 +1075,7 @@ export async function registerCustomer(payload) {
     // mot de passe haché et l'empreinte du code (6 chiffres : réversible).
     customer: publicCustomer(await Customer.findById(customer._id).lean()),
     token: signCustomerToken(customer),
-    ...(process.env.ENV === 'TEST' ? { verificationCode: code } : {}),
+    ...(config.testShortcuts ? { verificationCode: code } : {}),
   };
 }
 
@@ -1089,6 +1093,7 @@ export async function updateCustomerProfile(customerId, payload) {
 
 export async function loginCustomer(email, password) {
   const customer = await Customer.findOne({ email: String(email || '').trim().toLowerCase() }).select('+password');
+  if (!customer) await burnPasswordCheck(password, 10);
   if (!customer || !(await customer.comparePassword(String(password || '')))) {
     throw ApiError.unauthorized('Identifiants client invalides');
   }
@@ -1132,13 +1137,23 @@ export async function requestCustomerEmailVerification(customerId) {
   };
   await customer.save();
   await emitCustomerVerificationRequested(customer, code, expiresAt);
-  return { message: 'Code de vérification envoyé.', retryAfterSeconds: VERIFICATION_RESEND_SECONDS, ...(process.env.ENV === 'TEST' ? { verificationCode: code } : {}) };
+  return { message: 'Code de vérification envoyé.', retryAfterSeconds: VERIFICATION_RESEND_SECONDS, ...(config.testShortcuts ? { verificationCode: code } : {}) };
 }
 
-export async function verifyCustomerEmail(code) {
+export async function verifyCustomerEmail(code, { customerId = null, email = '' } = {}) {
   const tokenHash = hashCustomerSecret(String(code || '').trim());
   const now = new Date();
+  /*
+    LE CODE EST CHERCHÉ CHEZ UNE SEULE CLIENTE — celle de la session, ou celle
+    dont l'adresse accompagne le code (le lien de l'e-mail la porte). Cherché
+    parmi toutes, un code à 6 chiffres se devinait : il suffisait de tomber sur
+    celui de N'IMPORTE QUELLE cliente non vérifiée pour être connecté chez elle.
+  */
+  const adresse = String(email || '').trim().toLowerCase();
+  if (!customerId && !adresse) throw ApiError.badRequest('Indiquez votre adresse e-mail avec le code.', { code: 'EMAIL_REQUIRED' });
   const customer = await Customer.findOne({
+    // L'adresse du lien prime : le navigateur peut être connecté à un AUTRE compte.
+    ...(adresse ? { email: adresse } : { _id: customerId }),
     $or: [
       { 'emailVerification.tokenHash': tokenHash, 'emailVerification.expiresAt': { $gt: now } },
       { 'emailVerification.previousHashes': { $elemMatch: { tokenHash, expiresAt: { $gt: now } } } },
@@ -1218,7 +1233,7 @@ export async function requestCustomerPasswordReset(email, { siteUrl = '' } = {})
     },
     idempotencyKey: `customer-password-reset:${customer._id}:${customer.passwordReset.requestedAt.getTime()}`,
   });
-  if (process.env.ENV === 'TEST') response.resetUrl = resetUrl;
+  if (config.testShortcuts) response.resetUrl = resetUrl;
   return response;
 }
 
@@ -1315,6 +1330,9 @@ async function buildOrderLine(payload = {}, { allowUnscheduled = false, customer
     ? giftCardLinePayload(product, { giftCard: payload.giftCard || payload })
     : null;
   if (product.kind === 'GIFT_CARD') {
+    if (giftCard.amountCents > Math.max(GIFT_CARD_MAX_CENTS, Math.round(Number(product.price?.amountCents || 0)))) {
+      throw ApiError.badRequest('Le montant d’une carte cadeau en ligne est limité à 1 000 €.', { code: 'GIFT_CARD_AMOUNT_TOO_HIGH' });
+    }
     if (!giftCard.recipientName) throw ApiError.badRequest('Bénéficiaire requis pour la carte cadeau');
     if (!giftCard.senderName) throw ApiError.badRequest("Nom de l'expéditeur requis pour la carte cadeau");
   }
@@ -1410,6 +1428,7 @@ async function serviceBookingSnapshot(product, payload = {}, { customerId = null
   }
   // Le délai minimum de la fiche (voir bookingNotice.js) : tous les parcours clients passent ici.
   assertBookingNotice(product, startsAt);
+  await assertWithinOpeningHours(startsAt, endsAt);
   const sibling = bookingOverlap(startsAt, endsAt, await titledLines(otherLines));
   if (sibling) throw cartOverlapError(sibling);
   try {
@@ -3135,10 +3154,15 @@ export async function testInstituteIntegration(provider) {
 export async function listPublishedReviews(query = {}) {
   const filter = { status: 'PUBLISHED' };
   if (query.productId) filter.productId = query.productId;
+  if (query.productId && !mongoose.isValidObjectId(String(query.productId))) return [];
+  const limite = Math.max(1, Math.min(50, Number.parseInt(query.limit, 10) || 20));
+  // Lecture PUBLIQUE : seulement ce que la vitrine affiche. Jamais la note de
+  // modération, la cliente, la vente ni qui a modéré.
   return Review.find(filter)
+    .select('productId targetKind rating comment displayName sourceLabel createdAt')
     .populate('productId', 'title kind slug')
     .sort({ createdAt: -1 })
-    .limit(Math.min(50, Number(query.limit || 20)))
+    .limit(limite)
     .lean();
 }
 
@@ -3509,32 +3533,58 @@ export async function listCustomerTrainingSubmissions(customerId) {
     .lean();
 }
 
-function safeUploadExtension(file) {
-  const fromName = path.extname(file?.originalname || '').toLowerCase().replace(/[^.a-z0-9]/g, '');
-  if (fromName && fromName.length <= 12) return fromName;
-  const mime = String(file?.mimetype || '');
-  if (mime === 'application/pdf') return '.pdf';
-  if (mime.includes('png')) return '.png';
-  if (mime.includes('webp')) return '.webp';
-  if (mime.includes('gif')) return '.gif';
-  if (mime.includes('mp4')) return '.mp4';
-  if (mime.includes('quicktime')) return '.mov';
-  if (mime.includes('webm')) return '.webm';
-  return '.bin';
+/**
+ * LE TYPE RÉEL D'UN LIVRABLE, LU DANS SES PREMIERS OCTETS.
+ *
+ * Le type et le nom annoncés par le navigateur se falsifient : un `.html`
+ * déclaré `image/png` était enregistré tel quel sous `/uploads`, donc servi
+ * depuis les domaines du site — du script exécuté chez qui l'ouvrait.
+ * Seules les signatures ci-dessous sont acceptées, et l'extension finale est
+ * celle du type RECONNU, jamais celle du nom d'origine.
+ */
+export function sniffDeliverable(tete) {
+  const b = Buffer.isBuffer(tete) ? tete : Buffer.from(tete || []);
+  const asc = (debut, fin) => b.subarray(debut, fin).toString('latin1');
+  if (asc(0, 5) === '%PDF-') return { ext: '.pdf', mime: 'application/pdf', kind: 'PDF' };
+  if (b[0] === 0x89 && asc(1, 4) === 'PNG') return { ext: '.png', mime: 'image/png', kind: 'IMAGE' };
+  if (b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return { ext: '.jpg', mime: 'image/jpeg', kind: 'IMAGE' };
+  if (asc(0, 4) === 'GIF8') return { ext: '.gif', mime: 'image/gif', kind: 'IMAGE' };
+  if (asc(0, 4) === 'RIFF' && asc(8, 12) === 'WEBP') return { ext: '.webp', mime: 'image/webp', kind: 'IMAGE' };
+  if (b[0] === 0x1a && b[1] === 0x45 && b[2] === 0xdf && b[3] === 0xa3) return { ext: '.webm', mime: 'video/webm', kind: 'VIDEO' };
+  if (asc(4, 8) === 'ftyp') {
+    const marque = asc(8, 12);
+    if (/^(heic|heix|heim|heis|mif1|msf1)$/.test(marque)) return { ext: '.heic', mime: 'image/heic', kind: 'IMAGE' };
+    if (marque === 'qt  ') return { ext: '.mov', mime: 'video/quicktime', kind: 'VIDEO' };
+    return { ext: '.mp4', mime: 'video/mp4', kind: 'VIDEO' };
+  }
+  return null;
 }
 
 export async function uploadCustomerTrainingDeliverable(customerId, file) {
   if (!file?.path && !file?.buffer?.length) throw ApiError.badRequest('Aucun fichier reçu');
-  const mime = String(file.mimetype || 'application/octet-stream');
-  const kind = mime.startsWith('image/') ? 'IMAGE' : mime.startsWith('video/') ? 'VIDEO' : mime === 'application/pdf' ? 'PDF' : 'FILE';
+  let tete;
+  if (file.path) {
+    const fh = await fs.open(file.path, 'r');
+    try { tete = Buffer.alloc(16); await fh.read(tete, 0, 16, 0); } finally { await fh.close(); }
+  } else tete = file.buffer.subarray(0, 16);
+  const reel = sniffDeliverable(tete);
+  if (!reel) {
+    if (file.path) await fs.unlink(file.path).catch(() => {});
+    throw ApiError.badRequest('Formats acceptés : image, vidéo ou PDF.', { code: 'DELIVERABLE_TYPE_UNSUPPORTED' });
+  }
+  const mime = reel.mime;
+  const kind = reel.kind;
   const dir = path.join(config.paths.uploads, 'training-deliverables');
   let filename;
   if (file.path) {
-    // Déjà écrit sur le disque par multer, sous le nom qui porte la cliente.
-    filename = path.basename(file.path);
+    // Déjà écrit sur le disque par multer, sous le nom qui porte la cliente :
+    // seule l'extension est remplacée par celle du type reconnu.
+    const actuel = path.basename(file.path);
+    filename = `${actuel.slice(0, actuel.length - path.extname(actuel).length)}${reel.ext}`;
+    if (filename !== actuel) await fs.rename(file.path, path.join(path.dirname(file.path), filename));
   } else {
     await fs.mkdir(dir, { recursive: true });
-    filename = `${Date.now()}-${crypto.randomUUID()}${safeUploadExtension(file)}`;
+    filename = `${Date.now()}-${crypto.randomUUID()}${reel.ext}`;
     await fs.writeFile(path.join(dir, filename), file.buffer);
   }
   return {

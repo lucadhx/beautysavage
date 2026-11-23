@@ -67,6 +67,9 @@ export const authenticate = asyncHandler(async (req, res, next) => {
 
   const user = await User.findById(payload.sub).select('-password');
   if (!user) throw ApiError.unauthorized('Compte introuvable');
+  if (user.sessionsRevokedAt && Number(payload.iat || 0) * 1000 < user.sessionsRevokedAt.getTime()) {
+    throw ApiError.unauthorized('Session expirée : reconnectez-vous.');
+  }
 
   req.user = user;
   req.principal = {

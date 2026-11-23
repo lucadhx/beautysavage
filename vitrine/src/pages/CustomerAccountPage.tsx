@@ -35,7 +35,7 @@ export default function CustomerAccountPage() {
   */
   const navigate = useNavigate();
   const retour = params.get('retour') || '';
-  const safeRetour = /^\/(?!\/)[^\s]*$/.test(retour) ? retour : '';
+  const safeRetour = /^\/(?![/\\])[^\s\\]*$/.test(retour) ? retour : '';
   const retourQuery = safeRetour ? `?retour=${encodeURIComponent(safeRetour)}` : '';
   React.useEffect(() => {
     if (customer?.emailVerified && safeRetour) navigate(safeRetour, { replace: true });

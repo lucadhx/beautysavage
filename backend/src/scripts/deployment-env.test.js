@@ -26,6 +26,10 @@ const SRC = {
   PUBLIC_URL: 'http://localhost:6070',
   INTEGRATED_API_ENCRYPTION_KEY: 'a'.repeat(64),
   DEPLOY_VPS_SESSION_TTL_MS: '900000', // plan de contrôle : NE doit PAS partir sur le VPS
+  TEST_SHORTCUTS: '1', // poste de travail : NE doit PAS partir sur le VPS
+  // La production a SES secrets : jamais ceux de la recette.
+  PROD__JWT_SECRET: 'secret-propre-a-la-production-tres-long-0987654321',
+  PROD__INTEGRATED_API_ENCRYPTION_KEY: 'b'.repeat(64),
 };
 
 try {
@@ -39,8 +43,14 @@ try {
   check('2. MONGODB_URI VERBATIM (jamais réécrit)', e.MONGODB_URI === SRC.MONGODB_URI);
   check('2b. DB_TEST VERBATIM (du .env, jamais inventé)', e.DB_TEST === 'sbauto06_test');
   check('2c. DB_PROD VERBATIM (du .env, jamais inventé)', e.DB_PROD === 'sbauto06_prod');
-  check('2d. JWT_SECRET VERBATIM (pas de génération)', e.JWT_SECRET === SRC.JWT_SECRET);
-  check('2e. clé de chiffrement VERBATIM (pas de génération)', e.INTEGRATED_API_ENCRYPTION_KEY === SRC.INTEGRATED_API_ENCRYPTION_KEY);
+  check('2d. JWT_SECRET PROD = PROD__JWT_SECRET (pas celui de la recette)', e.JWT_SECRET === SRC.PROD__JWT_SECRET);
+  check('2e. clé de chiffrement PROD = PROD__… (pas celle de la recette)', e.INTEGRATED_API_ENCRYPTION_KEY === SRC.PROD__INTEGRATED_API_ENCRYPTION_KEY);
+  check('2e2. aucune clé préfixée PROD__ ne part sur le serveur', !Object.keys(e).some((k) => /^(PROD|TEST)__/.test(k)));
+  check('2e3. TEST_SHORTCUTS jamais sur un serveur', !('TEST_SHORTCUTS' in e));
+  let refus = null;
+  try { buildRemoteEnv(TARGET, { env: 'PROD', source: { ...SRC, PROD__JWT_SECRET: undefined } }); } catch (err) { refus = err; }
+  check('2e4. PROD sans secret propre -> DEPLOY_ENV_SHARED_SECRET', refus?.code === 'DEPLOY_ENV_SHARED_SECRET' && /JWT_SECRET/.test(refus.message));
+  check('2e5. …le message ne contient aucune valeur secrète', refus && !refus.message.includes(SRC.JWT_SECRET));
   check('2f. JWT_EXPIRES_IN VERBATIM', e.JWT_EXPIRES_IN === '7d');
 
   /* 3. Overrides spécifiques à l'hôte — et RIEN d'autre. */
@@ -57,6 +67,7 @@ try {
   const t = buildRemoteEnv(TARGET, { env: 'TEST', source: { ...SRC } });
   check('5. ENV=TEST -> dbName effectif = DB_TEST', t.dbName === 'sbauto06_test' && t.remoteEnv.ENV === 'TEST');
   check('5b. DB_PROD toujours présent (verbatim) même en TEST', t.remoteEnv.DB_PROD === 'sbauto06_prod');
+  check('5c. la recette garde SES secrets, jamais ceux de la production', t.remoteEnv.JWT_SECRET === SRC.JWT_SECRET && !Object.keys(t.remoteEnv).some((k) => /^PROD__/.test(k)));
 
   /* 6. Clés additionnelles du .env reprises verbatim (ex. STRIPE_PROVIDER). */
   const withExtra = buildRemoteEnv(TARGET, {
@@ -97,7 +108,7 @@ try {
   /* 8. describeRemoteEnv : résumé SANS aucune valeur secrète. */
   const desc = describeRemoteEnv({ remoteEnv: e, dbName, env: 'PROD' });
   const blob = JSON.stringify(desc);
-  check('8. résumé ne fuit ni JWT ni clé ni mot de passe Mongo', !blob.includes(SRC.JWT_SECRET) && !blob.includes(SRC.INTEGRATED_API_ENCRYPTION_KEY) && !blob.includes('PWD123'));
+  check('8. résumé ne fuit ni JWT ni clé ni mot de passe Mongo', !blob.includes(SRC.JWT_SECRET) && !blob.includes(SRC.PROD__JWT_SECRET) && !blob.includes(SRC.INTEGRATED_API_ENCRYPTION_KEY) && !blob.includes('PWD123'));
   check('8b. résumé expose base + type mongo + hôte', desc.dbName === 'sbauto06_prod' && desc.mongo === 'atlas (mongodb+srv)' && desc.publicUrl === 'https://demo-sbauto.lycarz.com');
 
   /* 9. Ordre des clés préservé (lisibilité du .env distant). */

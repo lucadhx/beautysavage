@@ -206,6 +206,11 @@ export async function describeTestLogin() {
   }
 
   const federation = federationAvailability();
+  // Serveur de recette en ligne : la fédération reste proposée (elle prouve
+  // l'identité), mais la liste des comptes et l'entrée sans mot de passe non.
+  if (!config.testShortcuts) {
+    return { enabled: false, environment: config.env, federation, accounts: [], labels: SOURCE_LABEL };
+  }
   const canoniques = await listProjectAccounts();
 
   const accounts = canoniques

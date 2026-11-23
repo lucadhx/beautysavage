@@ -291,10 +291,18 @@ export class SshTransport extends Transport {
     return this._sftp;
   }
 
-  async writeFile(remotePath, content) {
+  /**
+   * MODE EXPLICITE — sans lui, SFTP crée le fichier en 0666 : le `.env` de
+   * chaque site (clé Mongo, secrets JWT, clés de chiffrement) était lisible ET
+   * modifiable par n'importe quel compte du serveur. 0644 par défaut (Nginx doit
+   * pouvoir lire une config ou un manifeste) ; les secrets passent `mode: 0o600`.
+   * `open` n'applique le mode qu'à la CRÉATION : l'appelant d'un secret refait un
+   * `chmod` derrière pour un fichier déjà présent.
+   */
+  async writeFile(remotePath, content, { mode = 0o644 } = {}) {
     const sftp = await this._getSftp();
     await new Promise((resolve, reject) => {
-      const ws = sftp.createWriteStream(remotePath);
+      const ws = sftp.createWriteStream(remotePath, { mode });
       ws.on('close', resolve).on('error', reject);
       ws.end(Buffer.from(String(content), 'utf8'));
     });

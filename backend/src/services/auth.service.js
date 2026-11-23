@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { burnPasswordCheck } from '../utils/constantTimeLogin.js';
 import jwt from 'jsonwebtoken';
 import { config } from '../config/env.js';
 import { User } from '../models/User.model.js';
@@ -17,7 +18,10 @@ function signToken(user) {
 
 export async function login(email, password) {
   const user = await User.findOne({ email: email.toLowerCase() }).select('+password');
-  if (!user) throw ApiError.unauthorized('Email ou mot de passe incorrect');
+  if (!user) {
+    await burnPasswordCheck(password, 12);
+    throw ApiError.unauthorized('Email ou mot de passe incorrect');
+  }
 
   /**
    * ══ UN COMPTE EN ATTENTE D'ACTIVATION NE SE CONNECTE PAS (LOT 2C) ═════════
@@ -92,7 +96,7 @@ export async function listTestAccounts() {
  * jamais éprouver le parcours qu'on vient d'écrire.
  */
 export async function devLogin(email) {
-  if (!config.isTest) throw ApiError.forbidden('Fonction indisponible dans cet environnement');
+  if (!config.testShortcuts) throw ApiError.forbidden('Fonction indisponible dans cet environnement');
   const user = await User.findOne({ email: email.toLowerCase() });
   if (!user) {
     /**

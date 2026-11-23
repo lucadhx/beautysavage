@@ -40,7 +40,7 @@ export const pricingRangeUpdateSchema = {
 export const accountCreateSchema = {
   body: z.object({
     email: z.string().email('Email invalide'),
-    password: z.string().min(6, 'Mot de passe : 6 caractères minimum'),
+    password: z.string().min(10, 'Mot de passe : 10 caractères minimum'),
     name: z.string().optional().default(''),
     role: z.enum(ROLE_VALUES),
   }),
@@ -50,7 +50,7 @@ export const accountUpdateSchema = {
   params: z.object({ id: z.string().min(1) }),
   body: z.object({
     email: z.string().email('Email invalide').optional(),
-    password: z.string().min(6).optional().or(z.literal('')),
+    password: z.string().min(10).optional().or(z.literal('')),
     name: z.string().optional(),
     role: z.enum(ROLE_VALUES).optional(),
   }),

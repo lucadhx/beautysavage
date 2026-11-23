@@ -35,7 +35,12 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const DEFAULT_SOURCE_ENV = path.resolve(__dirname, '../../.env');
 
 /** Variables du plan de contrôle / scripts : jamais embarquées sur le VPS. */
-const CONTROL_ONLY_KEYS = new Set(['DEPLOY_VPS_SESSION_TTL_MS', 'CONFIRM_PROD_PROMOTION']);
+// TEST_SHORTCUTS : raccourcis de recette du POSTE (connexion sans mot de passe…),
+// jamais sur un serveur — voir config/env.js.
+const CONTROL_ONLY_KEYS = new Set(['DEPLOY_VPS_SESSION_TTL_MS', 'CONFIRM_PROD_PROMOTION', 'TEST_SHORTCUTS']);
+
+/** Secrets qu'une production ne partage JAMAIS avec la recette. */
+export const PROD_OWN_SECRETS = ['JWT_SECRET', 'INTEGRATED_API_ENCRYPTION_KEY'];
 
 /** Parse un contenu façon dotenv en objet { CLE: valeur }. */
 export function parseEnv(text) {
@@ -130,6 +135,33 @@ export function buildRemoteEnv(target, { env = 'PROD', sourceEnvPath = DEFAULT_S
   const remoteEnv = {};
   for (const [k, v] of Object.entries(src)) {
     if (!CONTROL_ONLY_KEYS.has(k)) remoteEnv[k] = v;
+  }
+
+  /*
+    SECRETS PROPRES À UN ENVIRONNEMENT — `PROD__JWT_SECRET=…` dans le `.env`
+    source remplace `JWT_SECRET` pour une cible PROD (et `TEST__…` pour TEST).
+    Les clés préfixées ne partent jamais telles quelles sur le serveur.
+
+    POURQUOI : la recette et la production recevaient la MÊME clé de signature.
+    La production étant une copie de la recette (mêmes identifiants de comptes),
+    un jeton obtenu en recette — où la connexion se fait sans mot de passe —
+    ouvrait le Manager de production.
+  */
+  for (const [k, v] of Object.entries(remoteEnv)) {
+    const m = k.match(/^(PROD|TEST)__([A-Z0-9_]+)$/);
+    if (!m) continue;
+    delete remoteEnv[k];
+    if (m[1] === targetEnv && v) remoteEnv[m[2]] = v;
+  }
+  if (targetEnv === 'PROD') {
+    const partages = PROD_OWN_SECRETS.filter((k) => remoteEnv[k] && remoteEnv[k] === src[k]);
+    if (partages.length) {
+      throw new DeploymentError(
+        'DEPLOY_ENV_SHARED_SECRET',
+        `Refus de déployer ${host} en PROD : ${partages.join(', ')} identique(s) à la recette. Ajoutez ${partages.map((k) => `PROD__${k}`).join(', ')} au .env du projet.`,
+        { step: 'build', details: { shared: partages } }
+      );
+    }
   }
 
   // Overrides SPÉCIFIQUES À L'HÔTE — rien d'autre n'est modifié.

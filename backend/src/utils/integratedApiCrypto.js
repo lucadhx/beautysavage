@@ -120,7 +120,11 @@ export function decryptSecret(payload) {
   const iv = Buffer.from(ivB64, 'base64');
   const authTag = Buffer.from(authTagB64, 'base64');
   const encrypted = Buffer.from(encB64, 'base64');
-  const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
+  // Tag de 16 octets exigé : un tag tronqué affaiblirait l'authentification GCM.
+  if (iv.length !== IV_LENGTH || authTag.length !== 16) {
+    throw new Error('[crypto] Format chiffré invalide (IV ou tag d’authentification de taille inattendue).');
+  }
+  const decipher = crypto.createDecipheriv(ALGORITHM, key, iv, { authTagLength: 16 });
   decipher.setAuthTag(authTag);
   return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString('utf8');
 }

@@ -55,3 +55,6 @@ skills-lock.json
 
 # Artefacts de recette locale — jamais versionnés.
 .recette/
+
+# Liens signés éphémères (jamais versionnés)
+playback-url.txt

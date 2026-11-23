@@ -332,8 +332,9 @@ export const customerApi = {
     publicSend<{ customer: Customer; token: string }>('/customer/login', { email, password }),
   requestEmailVerification: () =>
     publicSend<{ message: string; verificationCode?: string }>('/customer/email-verification/request', {}, customerTokenStore.get()),
-  verifyEmail: (code: string) =>
-    publicSend<{ customer: Customer; token: string; message: string }>('/customer/email-verification/confirm', { code }),
+  // Le code est lié à UNE cliente : sa session si elle est connectée, sinon l'adresse du lien.
+  verifyEmail: (code: string, email?: string) =>
+    publicSend<{ customer: Customer; token: string; message: string }>('/customer/email-verification/confirm', { code, ...(email ? { email } : {}) }, customerTokenStore.get()),
   requestPasswordReset: (email: string) =>
     publicSend<{ message: string; resetUrl?: string }>('/customer/password-reset/request', { email }),
   resetPassword: (body: { token: string; password: string }) =>

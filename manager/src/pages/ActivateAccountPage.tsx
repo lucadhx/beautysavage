@@ -79,8 +79,8 @@ export function ActivateAccountPage() {
   }, [token]);
 
   const localError =
-    password && password.length < 6
-      ? 'Au moins 6 caractères.'
+    password && password.length < 10
+      ? 'Au moins 10 caractères.'
       : confirm && password !== confirm
         ? 'Les mots de passe ne correspondent pas.'
         : null;
@@ -185,7 +185,7 @@ export function ActivateAccountPage() {
               Accès ouvert au nom de <span className="font-medium text-foreground">{profil.name}</span>.
             </p>
           )}
-          <Field label="Mot de passe" hint="6 caractères minimum.">
+          <Field label="Mot de passe" hint="10 caractères minimum.">
             <Input
               type={show ? 'text' : 'password'}
               value={password}

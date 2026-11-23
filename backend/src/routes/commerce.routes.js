@@ -27,7 +27,7 @@ export const publicCommerceRoutes = Router();
 publicCommerceRoutes.get('/catalog', asyncHandler(async (_req, res) => ok(res, await commerce.listCatalog())));
 // Collections de prestations (rayons de la page « Prestations »), dans l'ordre choisi.
 publicCommerceRoutes.get('/collections', asyncHandler(async (_req, res) => ok(res, await collections.listPublicCollections())));
-publicCommerceRoutes.get('/availability', requireSiteOpenForPurchase, identifyCustomer, asyncHandler(async (req, res) => ok(res, await calendar.listAvailability(req.query, { customerId: req.customer?._id, enforceNotice: true }))));
+publicCommerceRoutes.get('/availability', rateLimit({ windowMs: 60_000, max: 90 }), requireSiteOpenForPurchase, identifyCustomer, asyncHandler(async (req, res) => ok(res, await calendar.listAvailability(req.query, { customerId: req.customer?._id, enforceNotice: true }))));
 /*
   LES VIDÉOS — une bande-annonce se lit librement ; une vidéo de module, seulement
   par une cliente qui a accès à la formation (achat direct ou pack). Voir
@@ -70,12 +70,12 @@ export const customerRoutes = Router();
  */
 const customerLoginLimiter = authRateLimit({ scope: 'customer-login' });
 const customerRegisterLimiter = authRateLimit({ scope: 'customer-register' });
-const customerOtpLimiter = authRateLimit({ scope: 'customer-otp', identityFrom: () => null });
+const customerOtpLimiter = authRateLimit({ scope: 'customer-otp', identityFrom: (req) => (req.body?.email ? String(req.body.email).toLowerCase() : null) });
 const customerResetRequestLimiter = authRateLimit({ scope: 'customer-reset-request' });
 const customerResetConfirmLimiter = authRateLimit({ scope: 'customer-reset-confirm', identityFrom: () => null });
 customerRoutes.post('/register', customerRegisterLimiter, asyncHandler(async (req, res) => created(res, await commerce.registerCustomer(req.body))));
 customerRoutes.post('/login', customerLoginLimiter, asyncHandler(async (req, res) => ok(res, await commerce.loginCustomer(req.body.email, req.body.password))));
-customerRoutes.post('/email-verification/confirm', customerOtpLimiter, asyncHandler(async (req, res) => ok(res, await commerce.verifyCustomerEmail(req.body.code || req.body.token))));
+customerRoutes.post('/email-verification/confirm', customerOtpLimiter, identifyCustomer, asyncHandler(async (req, res) => ok(res, await commerce.verifyCustomerEmail(req.body.code || req.body.token, { customerId: req.customer?._id || null, email: req.body.email }))));
 customerRoutes.post('/email-verification/request', authenticateCustomer, asyncHandler(async (req, res) => ok(res, await commerce.requestCustomerEmailVerification(req.customer._id))));
 customerRoutes.post('/password-reset/request', customerResetRequestLimiter, asyncHandler(async (req, res) => ok(res, await commerce.requestCustomerPasswordReset(req.body.email, { siteUrl: await siteUrlFor(req) }))));
 customerRoutes.post('/password-reset/confirm', customerResetConfirmLimiter, asyncHandler(async (req, res) => ok(res, await commerce.resetCustomerPassword(req.body))));

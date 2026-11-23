@@ -15,6 +15,7 @@ import { SeoSettings } from '../../models/SeoSettings.model.js';
 import { listPublicCollections } from '../serviceCollection.service.js';
 import { projectCompanyMedia, projectHomeContentMedia, resolveOne } from '../media/mediaProjection.service.js';
 import { iconVersion } from './siteIcon.service.js';
+import { shareImageFor, SHARE_IMAGE } from './shareImage.service.js';
 
 /**
  * LE RÉFÉRENCEMENT DE LA VITRINE — SEO (moteurs) et GEO (assistants IA).
@@ -231,10 +232,27 @@ export async function loadSeoData() {
 
 /* ── Faits dérivés ───────────────────────────────────────────────────────── */
 
-function abs(data, url) {
+function abs(data, url, { garderHote = false } = {}) {
   const u = String(url || '').trim();
   if (!u) return '';
-  if (/^https?:\/\//i.test(u)) return u;
+  if (/^https?:\/\//i.test(u)) {
+    if (garderHote) return u;
+    /*
+      UN MÉDIA DU SITE EST ANNONCÉ SUR LE DOMAINE DU SITE. Les médias projetés
+      pointent vers l'hôte d'API (`api.<domaine>/uploads/…`), que son robots.txt
+      et son en-tête `noindex` ferment aux moteurs : Google ne pouvait lire ni
+      le logo ni l'image de partage, et X n'affichait aucune vignette. Le même
+      fichier est servi par le domaine public — c'est cette adresse qu'on publie.
+    */
+    try {
+      const cible = new URL(u);
+      const site = new URL(data.base);
+      if (cible.pathname.startsWith('/uploads/') && cible.host !== site.host && cible.host.endsWith(`.${site.host}`)) {
+        return `${data.base}${cible.pathname}${cible.search}`;
+      }
+    } catch { /* adresse illisible : rendue telle quelle */ }
+    return u;
+  }
   return `${data.base}${u.startsWith('/') ? '' : '/'}${u}`;
 }
 
@@ -296,7 +314,14 @@ function socialProfiles(data) {
   const li = data.media.linkedin;
   if (li && /^https?:/i.test(li)) out.push(li);
   for (const u of data.settings.sameAs || []) if (/^https?:\/\//i.test(u)) out.push(u);
-  return [...new Set(out)];
+  // Une même page écrite deux fois (barre finale, majuscules) n'est qu'un profil.
+  const vus = new Set();
+  return out.filter((u) => {
+    const cle = u.trim().toLowerCase().replace(/\/+$/, '').replace(/^https?:\/\/(www\.)?/, '');
+    if (vus.has(cle)) return false;
+    vus.add(cle);
+    return true;
+  }).map((u) => u.trim().replace(/\/+$/, ''));
 }
 
 const siteName = (data) => oneLine(data.company.name) || 'Institut';
@@ -359,7 +384,9 @@ function productTitle(data, p) {
   const redundant = label && title.toLowerCase().includes(label.split(' ')[0].toLowerCase());
   const place = p.kind === 'SERVICE' && c ? ` à ${c}` : '';
   const qualified = label && !redundant ? `${title} — ${label}${place}` : `${title}${place}`;
-  const candidates = [`${qualified} · ${name}`, `${title}${place} · ${name}`, `${title} · ${name}`, title];
+  // La marque n'est pas répétée quand le nom la porte déjà (« Carte cadeau MELINAILS »).
+  const porteLaMarque = name && title.toLowerCase().includes(name.toLowerCase());
+  const candidates = porteLaMarque ? [qualified, `${title}${place}`, title] : [`${qualified} · ${name}`, `${title}${place} · ${name}`, `${title} · ${name}`, title];
   return candidates.find((t) => t.length <= 65) || clip(title, 65);
 }
 
@@ -445,11 +472,6 @@ function websiteNode(data) {
     name: siteName(data),
     inLanguage: 'fr-FR',
     publisher: { '@id': `${data.base}/#business` },
-    potentialAction: {
-      '@type': 'SearchAction',
-      target: { '@type': 'EntryPoint', urlTemplate: `${data.base}/boutique?q={search_term_string}` },
-      'query-input': 'required name=search_term_string',
-    },
   };
 }
 
@@ -508,7 +530,7 @@ function productNode(data, p) {
   const url = productUrl(data, p);
   const list = data.reviewsByProduct.get(String(p._id)) || [];
   const r = rating(list);
-  const image = [p.coverUrl, ...(p.gallery || [])].map((u) => abs(data, u)).filter(Boolean);
+  const image = [...new Set([p.coverUrl, ...(p.gallery || [])].map((u) => abs(data, u)).filter(Boolean))];
   const common = {
     '@id': `${url}#offer-item`,
     name: p.title,
@@ -532,10 +554,18 @@ function productNode(data, p) {
   if (p.kind === 'DISTANCE_TRAINING' || p.kind === 'IN_PERSON_TRAINING') {
     const online = p.kind === 'DISTANCE_TRAINING';
     const address = oneLine(p.training?.location) || addressText(data);
+    /*
+      La CHARGE de travail est exigée par Google pour chaque session d'un cours
+      (résultat enrichi « Cours ») ; sans date ni durée, la fiche n'y était pas
+      éligible. Elle vient de la durée en jours de la formation (7 h par jour).
+    */
+    const jours = Math.max(0, Number(p.training?.durationDays || 0));
+    const workload = jours ? `PT${Math.round(jours * 7)}H` : undefined;
     const instances = online
-      ? [{ '@type': 'CourseInstance', courseMode: 'Online', inLanguage: 'fr' }]
+      ? [{ '@type': 'CourseInstance', courseMode: 'Online', inLanguage: 'fr', ...(workload ? { courseWorkload: workload } : {}) }]
       : futureSessions(p).slice(0, 10).map((s) => ({
         '@type': 'CourseInstance',
+        ...(workload ? { courseWorkload: workload } : {}),
         courseMode: 'Onsite',
         startDate: new Date(s.startsAt).toISOString(),
         endDate: new Date(s.endsAt).toISOString(),
@@ -549,7 +579,7 @@ function productNode(data, p) {
       inLanguage: 'fr',
       educationalCredentialAwarded: p.evaluation?.enabled ? 'Attestation de formation après évaluation finale' : undefined,
       offers: { ...offerOf(data, p, url), category: 'Paid' },
-      hasCourseInstance: instances.length ? instances : [{ '@type': 'CourseInstance', courseMode: 'Onsite', inLanguage: 'fr' }],
+      hasCourseInstance: instances.length ? instances : [{ '@type': 'CourseInstance', courseMode: 'Onsite', inLanguage: 'fr', courseWorkload: workload || 'PT7H' }],
     };
   }
   return {
@@ -645,6 +675,7 @@ export async function resolveRoute(rawPath, { originFallback = '' } = {}) {
     canonical: url,
     robots: indexable ? 'index, follow, max-image-preview:large, max-snippet:-1' : 'noindex, nofollow',
     ogType: 'website',
+    base: data.base,
     image: defaultImage,
     imageAlt: name,
     jsonLd: [],
@@ -660,7 +691,9 @@ export async function resolveRoute(rawPath, { originFallback = '' } = {}) {
   if (pathname === '/') {
     route.title = composeTitle(data, oneLine(data.settings.homeTitle) || [name, oneLine(data.company.tagline)].filter(Boolean).join(' · '));
     graph.push(webPageNode(data, { url, name: route.title, description: route.description, image: defaultImage }));
-    if (data.home?.hero?.image) route.preload.push(abs(data, data.home.hero.image));
+    // Le préchargement vise l'adresse EXACTE que la vitrine charge (sinon l'image
+    // serait téléchargée deux fois, et le premier affichage ralenti).
+    if (data.home?.hero?.image) route.preload.push(abs(data, data.home.hero.image, { garderHote: true }));
     route.body = homeBody(data);
   } else if (pathname.startsWith('/prestations/')) {
     const slug = pathname.slice('/prestations/'.length);
@@ -685,7 +718,13 @@ export async function resolveRoute(rawPath, { originFallback = '' } = {}) {
     const titles = items.slice(0, 4).map((p) => p.title).join(', ');
     const headings = {
       '/prestations': `Prestations beauté${c ? ` à ${c}` : ''}`,
-      '/formations': 'Formations beauté en ligne et en présentiel',
+      // Le titre dit ce qui existe : « en ligne » seulement s'il y a des formations en ligne.
+      '/formations': (() => {
+        const enLigne = items.some((p) => p.kind === 'DISTANCE_TRAINING' || p.kind === 'TRAINING_PACK');
+        const surPlace = items.some((p) => p.kind === 'IN_PERSON_TRAINING');
+        const ou = enLigne && surPlace ? 'en ligne et en présentiel' : enLigne ? 'en ligne' : surPlace ? `en présentiel${c ? ` à ${c}` : ''}` : '';
+        return `Formations beauté${ou ? ` ${ou}` : ''}`;
+      })(),
       '/formations/packs': 'Packs de formations beauté en ligne',
       '/cartes-cadeaux': 'Cartes cadeaux',
       '/boutique': 'Boutique : prestations, formations et cartes cadeaux',
@@ -699,7 +738,8 @@ export async function resolveRoute(rawPath, { originFallback = '' } = {}) {
         const onsite = items.filter((p) => p.kind === 'IN_PERSON_TRAINING').length;
         const packs = items.filter((p) => p.kind === 'TRAINING_PACK').length;
         const trainings = online + onsite;
-        return `${trainings} formation${trainings > 1 ? 's' : ''} ${name} : ${online} en ligne, ${onsite} en présentiel${packs ? `, et ${packs} pack${packs > 1 ? 's' : ''}` : ''}`;
+        const parts = [online ? `${online} en ligne` : '', onsite ? `${onsite} en présentiel` : ''].filter(Boolean);
+        return `${trainings} formation${trainings > 1 ? 's' : ''} ${name}${parts.length ? ` : ${parts.join(', ')}` : ''}${packs ? `, et ${packs} pack${packs > 1 ? 's' : ''}` : ''}`;
       })(),
       '/formations/packs': `${count} pack${count > 1 ? 's' : ''} de formations en ligne ${name}, à prix avantageux`,
       '/cartes-cadeaux': `Offrez un moment ${name} avec une carte cadeau envoyée par e-mail`,
@@ -978,6 +1018,37 @@ function iconTags(version) {
   ];
 }
 
+/**
+ * L'image annoncée aux réseaux : le JPEG 1200 × 630 dérivé quand l'image est un
+ * média du site (voir shareImage.service.js), avec ses dimensions et son type —
+ * sans elles, le premier partage d'un lien s'affiche sans vignette.
+ */
+function ogImageTags(route) {
+  if (!route.image) return [];
+  const derivee = shareImageFor(route.base, route.image);
+  return [
+    `<meta property="og:image" content="${esc(derivee || route.image)}" />`,
+    ...(derivee ? [
+      `<meta property="og:image:width" content="${SHARE_IMAGE.width}" />`,
+      `<meta property="og:image:height" content="${SHARE_IMAGE.height}" />`,
+      `<meta property="og:image:type" content="${SHARE_IMAGE.type}" />`,
+    ] : []),
+    `<meta property="og:image:alt" content="${esc(route.imageAlt)}" />`,
+  ];
+}
+
+/** Réannonce toutes les images de partage possibles (après un redémarrage). */
+export async function announceShareImages() {
+  const data = await loadSeoData();
+  const candidats = [
+    data.shareImage, data.home?.hero?.image, data.company?.heroImage, data.company?.logos?.header,
+    ...data.products.flatMap((p) => [p.coverUrl, p.gallery?.[0]]),
+    ...(data.collections || []).map((c) => c.coverUrl),
+    ...data.pages.map((pg) => pg.heroImage),
+  ];
+  for (const c of candidats) if (c) shareImageFor(data.base, c);
+}
+
 function headTags(route) {
   const tags = [
     `<title>${esc(route.title)}</title>`,
@@ -991,12 +1062,11 @@ function headTags(route) {
     `<meta property="og:title" content="${esc(route.title)}" />`,
     `<meta property="og:description" content="${esc(route.description)}" />`,
     route.canonical ? `<meta property="og:url" content="${esc(route.canonical)}" />` : '',
-    route.image ? `<meta property="og:image" content="${esc(route.image)}" />` : '',
-    route.image ? `<meta property="og:image:alt" content="${esc(route.imageAlt)}" />` : '',
+    ...ogImageTags(route),
     `<meta name="twitter:card" content="${route.image ? 'summary_large_image' : 'summary'}" />`,
     `<meta name="twitter:title" content="${esc(route.title)}" />`,
     `<meta name="twitter:description" content="${esc(route.description)}" />`,
-    route.image ? `<meta name="twitter:image" content="${esc(route.image)}" />` : '',
+    route.image ? `<meta name="twitter:image" content="${esc(shareImageFor(route.base, route.image) || route.image)}" />` : '',
     ...iconTags(route.iconVersion),
     ...route.preload.map((href) => `<link rel="preload" as="image" href="${esc(href)}" fetchpriority="high" />`),
     ...route.jsonLd.map((json) => `<script type="application/ld+json" data-seo="1">${JSON.stringify(json).replace(/</g, '\\u003c')}</script>`),
@@ -1028,6 +1098,13 @@ export async function renderVitrinePage(rawPath, opts = {}) {
   const key = normalizePath(rawPath);
   const cached = htmlCache.get(key);
   if (cached && Date.now() - cached.at < TTL_MS) return cached.value;
+  /*
+    ADRESSES QUI N'EN SONT PLUS : une vraie redirection permanente, pas une page
+    servie en double avec un canonique. `/presenter-un-projet` vient du site de
+    l'agence dont ce projet est issu.
+  */
+  const REDIRECTIONS = { '/presenter-un-projet': '/contact' };
+  if (REDIRECTIONS[key]) return { status: 301, location: REDIRECTIONS[key], html: '', robots: 'noindex, follow' };
   const [template, route] = await Promise.all([readTemplate(), resolveRoute(rawPath, opts)]);
   if (!template) return null;
   const value = { status: route.status, html: injectIntoTemplate(template, route), robots: route.robots };

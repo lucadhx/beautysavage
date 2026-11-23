@@ -130,8 +130,10 @@ section('1 · L’hôte PUBLIC a un bloc dédié pour le plan du site');
       && /location\s+@page_static\s*\{[\s\S]{0,200}?try_files\s+\/index\.html\s*=404\s*;/.test(vitrine));
 
   /** L'hôte public ne doit surtout PAS s'interdire lui-même l'indexation. */
+  // Seule exception : la coquille BRUTE à son adresse `/index.html` (doublon de
+  // `/` sans titre ni canonique). Le repli `@page_static`, lui, n'en porte pas.
   check('la vitrine ne porte AUCUN en-tête de non-indexation',
-    !/X-Robots-Tag/i.test(vitrine));
+    !/X-Robots-Tag/i.test(vitrine.replace(/location = \/index\.html \{[^}]*\}/, '')));
   /**
    * robots.txt est PRODUIT par le backend (domaine et adresses privées tirés de
    * la base), avec repli sur le fichier statique de la vitrine : un robots.txt

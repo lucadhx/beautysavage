@@ -93,6 +93,9 @@ export const uploadContractPdf = multer({
 /** Plafond d'un livrable (vidéo comprise) — Nginx doit laisser passer au moins autant. */
 export const TRAINING_DELIVERABLE_MAX_BYTES = 120 * 1024 * 1024;
 
+/** Les seules extensions d'un livrable : jamais `.html`, `.svg`, `.js`. */
+export const TRAINING_DELIVERABLE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif', '.heic', '.heif', '.mp4', '.m4v', '.mov', '.webm', '.pdf']);
+
 /**
  * LES LIVRABLES S'ÉCRIVENT DIRECTEMENT SUR LE DISQUE.
  *
@@ -118,7 +121,11 @@ export const uploadTrainingDeliverable = multer({
   limits: { fileSize: TRAINING_DELIVERABLE_MAX_BYTES },
   fileFilter(req, file, cb) {
     const mime = String(file.mimetype || '');
-    if (!mime.startsWith('image/') && !mime.startsWith('video/') && mime !== 'application/pdf') {
+    // Le type annoncé par le navigateur se falsifie : l'EXTENSION doit aussi être
+    // celle d'une image, d'une vidéo ou d'un PDF (les octets sont relus ensuite).
+    const ext = path.extname(file.originalname || '').toLowerCase();
+    if (!TRAINING_DELIVERABLE_EXTENSIONS.has(ext)
+      || (!mime.startsWith('image/') && !mime.startsWith('video/') && mime !== 'application/pdf')) {
       return cb(ApiError.badRequest(
         'Formats acceptes : image, video ou PDF.',
         { code: 'DELIVERABLE_TYPE_UNSUPPORTED' },

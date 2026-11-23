@@ -11,5 +11,7 @@ Disallow: /paiement
 Disallow: /espace-client
 Disallow: /connexion-client
 Disallow: /inscription-client
+Disallow: /verification-email
+Disallow: /avis
 
-Sitemap: https://beautysavage.ly-solution.com/sitemap.xml
+Sitemap: https://beautyconceptbyromane.fr/sitemap.xml

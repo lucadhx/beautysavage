@@ -324,7 +324,16 @@ export async function runPipeline({ transport, target, artifact, options, versio
         const envContent = Object.entries(remoteEnv)
           .map(([k, val]) => `${k}=${val}`)
           .join('\n');
-        await transport.writeFile(`${backendDir}/.env`, `${envContent}\n`);
+        await transport.writeFile(`${backendDir}/.env`, `${envContent}\n`, { mode: 0o600 });
+        // Le mode d'`open` ne vaut qu'à la création : un `.env` déjà présent
+        // gardait son 0666 d'avant. Secrets lisibles par root seul.
+        await runRemoteCommand(transport, {
+          commandId: 'env.protect',
+          command: `chmod 600 ${backendDir}/.env`,
+          commandClass: COMMAND_CLASS.CRITICAL,
+          timeoutMs: TIMEOUTS.FILESYSTEM,
+          step: 'dirs',
+        });
 
         // Relecture : ce qui est RÉELLEMENT sur le disque (NOMS de clés seulement,
         // jamais les valeurs). Confirme MONGODB_URI & co présents ET non vides.

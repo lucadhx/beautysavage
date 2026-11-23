@@ -127,8 +127,10 @@ async function main() {
   /* -------- nginx : politique de cache -------- */
   const target = parseTargetUrl('https://demo-sbauto.ly-solution.com', { wildcardBases: ['ly-solution.com'] });
   const cfg = renderNginxConfig(target, { webRoot: '/w', managerRoot: '/m', backendPort: 5005 });
-  check('nginx : index.html no-cache', cfg.includes('location = /index.html { add_header Cache-Control "no-cache"; }'));
-  check('nginx : version.json no-cache', cfg.includes('location = /version.json { add_header Cache-Control "no-cache"; }'));
+  // Le bloc porte ensuite les en-têtes de sécurité recopiés (voir withSecurityHeaders).
+  check('nginx : index.html no-cache', cfg.includes('location = /index.html { add_header Cache-Control "no-cache";'));
+  check('nginx : version.json no-cache', cfg.includes('location = /version.json { add_header Cache-Control "no-cache";'));
+  check('nginx : en-têtes de sécurité conservés sur index.html', /location = \/index\.html \{[^}]*X-Content-Type-Options "nosniff"[^}]*\}/.test(cfg));
   check('nginx : assets immutable', /location \/assets\/ \{[\s\S]*immutable/.test(cfg));
   check('nginx : assets expires 1y', /location \/assets\/ \{[\s\S]*expires 1y/.test(cfg));
   check('nginx : asset absent -> 404 (pas de HTML)', /location \/assets\/ \{[\s\S]*try_files \$uri =404/.test(cfg));

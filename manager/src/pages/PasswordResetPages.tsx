@@ -114,8 +114,8 @@ export function ResetPasswordPage() {
   const [error, setError] = React.useState<string | null>(null);
 
   const localError =
-    password && password.length < 6
-      ? 'Au moins 6 caractères.'
+    password && password.length < 10
+      ? 'Au moins 10 caractères.'
       : confirm && password !== confirm
         ? 'Les mots de passe ne correspondent pas.'
         : null;
@@ -164,7 +164,7 @@ export function ResetPasswordPage() {
         </div>
       ) : (
         <form onSubmit={submit} className="space-y-4 rounded-xl border border-border bg-card p-6 shadow-sm">
-          <Field label="Nouveau mot de passe" hint="6 caractères minimum.">
+          <Field label="Nouveau mot de passe" hint="10 caractères minimum.">
             <Input
               type={show ? 'text' : 'password'}
               value={password}

@@ -86,7 +86,8 @@ export function errorHandler(err, req, res, next) {
     details = norm.details;
   } else if (err.name === 'CastError') {
     statusCode = 400;
-    message = `Identifiant invalide : ${err.value}`;
+    // Jamais la valeur reçue en écho : une réponse ne recopie pas l'entrée.
+    message = 'Identifiant invalide';
   } else if (err.code === 11000) {
     statusCode = 409;
     message = `Valeur déjà utilisée : ${Object.keys(err.keyValue || {}).join(', ')}`;
@@ -118,8 +119,10 @@ export function errorHandler(err, req, res, next) {
   // Ne jamais divulguer le message d'une erreur interne inattendue (500 non
   // volontaire) : seuls les ApiError explicites portent un message destiné au
   // client. Le détail complet reste dans les logs serveur ci-dessus.
-  const safeMessage =
-    statusCode >= 500 && !(err instanceof ApiError) ? 'Erreur serveur' : message;
+  const interneInattendue = statusCode >= 500 && !(err instanceof ApiError);
+  const safeMessage = interneInattendue ? 'Erreur serveur' : message;
+  // Les détails d'une panne inattendue (driver, réseau, chemins) restent au journal.
+  if (interneInattendue && !MONGO_UNAVAILABLE.has(err.name)) details = undefined;
 
   // Remonte un code métier stable au niveau racine : celui de la validation
   // (`topCode`), sinon celui porté par un `details` OBJET (jamais un tableau,
@@ -165,6 +168,6 @@ export function errorHandler(err, req, res, next) {
     ...(retryAfterSeconds ? { retryAfterSeconds } : {}),
     message: safeMessage,
     ...(details ? { details } : {}),
-    ...(config.isTest && statusCode >= 500 ? { stack: err.stack } : {}),
+    ...(config.testShortcuts && statusCode >= 500 ? { stack: err.stack } : {}),
   });
 }

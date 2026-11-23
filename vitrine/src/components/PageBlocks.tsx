@@ -7,6 +7,7 @@ import { resolvePreviewMediaUrl } from '@/lib/media';
 import { siteIcon } from '@/lib/siteIcons';
 import { Lightbox } from '@/components/Lightbox';
 import { cn } from '@/lib/utils';
+import { sanitizeRichText } from '@/lib/richText';
 
 /**
  * LE RENDU DES BLOCS D'UNE PAGE ÉDITORIALE.
@@ -72,9 +73,11 @@ function Enveloppe({
 }
 
 function TexteRiche({ html }: { html: string }) {
-  if (!html?.trim()) return null;
+  // Assaini au serveur ET relu ici : deux filtres indépendants (défense en profondeur).
+  const propre = React.useMemo(() => sanitizeRichText(html || ''), [html]);
+  if (!propre.trim()) return null;
   // eslint-disable-next-line react/no-danger
-  return <div className="v-prose" dangerouslySetInnerHTML={{ __html: html }} />;
+  return <div className="v-prose" dangerouslySetInnerHTML={{ __html: propre }} />;
 }
 
 /**

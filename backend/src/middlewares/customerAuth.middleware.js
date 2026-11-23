@@ -4,6 +4,10 @@ import { ApiError } from '../utils/ApiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { Customer } from '../models/Customer.model.js';
 
+/** Jeton émis avant la dernière révocation (changement de mot de passe) ? */
+const revoque = (customer, payload) => Boolean(customer.sessionsRevokedAt)
+  && Number(payload.iat || 0) * 1000 < new Date(customer.sessionsRevokedAt).getTime();
+
 export const authenticateCustomer = asyncHandler(async (req, _res, next) => {
   const header = req.headers.authorization || '';
   const token = header.startsWith('Bearer ') ? header.slice(7) : null;
@@ -21,6 +25,7 @@ export const authenticateCustomer = asyncHandler(async (req, _res, next) => {
 
   const customer = await Customer.findById(payload.sub).select('-password');
   if (!customer) throw ApiError.unauthorized('Compte client introuvable');
+  if (revoque(customer, payload)) throw ApiError.unauthorized('Session expirée : reconnectez-vous.');
   req.customer = customer;
   next();
 });
@@ -38,8 +43,8 @@ export const identifyCustomer = asyncHandler(async (req, _res, next) => {
   if (token) {
     try {
       const payload = jwt.verify(token, config.jwt.secret, { algorithms: ['HS256'], audience: 'beautysavage.customer' });
-      const customer = await Customer.findById(payload.sub).select('_id');
-      if (customer) req.customer = customer;
+      const customer = await Customer.findById(payload.sub).select('_id sessionsRevokedAt');
+      if (customer && !revoque(customer, payload)) req.customer = customer;
     } catch { /* visiteur anonyme */ }
   }
   next();

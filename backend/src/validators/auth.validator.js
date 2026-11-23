@@ -29,7 +29,7 @@ export const resetPasswordSchema = {
   body: z
     .object({
       token: z.string().min(20, 'Lien invalide').max(200),
-      newPassword: z.string().min(6, 'Le nouveau mot de passe doit faire au moins 6 caractères'),
+      newPassword: z.string().min(10, 'Le nouveau mot de passe doit faire au moins 10 caractères'),
       confirmPassword: z.string().min(1, 'Confirmation requise'),
     })
     .refine((d) => d.newPassword === d.confirmPassword, {
@@ -50,7 +50,7 @@ export const activateAccountSchema = {
   body: z
     .object({
       token: z.string().min(20, 'Lien invalide').max(200),
-      newPassword: z.string().min(6, 'Le mot de passe doit faire au moins 6 caractères'),
+      newPassword: z.string().min(10, 'Le mot de passe doit faire au moins 10 caractères'),
       confirmPassword: z.string().min(1, 'Confirmation requise'),
     })
     .refine((d) => d.newPassword === d.confirmPassword, {
@@ -69,7 +69,7 @@ export const changePasswordSchema = {
   body: z
     .object({
       currentPassword: z.string().min(1, 'Mot de passe actuel requis'),
-      newPassword: z.string().min(6, 'Le nouveau mot de passe doit faire au moins 6 caractères'),
+      newPassword: z.string().min(10, 'Le nouveau mot de passe doit faire au moins 10 caractères'),
       confirmPassword: z.string().min(1, 'Confirmation requise'),
     })
     .refine((d) => d.newPassword === d.confirmPassword, {

@@ -151,7 +151,17 @@ function apiProxyAll(backendPort, { noindex = false } = {}) {
  */
 function staticSiteLocations({ noindex = false, backendPort = null } = {}) {
   const entete = noindex ? '\n        add_header X-Robots-Tag "noindex, nofollow" always;' : '';
-  return `    location = /index.html { add_header Cache-Control "no-cache";${entete} }
+  /*
+    Sur l'hôte PUBLIC rendu par le backend, `/index.html` n'est que la coquille
+    brute (sans titre, sans canonique) : une adresse en double pour les moteurs.
+    Elle est déclarée `noindex`. PAS de redirection : le contrôle de déploiement
+    (health.checkWebsiteArtifact) relit ce fichier pour le comparer au build.
+  */
+  const indexHtml = backendPort !== null
+    ? `    location = /index.html { add_header Cache-Control "no-cache";
+        add_header X-Robots-Tag "noindex, follow" always; }`
+    : `    location = /index.html { add_header Cache-Control "no-cache";${entete} }`;
+  return `${indexHtml}
     location = /version.json { add_header Cache-Control "no-cache"; }
     location = /build-manifest.json { add_header Cache-Control "no-cache"; }
 ${noindex ? `\n${sitemapAbsent()}\n${robotsInterdit()}\n` : ''}${backendPort !== null ? `\n${sitemapLocation(backendPort)}\n${seoProtocolLocations(backendPort)}\n` : ''}
@@ -538,6 +548,55 @@ export function servedHosts(target, opts = {}) {
  * @param {object} target Résultat de parseTargetUrl.
  * @param {object} opts   Voir planSites().
  */
+/**
+ * EN-TÊTES DE SÉCURITÉ DES HÔTES STATIQUES (vitrine, Manager).
+ *
+ * L'API les reçoit de helmet ; la vitrine et le Manager, servis par nginx, n'en
+ * avaient AUCUN : ni HSTS, ni `nosniff`, ni interdiction d'être affichés dans le
+ * cadre d'un site tiers (détournement de clic sur le Manager).
+ *
+ * PIÈGE NGINX : un `location` qui pose SON PROPRE `add_header` n'hérite plus de
+ * ceux du `server`. Les en-têtes sont donc posés au niveau du serveur ET recopiés
+ * dans chaque `location` qui a déjà un `add_header` (cache, noindex).
+ */
+export const SECURITY_HEADERS = [
+  'add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;',
+  'add_header X-Content-Type-Options "nosniff" always;',
+  'add_header X-Frame-Options "SAMEORIGIN" always;',
+  `add_header Content-Security-Policy "frame-ancestors 'self'; base-uri 'self'; object-src 'none'" always;`,
+  'add_header Referrer-Policy "strict-origin-when-cross-origin" always;',
+  'add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;',
+];
+
+/**
+ * COMPRESSION DES SCRIPTS ET FEUILLES DE STYLE. La configuration par défaut de
+ * nginx ne compresse que le HTML : ~0,5 Mo de JS/CSS partait en clair sur le
+ * chemin critique du premier affichage (≈ 150 Ko une fois compressés).
+ */
+const GZIP = [
+  '    gzip on;',
+  '    gzip_vary on;',
+  '    gzip_comp_level 6;',
+  '    gzip_min_length 1024;',
+  '    gzip_types text/css application/javascript text/javascript application/json application/xml text/xml image/svg+xml application/manifest+json text/plain;',
+].join(String.fromCharCode(10));
+
+export function withSecurityHeaders(serverBlock) {
+  const NL = String.fromCharCode(10);
+  const lignes = (indent) => SECURITY_HEADERS.map((h) => `${indent}${h}`).join(NL);
+  // Chaque location (blocs à un seul niveau d'accolades) qui pose déjà un add_header.
+  const recopie = serverBlock.replace(
+    /(location[^{\n]*\{)([^{}]*?add_header[^{}]*?\})/g,
+    // Recopiés EN FIN de bloc : les directives propres au bloc restent en tête.
+    (m, ouverture, corps) => `${ouverture}${corps.replace(/\s*\}$/, '')}${NL}${lignes('        ')}${NL}    }`,
+  );
+  // Niveau serveur : juste après client_max_body_size.
+  return recopie.replace(
+    /(client_max_body_size [^;]+;)/,
+    (m) => `${m}${NL}${NL}    # En-têtes de sécurité (voir SECURITY_HEADERS dans nginx.js).${NL}    server_tokens off;${NL}${lignes('    ')}${NL}${NL}${GZIP}`,
+  );
+}
+
 export function renderNginxConfig(target, opts) {
   const { backendPort } = opts;
   const sites = planSites(target, opts);
@@ -577,7 +636,7 @@ ${apiProxyAll(backendPort, { noindex: site.public !== true })}
       servir un ferait apparaître dans son domaine des adresses qui n'y sont
       pas, et l'inviterait à l'indexation qu'on lui refuse par ailleurs.
     */
-    return `# --- ${site.id}${site.public ? ' (hôte PUBLIC : indexable)' : ' (non indexable)'} ---
+    return withSecurityHeaders(`# --- ${site.id}${site.public ? ' (hôte PUBLIC : indexable)' : ' (non indexable)'} ---
 ${header}
 
     root ${site.root};
@@ -587,7 +646,7 @@ ${staticSiteLocations({
     noindex: site.public !== true,
     backendPort: site.public === true && site.withBackendProxy ? backendPort : null,
   })}
-}`;
+}`);
   });
 
   return `# Généré par DeploymentEngine — cible ${target.host}

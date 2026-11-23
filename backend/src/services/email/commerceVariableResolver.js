@@ -38,11 +38,13 @@ function saleLineHtml(line) {
 }
 
 export async function resolveCustomerEmailVerification({ event }) {
+  const vars = await customerVariables(event?.entityId || event?.payloadSafe?.customerId);
   return {
-    ...(await customerVariables(event?.entityId || event?.payloadSafe?.customerId)),
+    ...vars,
     verificationCode: event.payloadSafe.verificationPin,
-    // Le bouton de l'e-mail confirme en un clic : la page lit le code et le valide seule.
-    actionUrl: await customerAccountUrl(`/verification-email?code=${encodeURIComponent(event.payloadSafe.verificationPin)}`),
+    // Le bouton de l'e-mail confirme en un clic : la page lit le code (et l'adresse,
+    // à laquelle le code est lié) et le valide seule.
+    actionUrl: await customerAccountUrl(`/verification-email?code=${encodeURIComponent(event.payloadSafe.verificationPin)}&email=${encodeURIComponent(vars.clientEmail || '')}`),
     expiresAt: event.payloadSafe.expiresAt,
   };
 }

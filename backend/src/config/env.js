@@ -109,6 +109,16 @@ export const config = {
   panelWorld: ['TEST', 'PROD'].includes(String(process.env.PANEL_WORLD || '').toUpperCase()) ? String(process.env.PANEL_WORLD).toUpperCase() : ENV,
   isProd,
   isTest: !isProd,
+  /**
+   * RACCOURCIS DE RECETTE — connexion sans mot de passe, liste des comptes, lien
+   * de réinitialisation et code de vérification renvoyés dans la réponse, pas de
+   * limitation de débit, pile d'erreur exposée. Réservés au POSTE de travail :
+   * `TEST_SHORTCUTS=1` n'existe que dans le `.env` local, et le moteur de
+   * déploiement le retire (deployEnv.js). Un serveur de recette en ligne porte
+   * des données réelles : il se comporte comme la production sur ces points.
+   */
+  // Accesseur : suit `isTest` (que des tests basculent pour simuler la production).
+  get testShortcuts() { return this.isTest === true && process.env.TEST_SHORTCUTS === '1'; },
   port: Number(process.env.PORT) || 4000,
   mongoUri,
   dbName,

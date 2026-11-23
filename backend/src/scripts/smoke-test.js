@@ -57,7 +57,7 @@ try {
   });
   check('admin login', adminLogin.status === 200 && !!adminLogin.json.data.token);
   check('admin role', adminLogin.json.data.user.role === 'ADMIN');
-  const adminToken = adminLogin.json.data.token;
+  let adminToken = adminLogin.json.data.token;
 
   const devLogin = await api('POST', '/api/auth/login', {
     body: { email: 'dev@mail.com', password: '123dev' },
@@ -265,7 +265,7 @@ try {
 
   // Account creation by DEV
   const newAcc = await api('POST', '/api/accounts', {
-    token: devToken, body: { email: 'admin2@mail.com', password: 'secret1', role: 'ADMIN' },
+    token: devToken, body: { email: 'admin2@mail.com', password: 'secret-long-1', role: 'ADMIN' },
   });
   check('dev creates account', newAcc.status === 201);
 
@@ -310,12 +310,15 @@ try {
   // Change password
   const changed = await api('PATCH', '/api/auth/password', {
     token: adminToken,
-    body: { currentPassword: '123admin', newPassword: 'newpass1', confirmPassword: 'newpass1' },
+    body: { currentPassword: '123admin', newPassword: 'nouveau-mdp-1', confirmPassword: 'nouveau-mdp-1' },
   });
   check('password changed', changed.status === 200);
-  check('login with new password', (await api('POST', '/api/auth/login', {
-    body: { email: 'admin@mail.com', password: 'newpass1' },
-  })).status === 200);
+  // Changer de mot de passe coupe les sessions ouvertes AVANT (sessionsRevokedAt).
+  await new Promise((r) => setTimeout(r, 1100));
+  check('old session revoked after password change', (await api('GET', '/api/auth/me', { token: adminToken })).status === 401);
+  const relog = await api('POST', '/api/auth/login', { body: { email: 'admin@mail.com', password: 'nouveau-mdp-1' } });
+  check('login with new password', relog.status === 200);
+  adminToken = relog.json?.data?.token || adminToken;
 
   // Suppression d'un chapitre
   check('chapter deleted', (await api('DELETE', `/api/chapters/${chapterId}`, { token: adminToken })).status === 204);

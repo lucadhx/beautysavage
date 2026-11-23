@@ -29,9 +29,17 @@ function asDate(value, label) {
   return date;
 }
 
-function assertRange(startsAt, endsAt) {
+function assertRange(startsAt, endsAt, maxDays = Infinity) {
   if (endsAt <= startsAt) throw ApiError.badRequest('La fin doit être après le début');
+  // Une période sans borne (« de 2026 à 2200 ») gelait le serveur : chaque jour
+  // de l'intervalle est calculé créneau par créneau sur le fil unique de Node.
+  if ((endsAt - startsAt) / 86_400_000 > maxDays) {
+    throw ApiError.badRequest(`Période trop longue (${maxDays} jours au plus).`, { code: 'RANGE_TOO_LONG' });
+  }
 }
+/** La vitrine demande un mois (+ marges) ; le Manager, au plus une année. */
+const MAX_AVAILABILITY_DAYS = 62;
+const MAX_EVENTS_DAYS = 400;
 
 function publicEvent(event, extra = {}) {
   return {
@@ -176,7 +184,7 @@ export async function clearDayException(date) {
 export async function listEvents(query = {}) {
   const from = asDate(query.from || new Date(Date.now() - 7 * 86400_000), 'Date de debut');
   const to = asDate(query.to || new Date(Date.now() + 30 * 86400_000), 'Date de fin');
-  assertRange(from, to);
+  assertRange(from, to, MAX_EVENTS_DAYS);
   const stored = await CalendarEvent.find({
     startsAt: { $lt: to },
     endsAt: { $gt: from },
@@ -337,10 +345,35 @@ async function cartBusy(customerId, cartLineId, cartGroupId) {
     .map((line) => ({ startsAt: new Date(line.bookingSnapshot.startsAt), endsAt: new Date(line.bookingSnapshot.endsAt) }));
 }
 
+/**
+ * UN CRÉNEAU RÉSERVÉ PAR UNE CLIENTE TIENT DANS LES HORAIRES D'OUVERTURE.
+ *
+ * Les heures proposées viennent de `listAvailability`, mais la réservation
+ * arrive par un autre appel : sans ce contrôle, un appel direct posait un
+ * rendez-vous payé à 3 h du matin ou un jour fermé. Même règle que le calcul
+ * des créneaux (semaine type, journée exceptionnelle).
+ * La grille n'est PAS exigée : un enchaînement démarre à la fin d'un soin.
+ */
+export async function assertWithinOpeningHours(startsAt, endsAt) {
+  const schedule = await getSchedule();
+  const timeZone = schedule.timezone || 'Europe/Paris';
+  const a = zonedParts(startsAt, timeZone);
+  const b = zonedParts(new Date(endsAt.getTime() - 1), timeZone);
+  const refus = () => ApiError.badRequest('Ce créneau est en dehors des horaires d’ouverture. Choisissez une heure proposée au calendrier.', { code: 'SLOT_OUTSIDE_OPENING_HOURS' });
+  if (a.year !== b.year || a.month !== b.month || a.day !== b.day) throw refus();
+  const weekday = new Date(Date.UTC(a.year, a.month - 1, a.day)).getUTCDay() || 7;
+  const dayRule = regleEffective(schedule, a.year, a.month, a.day, (schedule.weeklyHours || []).find((rule) => rule.weekday === weekday));
+  if (!dayRule?.enabled) throw refus();
+  const debut = a.hour * 60 + a.minute;
+  const fin = debut + Math.round((endsAt - startsAt) / 60_000);
+  const dedans = (dayRule.ranges || []).some((r) => debut >= minutesOf(r.start) && fin <= minutesOf(r.end));
+  if (!dedans) throw refus();
+}
+
 export async function listAvailability(query = {}, { customerId = null, enforceNotice = false } = {}) {
   const from = asDate(query.from || new Date(), 'Date de debut');
   const to = asDate(query.to || new Date(Date.now() + 14 * 86400_000), 'Date de fin');
-  assertRange(from, to);
+  assertRange(from, to, MAX_AVAILABILITY_DAYS);
   // Plusieurs prestations à la suite : la durée cherchée est leur somme.
   const sequence = query.sequence ? await loadSequence(query.sequence) : null;
   const product = sequence ? null : await availabilityProduct(query);

@@ -110,20 +110,37 @@ export function sanitizeRichText(html, { maxLength = 40000 } = {}) {
   // une balise inconnue, donc simplement retirée — mais son contenu resterait.
   texte = texte.replace(/<(script|style|iframe|object|embed|noscript|template|svg|math)\b[\s\S]*$/gi, '');
 
-  // 2. Chaque balise est réécrite depuis la liste blanche, ou effacée.
-  texte = texte.replace(/<\s*(\/?)\s*([a-zA-Z][a-zA-Z0-9]*)((?:\s+[^<>]*?)?)\s*(\/?)>/g,
-    (_tout, fermante, nomBrut, attributs, autoFermante) => {
-      const nom = nomBrut.toLowerCase();
-      if (!BALISES_AUTORISEES.has(nom)) return '';
-      if (fermante) return `</${nom}>`;
-      if (nom === 'br') return '<br />';
-      return `<${nom}${attributsRetenus(nom, attributs)}${autoFermante ? ' /' : ''}>`;
-    });
+  /*
+    2. UNE SEULE LECTURE, de gauche à droite : à chaque `<`, ou bien une balise
+    complète commence ICI et elle est réécrite depuis la liste blanche (ou
+    effacée), ou bien ce `<` est du TEXTE et il est échappé.
 
-  // 3. Tout `<` restant est du TEXTE que l'auteur a écrit : on l'échappe.
-  texte = texte.replace(/<(?!\/?(?:[a-zA-Z][a-zA-Z0-9]*)(?:\s|\/?>))/g, '&lt;');
+    L'ancienne version enchaînait deux remplacements globaux : effacer une
+    balise interdite RECOLLAIT ses deux voisins. `<im<x>g src=x onerror=…>`
+    devenait `<img src=x onerror=…>` — du script sur la vitrine. Ici, rien de
+    ce qui est produit n'est relu : aucune balise ne peut naître d'un effacement.
+  */
+  const BALISE = /<(\/?)([a-zA-Z][a-zA-Z0-9]*)((?:\s+[^<>]*?)?)\s*(\/?)>/y;
+  let sortie = '';
+  let i = 0;
+  while (i < texte.length) {
+    const j = texte.indexOf('<', i);
+    if (j === -1) { sortie += texte.slice(i); break; }
+    sortie += texte.slice(i, j);
+    BALISE.lastIndex = j;
+    const m = BALISE.exec(texte);
+    if (!m) { sortie += '&lt;'; i = j + 1; continue; }
+    const [, fermante, nomBrut, attributs, autoFermante] = m;
+    const nom = nomBrut.toLowerCase();
+    if (BALISES_AUTORISEES.has(nom)) {
+      if (fermante) sortie += `</${nom}>`;
+      else if (nom === 'br') sortie += '<br />';
+      else sortie += `<${nom}${attributsRetenus(nom, attributs)}${autoFermante ? ' /' : ''}>`;
+    }
+    i = BALISE.lastIndex;
+  }
 
-  return texte.trim().slice(0, maxLength);
+  return sortie.trim().slice(0, maxLength);
 }
 
 /**
