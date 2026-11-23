@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { Link } from 'react-router-dom';
-import { Ban, CalendarDays, Check, Pencil, ChevronLeft, ChevronRight, Clock, CreditCard, GraduationCap, Lock, MapPin, Plus, RefreshCw, Users } from 'lucide-react';
+import { Ban, Unlock, CalendarDays, Check, Pencil, ChevronLeft, ChevronRight, Clock, CreditCard, GraduationCap, Lock, MapPin, Plus, RefreshCw, Users } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Button, Card, CardContent, Field, Input, Textarea } from '@/components/ui/primitives';
 import { ConfirmDialog, Modal } from '@/components/ui/dialog';
@@ -202,6 +202,8 @@ export default function CommerceCalendarPage() {
   const [showSchedule, setShowSchedule] = React.useState(false);
   /** Journée ouverte dans la fenêtre « ouvrir / fermer ce jour ». */
   const [dayEdit, setDayEdit] = React.useState<Date | null>(null);
+  /** Clic sur un jour FERMÉ : le choix entre réservation manuelle et déblocage. */
+  const [closedChoice, setClosedChoice] = React.useState<{ day: Date; minute: number } | null>(null);
   const [showCancelled, setShowCancelled] = React.useState(false);
   const [createOpen, setCreateOpen] = React.useState(false);
   /** Rendez-vous en cours de modification (même fenêtre que la création). */
@@ -258,8 +260,17 @@ export default function CommerceCalendarPage() {
     const rect = event.currentTarget.getBoundingClientRect();
     const ratio = clamp((event.clientY - rect.top) / rect.height, 0, 1);
     const raw = DAY_START + Math.round(((DAY_END - DAY_START) * ratio) / STEP) * STEP;
-    // Un clic dans la grille ouvre une réservation neuve à cette heure ; sa
-    // durée sera celle de la prestation choisie (1 h tant qu'aucune).
+    // JOUR FERMÉ : on demande d'abord ce que l'on veut y faire — poser un
+    // rendez-vous à la main, ou ouvrir la journée à la réservation en ligne.
+    if (schedule && !dayState(schedule as ScheduleLike, day).open) {
+      setClosedChoice({ day, minute: raw });
+      return;
+    }
+    openCreateAt(day, raw);
+  }
+
+  /** Une réservation neuve à cette heure ; sa durée sera celle de la prestation choisie (1 h tant qu'aucune). */
+  function openCreateAt(day: Date, raw: number) {
     setEditing(null);
     setForm(formWithSlot(day, raw, 60));
     setSelected(null);
@@ -598,6 +609,17 @@ export default function CommerceCalendarPage() {
           <EventPanel
             selected={selected}
             onEdit={() => openEdit(selected)}
+            onUnblock={async () => {
+              try {
+                await api.cancelCalendarEvent(selected.id, { reason: 'Débloqué depuis le planning', refundedCents: 0 });
+                setSelectedOpen(false);
+                setSelected(null);
+                refresh();
+                setMessage('Créneau débloqué.');
+              } catch (err) {
+                setMessage(err instanceof Error ? err.message : 'Déblocage impossible');
+              }
+            }}
             onBookOver={() => {
               // Une journée bloquée de bout en bout n'a plus de case libre où cliquer :
               // la réservation s'ouvre depuis le blocage, la case « poser dessus » déjà cochée.
@@ -619,6 +641,40 @@ export default function CommerceCalendarPage() {
             }}
           />
         )}
+      </Modal>
+      <Modal
+        open={Boolean(closedChoice)}
+        onClose={() => setClosedChoice(null)}
+        title={closedChoice ? (() => { const t = closedChoice.day.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }); return t.charAt(0).toUpperCase() + t.slice(1); })() : ''}
+        description="Ce jour est fermé à la réservation en ligne. Que voulez-vous faire ?"
+        className="max-w-md"
+      >
+        <div className="grid gap-2" data-testid="closed-day-choice">
+          <button
+            type="button"
+            data-testid="closed-choice-book"
+            onClick={() => { const c = closedChoice; setClosedChoice(null); if (c) openCreateAt(c.day, c.minute); }}
+            className="flex items-start gap-3 rounded-lg border p-4 text-left transition hover:border-primary hover:bg-primary/5"
+          >
+            <Plus className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
+            <span>
+              <span className="block font-semibold">Réservation manuelle</span>
+              <span className="block text-sm text-muted-foreground">Poser un rendez-vous ce jour-là{closedChoice ? ` à ${String(Math.floor(closedChoice.minute / 60)).padStart(2, '0')}:${String(closedChoice.minute % 60).padStart(2, '0')}` : ''}. Le jour reste fermé en ligne.</span>
+            </span>
+          </button>
+          <button
+            type="button"
+            data-testid="closed-choice-unblock"
+            onClick={() => { const c = closedChoice; setClosedChoice(null); if (c) setDayEdit(c.day); }}
+            className="flex items-start gap-3 rounded-lg border p-4 text-left transition hover:border-primary hover:bg-primary/5"
+          >
+            <Unlock className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
+            <span>
+              <span className="block font-semibold">Débloquer cette journée</span>
+              <span className="block text-sm text-muted-foreground">L’ouvrir exceptionnellement à la réservation en ligne, aux heures choisies.</span>
+            </span>
+          </button>
+        </div>
       </Modal>
       <DayOverrideModal
         date={dayEdit}
@@ -993,6 +1049,7 @@ function EventPanel({
   onEdit,
   onCancel,
   onBookOver,
+  onUnblock,
 }: {
   selected: CalendarEvent;
   onBalance: () => void;
@@ -1000,6 +1057,8 @@ function EventPanel({
   onCancel: () => void;
   /** Blocage : ouvrir une réservation manuelle posée par-dessus. */
   onBookOver?: () => void;
+  /** Blocage : le retirer (pas de remboursement, il n'y a rien à rembourser). */
+  onUnblock?: () => void;
 }) {
   const generated = selected.source?.generatedFrom === 'commerceProduct.sessions';
   const totalCents = Number(selected.paymentSnapshot?.totalCents || 0);
@@ -1076,7 +1135,9 @@ function EventPanel({
               )}
               {selected.status !== 'CANCELLED' && <Button onClick={onEdit} data-testid="event-edit"><Pencil className="h-4 w-4" /> Modifier</Button>}
               <Button variant="outline" onClick={onBalance}><CreditCard className="h-4 w-4" /> Encaisser solde</Button>
-              <Button variant="destructive" onClick={onCancel}><Ban className="h-4 w-4" /> Annuler / rembourser</Button>
+              {selected.type === 'MANUAL_BLOCK' && onUnblock
+                ? <Button variant="destructive" onClick={onUnblock} data-testid="event-unblock"><Unlock className="h-4 w-4" /> Débloquer</Button>
+                : <Button variant="destructive" onClick={onCancel}><Ban className="h-4 w-4" /> Annuler / rembourser</Button>}
             </>
           )}
         </div>

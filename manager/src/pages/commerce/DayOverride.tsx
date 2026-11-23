@@ -127,19 +127,22 @@ export function DayOverrideModal({
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState('');
   const dateKey = date ? isoOf(date) : '';
+  /** La journée pour laquelle le formulaire est prêt : jamais l'état de la précédente, même une image. */
+  const [readyFor, setReadyFor] = React.useState('');
 
-  React.useEffect(() => {
-    if (!date) return;
+  React.useLayoutEffect(() => {
+    if (!date) { setReadyFor(''); return; }
     const s = dayState(schedule, date);
     setMode(s.exception ? (s.exception.closed ? 'closed' : 'open') : s.usual.open ? 'usual' : 'open');
     setRanges(suggestedRanges(schedule, s).map((r) => ({ ...r })));
     setReason(s.exception?.reason || '');
     setError('');
+    setReadyFor(dateKey);
     // Réinitialisé à chaque journée ouverte, pas à chaque rechargement du planning.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dateKey]);
 
-  if (!date || !state) return null;
+  if (!date || !state || readyFor !== dateKey) return null;
   const longDay = date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
   const title = longDay.charAt(0).toUpperCase() + longDay.slice(1);
   const usualText = state.usual.open ? `ouvert, ${rangesLabel(state.usual.ranges)}` : 'fermé';
