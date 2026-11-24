@@ -11,6 +11,7 @@ import { bookingDurationMinutes } from './bookingDuration.js';
 import { bookableFrom, sequenceBookableFrom } from './bookingNotice.js';
 import { loadSequence, sequenceMinutes, sequenceSegments } from './bookingSequence.js';
 import { withCalendarLock } from './calendarLock.js';
+import { logger } from '../utils/logger.js';
 import { normaliserException, regleEffective } from './dayOverrides.js';
 
 const DEFAULT_WEEKLY = [
@@ -665,6 +666,13 @@ export async function updateEvent(id, payload) {
 async function updateEventLocked(id, payload) {
   const event = await CalendarEvent.findById(id);
   if (!event) throw ApiError.notFound('Événement introuvable');
+  // Ce que la cliente connaissait : comparé après coup pour savoir s'il faut la prévenir.
+  const before = {
+    startsAt: new Date(event.startsAt),
+    endsAt: new Date(event.endsAt),
+    productId: String(event.productId || ''),
+    title: String(event.title || ''),
+  };
   const startsAt = payload.startsAt ? asDate(payload.startsAt, 'Debut') : event.startsAt;
   const endsAt = payload.endsAt ? asDate(payload.endsAt, 'Fin') : event.endsAt;
   assertRange(startsAt, endsAt);
@@ -688,8 +696,47 @@ async function updateEventLocked(id, payload) {
       balanceDueCents: Math.max(0, totalCents - paidCents - Number(payload.paymentSnapshot.balancePaidCents || event.paymentSnapshot.balancePaidCents || 0)),
     };
   }
+  const startChanged = event.startsAt.getTime() !== before.startsAt.getTime();
+  const endChanged = event.endsAt.getTime() !== before.endsAt.getTime();
+  const serviceChanged = String(event.productId || '') !== before.productId || String(event.title || '') !== before.title;
+  if (startChanged) event.rescheduledAt = new Date();
   await event.save();
-  return publicEvent(event.toObject());
+  const customerNotified = await notifyAppointmentUpdated(event, before, { startChanged, endChanged, serviceChanged, notify: payload.notifyCustomer !== false });
+  return { ...publicEvent(event.toObject()), customerNotified };
+}
+
+/**
+ * RENDEZ-VOUS MODIFIÉ PAR L'INSTITUT — la cliente reçoit un e-mail quand la
+ * date, l'heure ou la prestation change (pas pour une note ou un montant).
+ * Seulement pour un rendez-vous prestation À VENIR, encore prévu, d'une
+ * cliente connue. L'institut peut choisir de ne pas la prévenir (case du
+ * Manager). Les rappels, eux, suivent tout seuls : ils sont recalculés à
+ * chaque passage depuis la date et la fiche prestation du rendez-vous.
+ */
+async function notifyAppointmentUpdated(event, before, { startChanged, endChanged, serviceChanged, notify }) {
+  const customerId = event.customerSnapshot?.customerId || event.customerSnapshot?.id || event.customerId || null;
+  if (!notify || !customerId || event.type !== 'SERVICE_BOOKING' || event.status !== 'SCHEDULED') return false;
+  if (!(startChanged || endChanged || serviceChanged)) return false;
+  if (event.startsAt.getTime() <= Date.now()) return false;
+  const emitted = await emitAndDispatch({
+    type: 'appointment.updated',
+    entityType: 'CalendarEvent',
+    entityId: event._id,
+    payloadSafe: {
+      calendarEventId: String(event._id),
+      customerId: String(customerId),
+      appointmentTitle: String(event.title || 'Rendez-vous').slice(0, 180),
+      previousTitle: before.title.slice(0, 180),
+      appointmentStart: event.startsAt.toISOString(),
+      appointmentEnd: event.endsAt.toISOString(),
+      previousStart: before.startsAt.toISOString(),
+      dateChanged: startChanged,
+      serviceChanged,
+      updatedAt: new Date().toISOString(),
+    },
+    idempotencyKey: `appointment-updated:${event._id}:${event.startsAt.getTime()}:${event.endsAt.getTime()}:${String(event.productId || '')}:${Date.now()}`,
+  }).catch((err) => { logger.warn(`[rdv modifié] e-mail non émis : ${err.message}`); return null; });
+  return Boolean(emitted);
 }
 
 export async function cancelEvent(id, payload = {}) {

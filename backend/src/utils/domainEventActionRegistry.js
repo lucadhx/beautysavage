@@ -218,6 +218,16 @@ export const DOMAIN_EVENT_ACTION_REGISTRY = Object.freeze({
       description: 'Envoie au client les informations de carte cadeau.',
     },
   ],
+  'appointment.updated': [
+    {
+      actionId: 'send-customer-appointment-updated',
+      actionType: ACTION_TYPE.SEND_EMAIL,
+      enabled: true,
+      templateId: 'APPOINTMENT_UPDATED_CLIENT',
+      recipientResolver: 'CUSTOMER_EMAIL',
+      description: "Previent le client que l'institut a deplace son rendez-vous ou change sa prestation.",
+    },
+  ],
   'appointment.cancelled': [
     {
       actionId: 'send-customer-appointment-cancelled',

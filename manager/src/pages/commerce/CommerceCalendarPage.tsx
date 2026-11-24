@@ -88,6 +88,8 @@ interface EventForm {
   notes: string;
   /** Poser le rendez-vous par-dessus un blocage de l'institut (journée bloquée). */
   overBlocks?: boolean;
+  /** Modification : prévenir la cliente par e-mail (coché par défaut). */
+  notifyCustomer?: boolean;
 }
 
 const DAY_LABELS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
@@ -310,7 +312,7 @@ export default function CommerceCalendarPage() {
     setSaving(true);
     setCreateError('');
     try {
-      await api.updateCalendarEvent(editing.id, {
+      const updated = await api.updateCalendarEvent(editing.id, {
         title: form.title,
         productId: form.type === 'SERVICE_BOOKING' && form.productId ? form.productId : null,
         startsAt: new Date(form.startsAt).toISOString(),
@@ -322,11 +324,13 @@ export default function CommerceCalendarPage() {
         },
         notes: form.notes,
         overBlocks: form.type === 'SERVICE_BOOKING' && Boolean(form.overBlocks),
+        notifyCustomer: form.notifyCustomer !== false,
       });
+      const notified = updated?.customerNotified ? ' La cliente est prévenue par e-mail.' : '';
       const moved = new Date(form.startsAt).getTime() !== new Date(editing.startsAt).getTime() || new Date(form.endsAt).getTime() !== new Date(editing.endsAt).getTime();
       setMessage(moved
-        ? `Rendez-vous déplacé au ${new Date(form.startsAt).toLocaleString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}.`
-        : 'Rendez-vous modifié.');
+        ? `Rendez-vous déplacé au ${new Date(form.startsAt).toLocaleString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}.${notified}`
+        : `Rendez-vous modifié.${notified}`);
       setCreateOpen(false);
       setEditing(null);
       refresh();
@@ -1018,6 +1022,20 @@ function CreatePanel({
         </div>
       )}
       <Field label="Notes"><Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></Field>
+      {editingId && form.type === 'SERVICE_BOOKING' && form.customerEmail && (
+        <label className="flex items-start gap-2 rounded-lg border px-3 py-2 text-sm" data-testid="notify-customer">
+          <input
+            type="checkbox"
+            className="mt-1"
+            checked={form.notifyCustomer !== false}
+            onChange={(e) => setForm({ ...form, notifyCustomer: e.target.checked })}
+          />
+          <span>
+            <strong>Prévenir la cliente par e-mail</strong> si la date, l’heure ou la prestation change.
+            <span className="block text-xs text-muted-foreground">Ses rappels suivent la nouvelle date dans tous les cas.</span>
+          </span>
+        </label>
+      )}
       {error && <p className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700" role="alert">{error}</p>}
       <Button className="h-11" onClick={onCreate} loading={saving} disabled={editing}>{editingId ? <><Check className="h-4 w-4" /> Enregistrer les modifications</> : <><Plus className="h-4 w-4" /> {form.type === 'MANUAL_BLOCK' ? 'Bloquer le créneau' : 'Créer le rendez-vous'}</>}</Button>
     </motion.div>

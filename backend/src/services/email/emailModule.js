@@ -2,7 +2,7 @@
 import { registerVariableResolver } from './emailVariableResolvers.js';
 import { resolveCommissionPaymentDue } from './commissionVariableResolver.js';
 import { registerRelevanceGuard } from '../events/actionRelevance.js';
-import { appointmentReminderStillRelevant } from '../appointmentReminder.service.js';
+import { appointmentReminderStillRelevant, appointmentUpdateStillRelevant } from '../appointmentReminder.service.js';
 import { reviewRequestStillRelevant } from '../reviewRequest.service.js';
 import { trainingAccessGrantStillActive } from '../trainingMembers.service.js';
 import { registerEmailActionHandlers } from './sendEmailHandler.js';
@@ -26,6 +26,7 @@ import {
   resolveTrainingDecisionClient,
   resolveTrainingSubmissionAdmin,
   resolveSessionRescheduledClient,
+  resolveAppointmentUpdatedClient,
   resolveSessionCancelledClient,
   resolveReviewRequestClient,
   resolveAppointmentReminderClient,
@@ -77,6 +78,9 @@ export async function initEmailModule({ skipBootstrap = false } = {}) {
   registerVariableResolver('COMMERCE_SALE_CONFIRMATION_CLIENT', resolveSaleConfirmationClient);
   registerVariableResolver('COMMERCE_GIFT_CARD_CLIENT', resolveGiftCardIssuedClient);
   registerVariableResolver('APPOINTMENT_CANCELLED_CLIENT', resolveAppointmentCancelledClient);
+  registerVariableResolver('APPOINTMENT_UPDATED_CLIENT', resolveAppointmentUpdatedClient);
+  // Modifié une seconde fois, annulé ou passé avant l'envoi : l'e-mail ne part pas.
+  registerRelevanceGuard('appointment.updated', appointmentUpdateStillRelevant);
   registerVariableResolver('APPOINTMENT_CONFIRMED_CLIENT', resolveAppointmentConfirmedClient);
   registerVariableResolver('CUSTOMER_ACCOUNT_CREATED', resolveCustomerAccountCreated);
   registerVariableResolver('TRAINING_ACCESS_GRANTED_CLIENT', resolveTrainingAccessGrantedClient);

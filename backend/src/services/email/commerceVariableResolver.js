@@ -326,6 +326,32 @@ export async function resolveSlotGroupAssignedAdmin({ event }) {
   };
 }
 
+/** Rendez-vous déplacé ou prestation changée par l'institut : ce qui change, et seulement ça. */
+export async function resolveAppointmentUpdatedClient({ event }) {
+  const p = event.payloadSafe;
+  const titre = p.appointmentTitle;
+  const introText = p.dateChanged && p.serviceChanged
+    ? `L’institut a déplacé votre rendez-vous et changé sa prestation. Voici votre rendez-vous à jour.`
+    : p.dateChanged
+      ? `L’institut a déplacé votre rendez-vous « ${titre} ». Voici la nouvelle date.`
+      : p.serviceChanged
+        ? `L’institut a changé la prestation de votre rendez-vous. Voici votre rendez-vous à jour.`
+        : `L’institut a modifié l’horaire de votre rendez-vous « ${titre} ». Voici votre rendez-vous à jour.`;
+  return {
+    ...(await customerVariables(p.customerId)),
+    subjectLine: p.dateChanged ? `Votre rendez-vous ${titre} a été déplacé` : `Votre rendez-vous ${titre} a été modifié`,
+    // Texte nu : le rendu de l'institut l'échappe.
+    introText,
+    serviceName: titre,
+    appointmentStart: p.appointmentStart,
+    appointmentEnd: p.appointmentEnd,
+    // Vides quand rien n'a changé : la ligne n'est alors pas affichée.
+    previousStart: p.dateChanged ? p.previousStart : '',
+    previousServiceName: p.serviceChanged && p.previousTitle !== titre ? p.previousTitle : '',
+    accountUrl: await customerAccountUrl(),
+  };
+}
+
 export async function resolveSessionRescheduledClient({ event }) {
   const p = event.payloadSafe;
   return {
@@ -376,5 +402,6 @@ export default {
   resolveAppointmentReminderClient,
   resolveSlotGroupAssignedAdmin,
   resolveSessionRescheduledClient,
+  resolveAppointmentUpdatedClient,
   resolveSessionCancelledClient,
 };

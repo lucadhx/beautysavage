@@ -34,6 +34,16 @@ import { logger } from '../utils/logger.js';
 
 const HORIZON_MS = 30 * 86400_000;
 
+/**
+ * Le point de départ des rappels d'un rendez-vous : sa réservation, ou son
+ * dernier déplacement par l'institut s'il est plus récent.
+ */
+export function reminderBookedAt(event) {
+  const created = new Date(event.createdAt || 0).getTime();
+  const moved = event.rescheduledAt ? new Date(event.rescheduledAt).getTime() : 0;
+  return new Date(Math.max(created, moved));
+}
+
 /** Les rappels dus pour une cible, du plus éloigné au plus proche. */
 export function dueReminders(target, config, now = new Date()) {
   if (!config.enabled) return [];
@@ -55,7 +65,7 @@ async function serviceTargets(now) {
     startsAt: { $gt: now, $lte: new Date(now.getTime() + HORIZON_MS) },
     productId: { $ne: null },
     'customerSnapshot.customerId': { $nin: [null, ''] },
-  }).select('title productId customerSnapshot startsAt endsAt createdAt paymentSnapshot').lean();
+  }).select('title productId customerSnapshot startsAt endsAt createdAt rescheduledAt paymentSnapshot').lean();
   return events.map((event) => ({
     kind: 'SERVICE',
     targetKey: `event:${event._id}`,
@@ -65,7 +75,7 @@ async function serviceTargets(now) {
     title: event.title,
     startsAt: event.startsAt,
     endsAt: event.endsAt,
-    bookedAt: event.createdAt,
+    bookedAt: reminderBookedAt(event),
     balanceDueCents: Number(event.paymentSnapshot?.balanceDueCents || 0),
   }));
 }
@@ -202,6 +212,25 @@ export async function processAppointmentReminders(now = new Date()) {
  * rendez-vous annulé, une session annulée ou déplacée, une inscription
  * remboursée entre la planification et l'envoi n'appellent pas ce rappel-là.
  */
+/**
+ * E-mail « rendez-vous modifié » : il ne part que si le rendez-vous est
+ * toujours tel qu'annoncé. Modifié une seconde fois entre-temps, c'est le
+ * second e-mail qui compte ; annulé, la cliente reçoit l'annulation.
+ */
+export async function appointmentUpdateStillRelevant(event) {
+  const p = event?.payloadSafe || {};
+  if (!mongoose.isValidObjectId(p.calendarEventId)) return { relevant: false, reason: 'Rendez-vous inconnu.' };
+  const current = await CalendarEvent.findById(p.calendarEventId).select('status startsAt endsAt title').lean();
+  if (!current || current.status !== 'SCHEDULED') return { relevant: false, reason: 'Rendez-vous annulé ou terminé.' };
+  if (new Date(current.startsAt).toISOString() !== p.appointmentStart
+    || new Date(current.endsAt).toISOString() !== p.appointmentEnd
+    || String(current.title || 'Rendez-vous').slice(0, 180) !== p.appointmentTitle) {
+    return { relevant: false, reason: 'Rendez-vous modifié à nouveau : un e-mail plus récent part.' };
+  }
+  if (new Date(current.startsAt).getTime() <= Date.now()) return { relevant: false, reason: 'Rendez-vous déjà passé.' };
+  return { relevant: true };
+}
+
 export async function appointmentReminderStillRelevant(event) {
   const p = event?.payloadSafe || {};
   if (p.kind === 'TRAINING') {

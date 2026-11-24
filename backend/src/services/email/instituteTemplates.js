@@ -85,6 +85,16 @@ export const INSTITUTE_TEMPLATES = Object.freeze({
     rows: [['Date prévue', '{{appointmentStart}}'], ['Fin prévue', '{{appointmentEnd}}'], ['Motif', '{{reason}}'], ['Remboursement', '{{refundAmount}}']],
     note: 'Un remboursement apparaît sur votre moyen de paiement sous quelques jours ouvrés.',
   },
+  APPOINTMENT_UPDATED_CLIENT: {
+    subject: '{{subjectLine}}',
+    preheader: 'Votre rendez-vous : {{appointmentStart}}.',
+    title: 'Rendez-vous modifié',
+    paragraphs: ['Bonjour {{clientFirstName}},', '{{introText}}'],
+    rows: [['Prestation', '{{serviceName}}'], ['Date', '{{appointmentStart}}'], ['Fin prévue', '{{appointmentEnd}}'], ['Ancienne prestation', '{{previousServiceName}}'], ['Ancienne date', '{{previousStart}}']],
+    addressBlock: true,
+    cta: { label: 'Voir mon espace client', url: '{{accountUrl}}' },
+    note: 'Ce changement ne vous convient pas ? Répondez à cet e-mail ou contactez l’institut. Vos rappels suivent automatiquement le rendez-vous.',
+  },
   FORMATION_SESSION_RESCHEDULED_CLIENT: {
     subject: 'Nouvelle date pour votre formation {{trainingTitle}}',
     preheader: 'Votre session a été déplacée.',

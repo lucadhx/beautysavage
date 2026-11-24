@@ -260,6 +260,25 @@ export const DOMAIN_EVENT_REGISTRY = Object.freeze({
     }).strict(),
   },
 
+  'appointment.updated': {
+    type: 'appointment.updated',
+    description: "Un rendez-vous prestation a ete deplace ou sa prestation changee depuis le Manager.",
+    entityTypes: [ENTITY_TYPE.CALENDAR_EVENT],
+    retentionClass: RETENTION_CLASS.OPERATIONAL,
+    payloadSchema: z.object({
+      calendarEventId: z.string().max(64),
+      customerId: z.string().max(64),
+      appointmentTitle: z.string().max(180),
+      previousTitle: z.string().max(180),
+      appointmentStart: z.string().max(40),
+      appointmentEnd: z.string().max(40),
+      previousStart: z.string().max(40),
+      dateChanged: z.boolean(),
+      serviceChanged: z.boolean(),
+      updatedAt: z.string().max(40),
+    }).strict(),
+  },
+
   'appointment.booked': {
     type: 'appointment.booked',
     description: "Un rendez-vous prestation est confirme a un client identifie (vitrine ou Manager).",

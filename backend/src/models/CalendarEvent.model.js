@@ -47,6 +47,12 @@ const calendarEventSchema = new mongoose.Schema(
     holdExpiresAt: { type: Date, default: null },
     paymentSnapshot: { type: moneySnapshotSchema, default: () => ({}) },
     notes: { type: String, default: '' },
+    /**
+     * Dernier déplacement par l'institut. Les rappels se comptent à partir de
+     * là (comme d'une réservation) : un « 24 h avant » déjà dépassé pour la
+     * nouvelle date ne part pas en rafale juste après l'e-mail de modification.
+     */
+    rescheduledAt: { type: Date, default: null },
     cancellation: {
       reason: { type: String, default: '' },
       cancelledAt: { type: Date, default: null },
